@@ -9,7 +9,7 @@ A report with protein and precursor ion quantities is produced.
 
 ### Installation
 
-None required. Just download the diann.exe file.
+None required.
 
 ### Input files
 
