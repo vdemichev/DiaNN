@@ -6,7 +6,7 @@
 /* Uncomment the below line to use CBLAS */
 // #define CRANIUM_USE_CBLAS
 #ifdef CRANIUM_USE_CBLAS
-#include <cblas.h>
+#include "mkl.h"
 #endif
 
 // represents user-supplied training data
