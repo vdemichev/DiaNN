@@ -1,0 +1,30 @@
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, 
+INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, 
+OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
+OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, 
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, 
+EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+The file /src/diann.cpp is licensed under the Creative Commons Attribution 4.0 International License. 
+To view a copy of this license, visit http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative Commons, 
+PO Box 1866, Mountain View, CA 94042, USA.
+
+All third-party software included in this DiaNN distribution retains its original license (see below).
+For the inclusion in this DiaNN distribution, the source code of MSToolkit and Cranium was modified.
+
+Cranium
+ - folder within this distribution: /cranium
+ - URL: https://github.com/100/Cranium
+ - License information: /cranium/LICENSE
+
+MSToolkit
+ - folder within this distribution: /mstoolkit
+ - URL: https://github.com/mhoopmann/mstoolkit
+ - License information: /mstoolkit/LICENSE.txt
+
+Eigen
+ - folder within this distribution: /eigen
+ - URL: http://eigen.tuxfamily.org/
+ - License information: eigen/COPYING.README
+
