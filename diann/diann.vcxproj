@@ -70,7 +70,7 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>C:\diann\mstoolkit\src\expat-2.2.0;C:\diann\mstoolkit\src\MSToolkit;C:\diann\mstoolkit\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)\mstoolkit\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>C:\diann\mstoolkit\include;$(IncludePath)</IncludePath>
@@ -92,6 +92,9 @@
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <BufferSecurityCheck>false</BufferSecurityCheck>
     </ClCompile>
+    <Link>
+      <OutputFile>$(SolutionDir)\DiaNN-debug.exe</OutputFile>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -128,6 +131,7 @@
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <OutputFile>$(SolutionDir)\DiaNN.exe</OutputFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
