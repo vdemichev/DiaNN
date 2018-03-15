@@ -19,6 +19,9 @@ visit http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative C
 #undef INPUT
 #endif
 
+// comment if no MKL installation available
+#define CRANIUM_USE_MKL
+
 #include "../cranium/src/cranium.h"
 #include "../eigen/Eigen/Dense"
 #include <iostream>

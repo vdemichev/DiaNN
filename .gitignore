@@ -4,4 +4,6 @@
 *.user
 *.tlog
 *.log
+*.csv
+
 

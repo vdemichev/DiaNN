@@ -3,10 +3,14 @@
 #ifndef MATRIX_H
 #define MATRIX_H
 
-/* Uncomment the below line to use CBLAS */
-// #define CRANIUM_USE_CBLAS
-#ifdef CRANIUM_USE_CBLAS
+#ifdef CRANIUM_USE_MKL
+#define CRANIUM_USE_BLAS
 #include "mkl.h"
+#else
+#ifdef CRANIUM_USE_CBLAS
+#define CRANIUM_USE_BLAS
+#include <cblas.h>
+#endif
 #endif
 
 // represents user-supplied training data
@@ -296,7 +300,7 @@ Matrix* multiply(Matrix* A, Matrix* B){
     assert(A->cols == B->rows);
     float* data = (float*)malloc(sizeof(float) * A->rows * B->cols);
     Matrix* result = createMatrix(A->rows, B->cols, data);
-#ifdef CRANIUM_USE_CBLAS
+#ifdef CRANIUM_USE_BLAS
     zeroMatrix(result);
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, A->rows, B->cols
     , A->cols, 1, A->data, A->cols, B->data, B->cols, 1, result->data, result->cols);
@@ -317,7 +321,7 @@ Matrix* multiply(Matrix* A, Matrix* B){
 }
 
 void multiplyInto(Matrix* A, Matrix* B, Matrix* into){
-#ifdef CRANIUM_USE_CBLAS
+#ifdef CRANIUM_USE_BLAS
     zeroMatrix(into);
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, A->rows, B->cols
     , A->cols, 1, A->data, A->cols, B->data, B->cols, 1, into->data, into->cols);
