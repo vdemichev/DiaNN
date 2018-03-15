@@ -41,7 +41,7 @@ diann.exe --f run1.mzML --f run2.mzML --lib yeast.csv
 ```
 --cfg <config file> 
 ```
-Specifies a file with a set of commands to be executed.
+Specifies a file with a set of commands.
 ```
 --threads <thread number> 
 ```
