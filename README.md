@@ -5,7 +5,7 @@ DIA-NN implements deep neural networks to improve precursor ion identification.
 
 **DIA-NN: Deep neural networks substantially improve the   
 identification performance of Data-independent acquisition (DIA) in proteomics**  
-Vadim Demichev, Christoph B. Messner, Kathryn S. Lilley, Markus Ralser
+Vadim Demichev, Christoph B. Messner, Kathryn S. Lilley, Markus Ralser  
 https://doi.org/10.1101/282699
 
 DIA-NN encompasses all stages of DIA-MS data processing in a single program.   
