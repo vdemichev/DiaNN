@@ -617,12 +617,21 @@ public:
 	char type, index, loss, charge; // index - number of AAs to the left from the cleavage site
 	float mz;
 
+	Ion() {};
 	Ion(int _type, int _index, int _loss, int _charge, double _mz) {
 		type = _type;
 		index = _index;
 		loss = _loss;
 		charge = _charge;
 		mz = _mz;
+	}
+
+	void init(Ion &other) {
+		type = other.type;
+		index = other.index;
+		loss = other.loss;
+		charge = other.charge;
+		mz = other.mz;
 	}
 
 	bool operator == (const Ion &other) { return index == other.index && type == other.type && charge == other.charge && loss == other.loss; }
@@ -645,32 +654,36 @@ std::vector<Ion> generate_fragments(std::vector<double> &sequence, int charge, i
 }
 
 std::vector<Ion> recognise_fragments(std::vector<double> &sequence, std::vector<Peak> &fragments) {
-	int i, j, cnt = 0, charge = 1, loss = loss_none;
-	std::vector<Ion> result;
+	int i, j, cnt = 0, tot = 0, charge = 1, loss = loss_none;
+	std::vector<Ion> result(fragments.size());
 	std::vector<Ion> v;
 	double delta, min, index = 0;
+	for (i = 0; i < result.size(); i++) result[i].charge = 0;
 
 start:
 	v = generate_fragments(sequence, charge, loss, &cnt);
 	for (i = 0; i < fragments.size(); i++) {
+		if (result[i].charge) continue;
 		double margin = fragments[i].mz * GeneratorAccuracy;
 		for (j = 0, min = margin; j < v.size(); j++) {
 			delta = Abs(v[j].mz - fragments[i].mz);
 			if (delta < min) min = delta, index = j;
 		}
 		if (min < margin) {
-			result.push_back(v[index]);
-			if (result.size() >= fragments.size()) goto stop;
+			tot++;
+			result[i].init(v[index]);
+			if (tot >= fragments.size()) goto stop;
 		}
 	}
 
 	loss++;
 	if (loss == loss_N) loss = loss_none, charge++;
-	if (charge < 5 && result.size() < fragments.size()) goto start;
+	if (charge < 5 && tot < fragments.size()) goto start;
 
 stop:
-	if (result.size() < fragments.size())
-		std::cerr << "Not all fragments recognised\n";
+	if (tot < fragments.size())
+		std::cerr << "\nWARNING: not all fragments recognised\n\n";
+
 	return result;
 }
 
@@ -678,20 +691,18 @@ std::vector<Ion> generate_fragments(std::vector<double> &sequence, std::vector<I
 	int j, charge = 1, loss = loss_none, cnt = 0;
 	std::vector<Ion> result;
 	std::vector<Ion> v;
-	auto pos = pattern.begin();
 
 start:
 	v = generate_fragments(sequence, charge, loss, &cnt);
-	for (; pos != pattern.end(); pos++) {
+	for (auto pos = pattern.begin(); pos != pattern.end(); pos++) {
 		for (j = 0; j < v.size(); j++) if (v[j] == *pos) {
 			result.push_back(v[j]);
 			break;
 		}
-		if (j == v.size()) break;
 	}
 	loss++;
 	if (loss == loss_N) loss = loss_none, charge++;
-	if (charge < 4 && pos != pattern.end()) goto start;
+	if (charge < 4 && result.size() < pattern.size()) goto start;
 
 	return result;
 }
