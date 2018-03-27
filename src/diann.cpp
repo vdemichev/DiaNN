@@ -69,6 +69,9 @@ int WindowRadius = 0;
 double ScanScale = 2.2;
 bool InferWindow = true;
 bool IndividualWindows = false;
+bool InferMassDelta = true;
+double GlobalMassDelta = 0.0;
+bool InferMassAccuracy = false;
 
 int MaxDpPP = INF;
 
@@ -100,7 +103,7 @@ float Regularisation = 0.0;
 bool nnStandardise = false;
 const double nnStScale = 0.5;
 
-double MassAccuracy = 20.0 / 1000000.0; 
+double GlobalMassAccuracy = 20.0 / 1000000.0; 
 double GeneratorAccuracy = 20.0 / 1000000.0;
 double MaxProfilingQvalue = 0.01;
 double MaxQuantQvalue = 0.01;
@@ -140,6 +143,10 @@ std::vector<std::string> library_headers = {
 std::vector<std::pair<std::string, float> > Modifications = {
 	std::pair<std::string, float>("UniMod:4", (float)57.021464),
 	std::pair<std::string, float>("Carbamidomethyl (C)", (float)57.021464),
+	std::pair<std::string, float>("UniMod:5", (float)43.005814),
+	std::pair<std::string, float>("Carbamylation (KR)", (float)43.005814),
+	std::pair<std::string, float>("UniMod:7", (float)0.984016),
+	std::pair<std::string, float>("Deamidation (NQ)", (float)0.984016),
 	std::pair<std::string, float>("UniMod:35", (float)15.994915),
 	std::pair<std::string, float>("Oxidation (M)", (float)15.994915),
 	std::pair<std::string, float>("UniMod:1", (float)42.010565),
@@ -249,11 +256,11 @@ void arguments(int argc, char *argv[]) {
 			}
 		}
 		else if (!memcmp(&(args[start]), "mod ", 4)) {
-			std::string name, mz;
+			std::string name, mass;
 			std::stringstream list(trim(args.substr(start + 4, end - start - 4)));
 			if (!std::getline(list, name, ',')) std::cout << "\nWARNING: no modification name, modification ignored\n";
-			else if (!std::getline(list, mz, ',')) std::cout << "\nWARNING: no modification m/z, modification ignored\n";
-			else Modifications.push_back(std::pair<std::string, float>(name, (float)std::stod(mz)));
+			else if (!std::getline(list, mass, ',')) std::cout << "\nWARNING: no modification mass, modification ignored\n";
+			else Modifications.push_back(std::pair<std::string, float>(name, (float)std::stod(mass)));
 		}
 		else if (!memcmp(&(args[start]), "exclude ", 8)) exclude_from_training = trim(args.substr(start + 8, end - start - 8)),
 			std::cout << "Precursors corresponding to proteins with [" << exclude_from_training << "] in the ID will be ignored when training the classifier\n";
@@ -289,7 +296,7 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "no-test-dataset ", 16)) TestDataset = false, std::cout << "Library will not be split into training and test datasets\n";
 		else if (!memcmp(&(args[start]), "test-proportion ", 16)) TestDatasetSize = std::stod(args.substr(start + 16, std::string::npos)),
 			std::cout << "The " << TestDatasetSize << " fraction of the precursors will be used as the test dataset\n";
-		else if (!memcmp(&(args[start]), "no-nn ", 6)) nnIter = iN, std::cout << "Neural network classifier turned off\n";
+		else if (!memcmp(&(args[start]), "no-nn ", 6)) nnIter = INF, std::cout << "Neural network classifier turned off\n";
 		else if (!memcmp(&(args[start]), "global-nn ", 10)) GlobalNN = GlobalTraining = true, std::cout << "Global NN training will be used\n";
 		else if (!memcmp(&(args[start]), "nn-iter ", 8)) nnIter = Max(nRTWindowIter + 3, std::stoi(args.substr(start + 8, std::string::npos))),
 			std::cout << "Neural network classifier will be used starting from the interation number " << nnIter << "\n";
@@ -308,8 +315,8 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "nn-global-hidden ", 17)) nnGlobalHidden = Max(1, std::stoi(args.substr(start + 17, std::string::npos))),
 			std::cout << "Number of hidden layers in the global NN set to " << nnGlobalHidden << "\n";
 		else if (!memcmp(&(args[start]), "standardise ", 12)) nnStandardise = true, std::cout << "Standardisation of scores will be performed\n";
-		else if (!memcmp(&(args[start]), "mass-acc ", 9)) MassAccuracy = std::stod(args.substr(start + 9, std::string::npos)) / 1000000.0,
-			std::cout << "Mass accuracy set to " << MassAccuracy << "\n";
+		else if (!memcmp(&(args[start]), "mass-acc ", 9)) GlobalMassAccuracy = std::stod(args.substr(start + 9, std::string::npos)) / 1000000.0,
+			std::cout << "Initial mass accuracy set to " << GlobalMassAccuracy << "\n";
 		else if (!memcmp(&(args[start]), "gen-acc ", 8)) GeneratorAccuracy = std::stod(args.substr(start + 8, std::string::npos)) / 1000000.0,
 			std::cout << "Fragmentation spectrum generator accuracy set to " << GeneratorAccuracy << "\n";
 		else if (!memcmp(&(args[start]), "max-dppp ", 9)) MaxDpPP = Max(1, std::stoi(args.substr(start + 9, std::string::npos))),
@@ -319,6 +326,10 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Q-value threshold for cross-run normalisation set to " << NormalisationQvalue << "\n";
 		else if (!memcmp(&(args[start]), "norm-fraction ", 14)) NormalisationPeptidesFraction = std::stod(args.substr(start + 14, std::string::npos)),
 			std::cout << "Normalisation peptides fraction set to " << NormalisationPeptidesFraction << "\n";
+		else if (!memcmp(&(args[start]), "mass-delta ", 11)) GlobalMassDelta = std::stod(args.substr(start + 11, std::string::npos)),
+			std::cout << "Mass delta set to " << GlobalMassDelta << "\n";
+		else if (!memcmp(&(args[start]), "zero-mass-delta ", 16)) InferMassDelta = false, std::cout << "Mass delta inference turned off\n";
+		else if (!memcmp(&(args[start]), "infer-mass-acc ", 15)) InferMassAccuracy = true, std::cout << "Mass accuracy inference turned on\n";
 		else std::cerr << "\nWARNING: unrecognised option [--" << trim(args.substr(start, end - start)) << "]\n\n";
         
         start = next;
@@ -328,6 +339,7 @@ void arguments(int argc, char *argv[]) {
 	if (ms_files.size() < 2) RTProfiling = Normalisation = false;
     if (UseQuant || QuantOnly) UseRTInfo = true;
 	if (GlobalNN) TestDataset = false;
+	if (!InferMassDelta) InferMassAccuracy = false;
 	nnIter = Min(nnIter, iN);
 
 	net.resize(nnBagging);
@@ -688,21 +700,21 @@ stop:
 }
 
 std::vector<Ion> generate_fragments(std::vector<double> &sequence, std::vector<Ion> pattern) {
-	int j, charge = 1, loss = loss_none, cnt = 0;
-	std::vector<Ion> result;
+	int i, j, charge = 1, loss = loss_none, cnt = 0, tot = 0;
+	std::vector<Ion> result(pattern.size());
 	std::vector<Ion> v;
 
 start:
-	v = generate_fragments(sequence, charge, loss, &cnt);
-	for (auto pos = pattern.begin(); pos != pattern.end(); pos++) {
+	v = generate_fragments(sequence, charge, loss, &cnt); i = 0;
+	for (auto pos = pattern.begin(); pos != pattern.end(); pos++, i++) {
 		for (j = 0; j < v.size(); j++) if (v[j] == *pos) {
-			result.push_back(v[j]);
+			result[i].init(v[j]); tot++;
 			break;
 		}
 	}
 	loss++;
 	if (loss == loss_N) loss = loss_none, charge++;
-	if (charge < 4 && result.size() < pattern.size()) goto start;
+	if (charge < 5 && tot < pattern.size()) goto start;
 
 	return result;
 }
@@ -731,10 +743,10 @@ public:
     
     inline bool has(float mz) { return (window_low <= mz && window_high > mz); }
     
-	template <bool get_mz> inline double level(float mz, float * peak_mz = NULL) {
+	template <bool get_mz> inline double level(float mz, float accuracy, float * peak_mz = NULL) {
 		int i, low = 0, high = size();
 		float v, s, margin, min, max;
-		margin = mz * MassAccuracy;
+		margin = mz * accuracy;
 		min = mz - margin, max = mz + margin;
 
 		while (high > low) {
@@ -1336,9 +1348,9 @@ void global_training(Library * lib) {
 	lib->info.clear();
 }
 
-std::vector<int> rt_stats, rt_ref;
+std::vector<int> rt_stats, rt_ref, mass_stats;
 std::vector<std::pair<float, float> > rt_data;
-std::vector<float> rt_delta;
+std::vector<float> rt_delta, mass_acc;
 
 class Run {
 public:
@@ -1359,7 +1371,7 @@ public:
 	std::vector<std::vector<int> > PeakList, BestFrList;
 
     int curr_iter;
-    double min_target_decoy_score = 0.0, nRT_cscore, nRT_ref_score, PeakWidth = 0.0;
+    double min_target_decoy_score = 0.0, nRT_cscore, nRT_ref_score, PeakWidth = 0.0, MassCorrection = 1.0, MassAccuracy = GlobalMassAccuracy;
     
     std::vector<Parameter> pars;
     bool par_seek[pN], par_learn[pN];
@@ -1434,6 +1446,7 @@ public:
 		float scores[pN];
         int apex, peak_width, best_peak;
 		int peak_pos, best_fragment;
+		float mass_delta = 0.0;
         
 		void init(Run * _run, Peptide &p) {
 			run = _run;
@@ -1486,9 +1499,9 @@ public:
 				for (int fr = 0; fr < m; fr++) mz[fr] = pr->fragments[fr].mz, ref[fr] = pr->fragments[fr].height;
 			}
 
-			void chromatogram(int from, int to, bool get_ms1 = false) { // [from, to)
-				int i, k, fr, l = to - from, pos, ind;
-				float ms1_left = 0.0, ms1_right = 0.0, rt, ms1_left_RT = 0.0, ms1_right_RT = 0.0;
+			template <bool get_mz> void chromatogram(int from, int to, bool get_ms1 = false) { // [from, to)
+				int i, k, fr, l = to - from, pos, ind, center = (from + to) / 2;
+				float ms1_left = 0.0, ms1_right = 0.0, rt, ms1_left_RT = 0.0, ms1_right_RT = 0.0, peak_mz = 0.0;
 
 				run->MS2[pr->thread_id].resize(l * m);
 				run->MS2_min[pr->thread_id].resize(l * m);
@@ -1519,14 +1532,16 @@ public:
 							else {
 								ms1_left = ms1_right, ms1_left_RT = ms1_right_RT;
 								ms1_right_RT = *ms1_ptr;
-								ms1_right = run->ms1[pos].level<false>(Mz);
+								ms1_right = run->ms1[pos].level<false>(Mz * run->MassCorrection, run->MassAccuracy);
 							}
 						}
 						ms1[ind] = ((rt - ms1_left_RT) * ms1_right + (ms1_right_RT - rt) * ms1_left) / Max(E, ms1_right_RT - ms1_left_RT);
 					}
 
-					for (fr = 0; fr < m; fr++)
-						ms2[l * fr + ind] = run->scans[i].level<false>(mz[fr]);
+					for (fr = 0; fr < m; fr++) {
+						ms2[l * fr + ind] = run->scans[i].level<get_mz>(mz[fr] * (1.0 * run->MassCorrection), run->MassAccuracy, &peak_mz);
+						if (get_mz && k == center && fr == pr->best_fragment) pr->mass_delta = ms2[l * fr + ind] > E ? (peak_mz - mz[fr]) / mz[fr] : 0.0;
+					}
 				}
 
 				for (fr = 0; fr < m; fr++)
@@ -1669,7 +1684,7 @@ public:
 			if (!initialised) {
 				Searcher searcher(this);
 				build_index();
-				searcher.chromatogram(0, scan_number, true);
+				searcher.chromatogram<false>(0, scan_number, true);
 				searcher.peaks();
 				for (int peak = 0; peak < peak_number; peak++) searcher.score(peak);
 				initialised = true;
@@ -1688,13 +1703,13 @@ public:
             double w, r, e;
 			Searcher searcher(this);
 
-			int low = Max(0, k - Min(MaxDpPP / 2 - (1 ^ (MaxDpPP & 1)), S / 2));
-			int high = Min(scan_number - 1, k + Min(MaxDpPP / 2, S / 2));
+			int low = Max(0, k - Min(MaxDpPP / 2 - (1 ^ (MaxDpPP & 1)), Max(1, S / 2)));
+			int high = Min(scan_number - 1, k + Min(MaxDpPP / 2, Max(1, S / 2)));
 			int len = high - low + 1;
 			float *elution = (float*)alloca(len * sizeof(float));
 			float *signal = (float*)alloca(len * sizeof(float));
 
-			searcher.chromatogram(low, high + 1, false);
+			searcher.chromatogram<true>(low, high + 1, false);
 			for (pos = 0; pos < len; pos++) signal[pos] = searcher.ms2[best_fr * len + pos];
 			smooth(&(elution[0]), &(signal[0]), len);
 
@@ -1761,7 +1776,7 @@ public:
 				predicted_nRT = run->predicted_nRT[apex];
 				RT = run->scan_RT[apex];
 				for (k = 0; k < pN; k++) scores[k] = scoring[best_peak * pN + k];
-				if (!decoy) if (run->curr_iter == iN - 1 || (run->curr_iter == nRTWindowIter && InferWindow)) quantify(peaks[best_peak].peak);
+				if (!decoy) if (run->curr_iter == iN - 1 || (run->curr_iter == nRTWindowIter && (InferWindow || InferMassDelta))) quantify(peaks[best_peak].peak);
 			}
 			
         }
@@ -1966,7 +1981,7 @@ public:
         } else process_precursors(0);
 		for (i = 0; i < entries.size(); i++) {
 			entries[i].target.lock.free(), entries[i].decoy.lock.free();
-			if (curr_iter == nRTWindowIter && InferWindow) entries[i].target.free(), entries[i].decoy.free();
+			if (curr_iter == nRTWindowIter && (InferWindow || InferMassDelta)) entries[i].target.free(), entries[i].decoy.free();
 		}
     }
 
@@ -2213,7 +2228,8 @@ public:
     void estimate_nRT() {
 		if (Verbose >= 1) std::cout << "Estimating nRT, score threshold = " << nRT_cscore << "...\n";
 
-		int peak_width = 0, peak_cnt = 0;
+		int peak_width = 0, peak_cnt = 0, mass_cnt = 0;
+		float mass_delta = 0.0;
 		bool gen_ref = false;
 		if (curr_iter == iN - 1 && ((!reference.size() && UseRefFile) || UpdateRefFile)) gen_ref = true;
 
@@ -2221,14 +2237,23 @@ public:
 		rt_stats.reserve(entries.size());
 		rt_ref.clear();
 		rt_ref.reserve(entries.size());
+		if (InferMassAccuracy) {
+			mass_stats.clear();
+			mass_stats.reserve(entries.size());
+		}
         
         for (auto it = entries.begin(); it != entries.end(); it++) {
             if (!it->target.found) continue;
 			if (it->target.qvalue <= nRTMaxQvalue || it->target.combined_score >= nRT_cscore) {
 				int index = std::distance(entries.begin(), it);
 				rt_stats.push_back(index);
-				if (curr_iter == nRTWindowIter && it->target.qvalue < nRTMaxQvalue && it->target.combined_score >= nRT_cscore)
+				if (curr_iter == nRTWindowIter && it->target.qvalue < nRTMaxQvalue && it->target.combined_score >= nRT_cscore) {
 					peak_width += it->target.peak_width, peak_cnt++;
+					if (Abs(it->target.mass_delta) > E) {
+						mass_delta += it->target.mass_delta, mass_cnt++;
+						if (InferMassAccuracy) mass_stats.push_back(index);
+					}
+				}
 				if (gen_ref && it->target.combined_score >= nRT_ref_score) rt_ref.push_back(it->target.index);
  			}
         }
@@ -2246,7 +2271,7 @@ public:
 			else {
 				if (Verbose >= 1) std::cout << "Calculating nRT windows...\n";
 				rt_delta.resize(rt_stats.size());
-				for (int i = 0; i < rt_stats.size(); i++) rt_delta[i] = Abs(entries[rt_stats[i]].target.nRT - entries[rt_stats[i]].target.predicted_nRT);
+				for (int i = 0; i < rt_stats.size(); i++) rt_delta[i] = -Abs(entries[rt_stats[i]].target.nRT - entries[rt_stats[i]].target.predicted_nRT);
 				std::sort(rt_delta.begin(), rt_delta.end());
 				nRT_window = Max(-rt_delta[(int)(nRTWindowLoss * (double)rt_delta.size())], (lib->nRT_max - lib->nRT_min) / (double)nRTWindowFactor);
 			}
@@ -2267,6 +2292,20 @@ public:
 
 			if (!IndividualWindows) WindowRadius = Max(1, int(ScanScale * PeakWidth)), InferWindow = false;
 			if (Verbose >= 1) std::cout << "Scan window radius set to " << WindowRadius << "\n";
+		}
+		if (curr_iter == nRTWindowIter && InferMassDelta) {
+			double av_mass_delta = (double(mass_delta)) / (double)Max(1, mass_cnt);
+			MassCorrection = av_mass_delta + 1.0;
+			if (Verbose >= 1) std::cout << "Mass delta: " << av_mass_delta << "\n";
+
+			if (InferMassAccuracy) {
+				mass_acc.resize(mass_stats.size());
+				for (int i = 0; i < mass_stats.size(); i++)
+					mass_acc[i] = -Abs(entries[mass_stats[i]].target.mass_delta - av_mass_delta);
+				std::sort(mass_acc.begin(), mass_acc.end());
+				MassAccuracy = -mass_acc[0.01 * (double)mass_acc.size()];
+				if (Verbose >= 1) std::cout << "Mass accuracy: " << MassAccuracy << "\n";
+			}
 		}
     }
     

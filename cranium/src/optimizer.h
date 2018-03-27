@@ -189,8 +189,8 @@ public:
 
 				// average out gradients and add learning rate
 				for (i = 0; i < network->numConnections; i++) {
-					scalarMultiply(dWi_avg[i], currentLearningRate / data->rows);
-					scalarMultiply(dbi_avg[i], currentLearningRate / data->rows);
+					scalarMultiply(dWi_avg[i], currentLearningRate / (double)data->rows);
+					scalarMultiply(dbi_avg[i], currentLearningRate / (double)data->rows);
 				}
 
 				// add regularization
