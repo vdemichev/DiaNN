@@ -130,6 +130,7 @@
       <AdditionalOptions>/we4146    /we4308 	/we4532	/we4533	/we4700	/we4703	/we4789	/we4995 %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Sync</ExceptionHandling>
       <BufferSecurityCheck>false</BufferSecurityCheck>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>

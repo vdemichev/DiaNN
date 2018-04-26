@@ -97,7 +97,7 @@ void activateLayer(Layer* layer){
 }
 
 void destroyLayer(Layer* layer){
-    destroyMatrix(layer->input);
+    if (layer->input != NULL) (layer->input);
     free(layer);
 }
 

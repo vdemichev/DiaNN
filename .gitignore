@@ -5,5 +5,8 @@
 *.tlog
 *.log
 *.csv
+*.tsv
+*.ilk
+*.zip
 
 
