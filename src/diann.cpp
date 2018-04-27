@@ -125,9 +125,12 @@ bool nRTWindowedSearch = true;
 const int CalibrationIter = 4;
 bool ForceMassAcc = false;
 bool IndividualMassAcc = false;
+bool CalcQuantMassAcc = true;
+bool IndividualQuantMassAcc = false;
 double CalibrationMassAccuracy = 100.0 / 1000000.0;
 double GlobalMassAccuracy = 20.0 / 1000000.0; 
 double GlobalMassAccuracyMs1 = 20.0 / 1000000.0;
+double QuantMassAccuracy = 20.0 / 1000000.0;
 double MinMassAcc = 1.0;
 double MinMassAccMs1 = 1.0;
 double GeneratorAccuracy = 5.0 / 1000000.0;
@@ -274,7 +277,7 @@ std::vector<std::string> oh = { // output headers
 	"nRT"
 };
 
-bool Normalisation = true;
+bool Normalisation = true, TopPeptidesNorm = true;
 double NormalisationQvalue = 0.001;
 double NormalisationPeptidesFraction = 0.4;
 
@@ -860,6 +863,7 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "no-window-inference ", 20)) InferWindow = false, std::cout << "Scan window inference turned off\n";
 		else if (!memcmp(&(args[start]), "individual-windows ", 19)) IndividualWindows = true, std::cout << "Scan windows will be inferred separately for different runs\n";
 		else if (!memcmp(&(args[start]), "individual-mass-acc ", 20)) IndividualMassAcc = true, std::cout << "Mass accuracy will be determined separately for different runs\n";
+		else if (!memcmp(&(args[start]), "individual-quant-mass-acc ", 26)) IndividualQuantMassAcc = true, std::cout << "Quantificaiton mass accuracy will be determined separately for different runs\n";
 		else if (!memcmp(&(args[start]), "convert ", 8)) Convert = true, std::cout << ".mzML to .dia conversion\n";
 		else if (!memcmp(&(args[start]), "use-rt ", 7)) UseRTInfo = true, std::cout << "Existing .quant files will be used for RT profiling\n";
 		else if (!memcmp(&(args[start]), "use-quant ", 10)) UseQuant = true, std::cout << "Existing .quant files will be used\n";
@@ -900,6 +904,8 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "standardise ", 12)) nnStandardise = true, std::cout << "Standardisation of scores will be performed\n";
 		else if (!memcmp(&(args[start]), "mass-acc-cal ", 13)) CalibrationMassAccuracy = std::stod(args.substr(start + 13, std::string::npos)) / 1000000.0,
 			std::cout << "Calibration mass accuracy set to " << CalibrationMassAccuracy << "\n";
+		else if (!memcmp(&(args[start]), "mass-acc-quant ", 15)) QuantMassAccuracy = std::stod(args.substr(start + 15, std::string::npos)) / 1000000.0,
+			std::cout << "Quantificaiton mass accuracy set to " << QuantMassAccuracy << "\n";
 		else if (!memcmp(&(args[start]), "mass-acc ", 9)) GlobalMassAccuracy = std::stod(args.substr(start + 9, std::string::npos)) / 1000000.0,
 			std::cout << "Mass accuracy set to " << GlobalMassAccuracy << "\n";
 		else if (!memcmp(&(args[start]), "mass-acc-ms1 ", 13)) GlobalMassAccuracyMs1 = std::stod(args.substr(start + 13, std::string::npos)) / 1000000.0,
@@ -916,6 +922,7 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "max-dppp ", 9)) MaxDpPP = Max(1, std::stoi(args.substr(start + 9, std::string::npos))),
 			std::cout << "Maximum number of data points per peak set to " << MaxDpPP << "\n";
 		else if (!memcmp(&(args[start]), "no-norm ", 8)) Normalisation = false, std::cout << "Cross-run normalisation turned off\n";
+		else if (!memcmp(&(args[start]), "total-signal-norm ", 18)) TopPeptidesNorm = false, std::cout << "Total signal cross-run normalisation will be used\n";
 		else if (!memcmp(&(args[start]), "norm-qvalue ", 12)) NormalisationQvalue = std::stod(args.substr(start + 11, std::string::npos)),
 			std::cout << "Q-value threshold for cross-run normalisation set to " << NormalisationQvalue << "\n";
 		else if (!memcmp(&(args[start]), "norm-fraction ", 14)) NormalisationPeptidesFraction = std::stod(args.substr(start + 14, std::string::npos)),
@@ -1197,6 +1204,18 @@ public:
 	mutable float decoy_scores[pN];
 };
 
+template <class T> void write_vector(std::ofstream &out, std::vector<T> &v) {
+	int size = v.size();
+	out.write((char*)&size, sizeof(int));
+	out.write((char*)&(v[0]), size * sizeof(T));
+}
+
+template <class T> void read_vector(std::ifstream &in, std::vector<T> &v) {
+	int size; in.read((char*)&size, sizeof(int));
+	v.resize(size);
+	in.read((char*)&(v[0]), size * sizeof(T));
+}
+
 class QuantEntry {
 public:
 	int index, stored_scores, window;
@@ -1235,12 +1254,24 @@ class Quant {
 public:
 	std::vector<QuantEntry> entries;
 	double weights[pN];
+
+	double MassAccuracy = GlobalMassAccuracy, MassAccuracyMs1 = GlobalMassAccuracyMs1, QuantMassAcc;
+	std::vector<double> MassCorrection, MassCorrectionMs1, MassCalSplit, MassCalSplitMs1, MassCalCenter, MassCalCenterMs1;
     
     void write(std::ofstream &out) {
         int size = entries.size();
         out.write((char*)&size, sizeof(int));
         for (int i = 0; i < size; i++) entries[i].write(out);
 		out.write((char*)weights, pN * sizeof(double));
+		out.write((char*)&MassAccuracy, sizeof(double));
+		out.write((char*)&MassAccuracyMs1, sizeof(double));
+		out.write((char*)&QuantMassAcc, sizeof(double));
+		write_vector(out, MassCorrection);
+		write_vector(out, MassCorrectionMs1);
+		write_vector(out, MassCalSplit);
+		write_vector(out, MassCalSplitMs1);
+		write_vector(out, MassCalCenter);
+		write_vector(out, MassCalCenterMs1);
     }
     
     void read(std::ifstream &in) {
@@ -1248,6 +1279,15 @@ public:
         entries.resize(size);
         for (int i = 0; i < size; i++) entries[i].read(in);
 		in.read((char*)weights, pN * sizeof(double));
+		in.read((char*)&MassAccuracy, sizeof(double));
+		in.read((char*)&MassAccuracyMs1, sizeof(double));
+		in.read((char*)&QuantMassAccuracy, sizeof(double));
+		read_vector(in, MassCorrection);
+		read_vector(in, MassCorrectionMs1);
+		read_vector(in, MassCalSplit);
+		read_vector(in, MassCalSplitMs1);
+		read_vector(in, MassCalCenter);
+		read_vector(in, MassCalCenterMs1);
     }
 };
 
@@ -1531,6 +1571,8 @@ public:
 					jt->second.pr.normalised = (jt->second.pr.quantity * av) / sums[index];
 				}
 			}
+
+			if (!TopPeptidesNorm) return;
 
 			// advanced normalisation
 			std::vector<float> score(map.size());
@@ -2207,7 +2249,7 @@ public:
 		MS1.resize(Threads), MS2.resize(Threads), MS2_min.resize(Threads);
 		PeakList.resize(Threads), BestFrList.resize(Threads), CorrSumList.resize(Threads);
 
-		if (Calibrate) MassAccuracy = MassAccuracyMs1 = CalibrationMassAccuracy;
+		if (Calibrate && !QuantOnly) MassAccuracy = MassAccuracyMs1 = CalibrationMassAccuracy;
 		MassCorrection.resize(1 + MassCalBins * 2, 0.0); MassCorrectionMs1.resize(1 + MassCalBinsMs1 * 2, 0.0);
 		MassCalSplit.resize(MassCalBins + 1, 0.0); MassCalSplitMs1.resize(MassCalBinsMs1 + 1, 0.0);
 		MassCalCenter.resize(MassCalBins + 1, 0.0); MassCalCenterMs1.resize(MassCalBinsMs1 + 1, 0.0);
@@ -3463,6 +3505,10 @@ public:
 				if (fail >= 3) break;
 			}
 			MassAccuracy = best_acc, fail = 0;
+			if (CalcQuantMassAcc) {
+				QuantMassAccuracy = MassAccuracy;
+				if (!IndividualQuantMassAcc) CalcQuantMassAcc = false;
+			}
 			if (Verbose >= 1) std::cout << "Optimised mass accuracy: " << MassAccuracy * 1000000.0 << " ppm\n";
 
 			if (acc_ms1_calibrated) while (true) {
@@ -3518,10 +3564,14 @@ public:
 
 	report:
 		curr_iter = iN - 1;
+		MassAccuracy = QuantMassAccuracy;
 		seek_precursors(false, 0);
 		Quant quant;
 		QuantEntry qe;
 		for (i = 0; i < pN; i++) quant.weights[i] = weights[i];
+		quant.MassAccuracy = MassAccuracy, quant.MassAccuracyMs1 = MassAccuracyMs1, quant.QuantMassAcc = QuantMassAccuracy;
+		quant.MassCorrection = MassCorrection, quant.MassCorrectionMs1 = MassCorrectionMs1;
+		quant.MassCalSplit = MassCalSplit, quant.MassCalSplitMs1 = MassCalSplitMs1, quant.MassCalCenter = MassCalCenter, quant.MassCalCenterMs1 = MassCalCenterMs1;
 
         for (auto it = entries.begin(); it != entries.end(); it++) {
             if (!it->target.found) continue;
@@ -3600,7 +3650,7 @@ int main(int argc, char *argv[]) {
 		if (lib_file.size() && lib.load(&(lib_file[0]))) GuideLibrary = true;
 		lib.load(fasta);
 	} else if (!lib.load(&(lib_file[0]))) Throw("Cannot load spectral library");
-	if (!QuantOnly) lib.generate_decoys();
+	if (!QuantOnly && !ReportOnly) lib.generate_decoys();
 
 	Library ref;
 	if (ref_file.size()) {
@@ -3665,6 +3715,10 @@ int main(int argc, char *argv[]) {
 				e->target.peak_width = pos->pr.peak_width;
 				e->target.qvalue = pos->pr.qvalue;
 			}
+			run.MassAccuracy = lib.info.raw[runN].MassAccuracy, run.MassAccuracyMs1 = lib.info.raw[runN].MassAccuracyMs1, QuantMassAccuracy = lib.info.raw[runN].QuantMassAcc;
+			run.MassCorrection = lib.info.raw[runN].MassCorrection, run.MassCorrectionMs1 = lib.info.raw[runN].MassCorrectionMs1;
+			run.MassCalSplit = lib.info.raw[runN].MassCalSplit, run.MassCalSplitMs1 = lib.info.raw[runN].MassCalSplitMs1;
+			run.MassCalCenter = lib.info.raw[runN].MassCalCenter, run.MassCalCenterMs1 = lib.info.raw[runN].MassCalCenterMs1;
 			run.process();
 		}
 		lib.info.clear();
