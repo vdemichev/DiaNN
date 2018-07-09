@@ -60,7 +60,7 @@ Specifies a file with a set of commands.
 ```
 --dif <folder> 
 ```
-Specifies a folder containing raw files to be processed.
+Specifies a folder containing raw files to be processed. All files in the folder must be in .raw, .mzML or .dia format.  
 ```
 --threads <thread number> 
 ```
