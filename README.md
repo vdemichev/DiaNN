@@ -1,7 +1,7 @@
 ### DIA-NN
 
 DIA-NN - a fast and easy to use tool for processing data independent acquisition (DIA) proteomics data.  
-DIA-NN implements deep neural networks to improve precursor ion identification. 
+DIA-NN implements deep neural networks to improve precursor ion identification.  
 DIA-NN now also supports library-free search and spectral library generation.
 
 **DIA-NN: Deep neural networks substantially improve the   
