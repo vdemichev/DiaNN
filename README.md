@@ -77,7 +77,7 @@ Specifies the output file; by default, the output is saved to quant.csv in the c
 diann.exe --threads 4 --f run1 --f run2 --lib yeast.csv --prefix C:\Data\ --ext .mzML --out run1_2.csv    
 ```
 
-For a full list of supported commands see the arguments() function in /src/diann.cpp.    
+For a full list of supported commands see the arguments() function in /src/diann.cpp. A reference manual will be added soon. 
 
 ### Building
 
