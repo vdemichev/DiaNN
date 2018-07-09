@@ -13,6 +13,15 @@ DIA-NN encompasses all stages of DIA-MS data processing in a single program.
 As input it takes raw data files and a spectral library.  
 A report with protein and precursor ion quantities is produced.  
 
+### New in version 1.5
+
+Significantly improved identification performance.  
+Automatic mass correction and mass accuracy inference.  
+Automatic removal of interfering peptides.
+Increased speed and greatly reduced memory usage.
+Library-free search and spectral library generation from DIA data.
+GUI wrapper.
+
 ### Installation
 
 None required. Two executables are provided: DiaNN.exe (a command-line tool) and DIA-NN.exe (a GUI implemented as a wrapper for DiaNN.exe).
