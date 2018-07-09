@@ -20,6 +20,7 @@ None required. Two executables are provided: DiaNN.exe (a command-line tool) and
 ### Input files
 
 Raw data files: Thermo .raw, .mzML or .dia (format used by DIA-NN to store spectra).  
+Reading Thermo .raw files requires Thermo MS File Reader (https://thermo.flexnetoperations.com/control/thmo/login?nextURL=%2Fcontrol%2Fthmo%2Fdownload%3Felement%3D6306677) to be installed.   
 The .mzML files should be centroided and contain data as spectra (e.g. SWATH) and not chromatograms.  
 
 Spectral library: comma-separated (.csv) or tab-separated (.tsv or .txt) file.   
