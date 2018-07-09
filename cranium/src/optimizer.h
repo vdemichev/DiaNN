@@ -24,7 +24,7 @@ public:
     float learningRate;
     float searchTime;
     float regularizationStrength;
-    float momentumFactor;
+    float B1, B2;
     int maxIters;
     int shuffle;
     int verbose;
@@ -81,19 +81,24 @@ public:
 		// these will be reused per epoch
 		Matrix** dWi_avg = (Matrix**)alloca(network->numConnections * sizeof(Matrix*));
 		Matrix** dbi_avg = (Matrix**)alloca(network->numConnections * sizeof(Matrix*));
-		Matrix** dWi_last = (Matrix**)alloca(network->numConnections * sizeof(Matrix*));
-		Matrix** dbi_last = (Matrix**)alloca(network->numConnections * sizeof(Matrix*));
+		Matrix** Mw = (Matrix**)alloca(network->numConnections * sizeof(Matrix*));
+		Matrix** Mb = (Matrix**)alloca(network->numConnections * sizeof(Matrix*));
+		Matrix** Vw = (Matrix**)alloca(network->numConnections * sizeof(Matrix*));
+		Matrix** Vb = (Matrix**)alloca(network->numConnections * sizeof(Matrix*));
 		for (i = 0; i < network->numConnections; i++) {
 			dWi_avg[i] = createMatrixZeroes(network->connections[i]->weights->rows, network->connections[i]->weights->cols);
 			dbi_avg[i] = createMatrixZeroes(1, network->connections[i]->bias->cols);
-			dWi_last[i] = createMatrixZeroes(network->connections[i]->weights->rows, network->connections[i]->weights->cols);
-			dbi_last[i] = createMatrixZeroes(1, network->connections[i]->bias->cols);
+			Mw[i] = createMatrixZeroes(network->connections[i]->weights->rows, network->connections[i]->weights->cols);
+			Mb[i] = createMatrixZeroes(1, network->connections[i]->bias->cols);
+			Vw[i] = createMatrixZeroes(network->connections[i]->weights->rows, network->connections[i]->weights->cols);
+			Vb[i] = createMatrixZeroes(1, network->connections[i]->bias->cols);
 		}
 
 		int numBatches = (data->rows / batchSize) + (data->rows % batchSize != 0 ? 1 : 0);
 		int training, batch, epoch, layer;
 		DataSet** dataBatches, ** classBatches;
 		epoch = 1;
+		float B1t = B1, B2t = B2;
 		while (epoch <= maxIters) {
 			// shuffle all data and classes but maintain training/class alignment
 			if (shuffle != 0) {
@@ -184,15 +189,6 @@ public:
 					}
 				}
 
-				// calculate learning rate for this epoch
-				float currentLearningRate = searchTime == 0 ? learningRate : learningRate / (1 + (epoch / searchTime));
-
-				// average out gradients and add learning rate
-				for (i = 0; i < network->numConnections; i++) {
-					scalarMultiply(dWi_avg[i], currentLearningRate / (double)data->rows);
-					scalarMultiply(dbi_avg[i], currentLearningRate / (double)data->rows);
-				}
-
 				// add regularization
 				for (i = 0; i < network->numConnections; i++) {
 					copyValuesInto(network->connections[i]->weights, regi[i]);
@@ -200,12 +196,16 @@ public:
 					addTo(regi[i], dWi_avg[i]);
 				}
 
-				// add momentum
+				// ADAM
 				for (i = 0; i < network->numConnections; i++) {
-					scalarMultiply(dWi_last[i], momentumFactor);
-					scalarMultiply(dbi_last[i], momentumFactor);
-					addTo(dWi_last[i], dWi_avg[i]);
-					addTo(dbi_last[i], dbi_avg[i]);
+					matrix_mul_add(Mw[i], B1, dWi_avg[i], 1.0 - B1);
+					matrix_mul_add(Mb[i], B1, dbi_avg[i], 1.0 - B1);
+					matrix_mul_add(Vw[i], B2, dWi_avg[i], 1.0 - B2, true);
+					matrix_mul_add(Vb[i], B2, dbi_avg[i], 1.0 - B2, true);
+					float rate = learningRate * (sqrt(1.0 - B2t) / (1.0 - B1t));
+					adam_update(dWi_avg[i], Mw[i], Vw[i], rate);
+					adam_update(dbi_avg[i], Mb[i], Vb[i], rate);
+					B1t *= B1, B2t *= B2;
 				}
 
 				// adjust weights and bias
@@ -214,15 +214,6 @@ public:
 					scalarMultiply(dbi_avg[i], -1);
 					addTo(dWi_avg[i], network->connections[i]->weights);
 					addTo(dbi_avg[i], network->connections[i]->bias);
-				}
-
-				// cache weight and bias updates for momentum
-				for (i = 0; i < network->numConnections; i++) {
-					copyValuesInto(dWi_avg[i], dWi_last[i]);
-					copyValuesInto(dbi_avg[i], dbi_last[i]);
-					// make positive again for next epoch
-					scalarMultiply(dWi_last[i], -1);
-					scalarMultiply(dbi_last[i], -1);
 				}
 
 				// zero out reusable average matrices and regularization matrices
@@ -275,8 +266,8 @@ public:
 		for (i = 0; i < network->numConnections; i++) {
 			destroyMatrix(dWi_avg[i]);
 			destroyMatrix(dbi_avg[i]);
-			destroyMatrix(dWi_last[i]);
-			destroyMatrix(dbi_last[i]);
+			destroyMatrix(Mw[i]);
+			destroyMatrix(Mb[i]);
 			destroyMatrix(regi[i]);
 		}
 

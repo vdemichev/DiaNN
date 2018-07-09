@@ -252,7 +252,7 @@ int MzParser::checkFileType(char* fname){
   for(i=0;i<strlen(ext);i++) ext[i]=toupper(ext[i]);
   for(i=0;i<strlen(preExt);i++) preExt[i]=toupper(preExt[i]);
 
-  if(!strcmp(ext,"MZML")) return 1;
+  if(!strcmp(ext,"MSTOOLKIT")) return 1;
   if(!strcmp(ext,"MZXML")) return 2;
   if(!strcmp(ext,"MZ5")) {
 #ifdef MZP_MZ5
@@ -264,7 +264,7 @@ int MzParser::checkFileType(char* fname){
   }
   
   if(!strcmp(ext,"GZ")) {
-    if(!strcmp(preExt,"MZML")) return 3;
+    if(!strcmp(preExt,"MSTOOLKIT")) return 3;
     if(!strcmp(preExt,"MZXML")) return 4;
     cerr << "Unknown .gz file. Only .mzML.gz and .mzXML.gz allowed. No file loaded." << endl;
     return 0;

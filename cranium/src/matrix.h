@@ -263,6 +263,40 @@ Matrix* add(Matrix* A, Matrix* B){
     return result;
 }
 
+void matrix_mul_add(Matrix * to, float a, Matrix * x, float b, bool square = false) {
+	assert(to->rows == x->rows && to->cols == x->cols);
+	int i, j;
+	for (i = 0; i < to->rows; i++) {
+		if (!square) {
+			for (j = 0; j < to->cols; j++)
+				setMatrix(to, i, j, getMatrix(to, i, j) * a + getMatrix(x, i, j) * b);
+		}
+		else for (j = 0; j < to->cols; j++) {
+			float val = getMatrix(x, i, j);
+			setMatrix(to, i, j, getMatrix(to, i, j) * a + val * val * b);
+		}
+	}
+}
+
+void matrix_replace(Matrix * to, Matrix * x, float b) {
+	assert(to->rows == x->rows && to->cols == x->cols);
+	int i, j;
+	for (i = 0; i < to->rows; i++) {
+		for (j = 0; j < to->cols; j++)
+			setMatrix(to, i, j, getMatrix(x, i, j) * b);
+	}
+}
+
+void adam_update(Matrix * to, Matrix * m, Matrix * v, float a) {
+	assert(to->rows == m->rows && to->cols == m->cols);
+	assert(to->rows == v->rows && to->cols == v->cols);
+	int i, j;
+	for (i = 0; i < to->rows; i++) {
+		for (j = 0; j < to->cols; j++)
+			setMatrix(to, i, j, (getMatrix(m, i, j) * a) / (sqrt(getMatrix(v, i, j)) + 0.000000001));
+	}
+}
+
 void addTo(Matrix* from, Matrix* to){
     assert(from->rows == to->rows && from->cols == to->cols);
     int i, j;

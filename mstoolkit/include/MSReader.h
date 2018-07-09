@@ -17,7 +17,7 @@ limitations under the License.
 // THIS FILE HAS BEEN MODIFIED BY VADIM DEMICHEV
 
 #define _NOSQLITE
-#define _NO_THERMORAW
+//#define _NO_THERMORAW
 
 #ifndef _MSREADER_H
 #define _MSREADER_H

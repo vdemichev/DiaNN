@@ -13,6 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+// THIS FILE HAS BEEN MODIFIED BY VADIM DEMICHEV
+
 #include "MSReader.h"
 #include <iostream>
 using namespace std;
@@ -2181,6 +2184,8 @@ MSFileFormat MSReader::checkFileFormat(const char *fn){
 	for(i=0;i<strlen(ext);i++) ext[i]=toupper(ext[i]);
 
   //check extension first - we must trust MS1 & MS2 & ZS & UZS
+	if (strcmp(ext, ".RAW") == 0) return raw;
+  if (strcmp(ext,".MZML") == 0) return mzML;
   if(strcmp(ext,".MS1")==0 ) return ms1;
   if(strcmp(ext,".MS2")==0 ) return ms2;
 	if(strcmp(ext,".BMS1")==0 ) return bms1;
@@ -2190,13 +2195,12 @@ MSFileFormat MSReader::checkFileFormat(const char *fn){
   if(strcmp(ext,".ZS")==0 ) return zs;
   if(strcmp(ext,".UZS")==0 ) return uzs;
   if(strcmp(ext,".MSMAT")==0 ) return msmat_ff;
-  if(strcmp(ext,".RAW")==0 ) return raw;
   if(strcmp(ext,".MZXML")==0 ) return mzXML;
   if(strcmp(ext,".MZ5")==0 ) {
     cerr << "MZ5 format is no longer supported." << endl;
     return dunno;
   }
-	if(strcmp(ext,".MZML")==0 ) return mzML;
+	if(strcmp(ext,".MSTOOLKIT")==0 ) return mzML;
   if(strcmp(ext,".MGF")==0 ) return mgf;
 	//add the sqlite3 format
   if(strcmp(ext,".SQLITE3")==0 ) return sqlite;
@@ -2211,7 +2215,7 @@ MSFileFormat MSReader::checkFileFormat(const char *fn){
 		strcpy(ext,c);
 		for(i=0;i<strlen(ext);i++) ext[i]=toupper(ext[i]);
 		if(strcmp(ext,".MZXML")==0 ) return mzXMLgz;
-		if(strcmp(ext,".MZML")==0 ) return mzMLgz;
+		if(strcmp(ext,".MSTOOLKIT")==0 ) return mzMLgz;
 	}
 
   return dunno;

@@ -135,5 +135,8 @@
     <ClCompile Include="..\mstoolkit\src\mzParser\MSNumpress.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\mstoolkit\src\MSToolkit\RAWReader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

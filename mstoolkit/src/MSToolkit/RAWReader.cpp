@@ -13,6 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+// THIS FILE HAS BEEN MODIFIED BY VADIM DEMICHEV
+
 #ifndef _NO_THERMORAW
 #include "RAWReader.h"
 
@@ -381,7 +384,7 @@ bool RAWReader::readRawFile(const char *c, Spectrum &s, int scNum){
   BSTR testStr;
 
 	//Additional members for Scan Information
-  bool bCentroid;
+  bool bCentroid = false;
 
   double cv;    //Compensation Voltage
   double BPI;   //Base peak intensity
@@ -393,6 +396,10 @@ bool RAWReader::readRawFile(const char *c, Spectrum &s, int scNum){
 	long tl;      //temp long value
   MSActivation act;
 
+  double selLower = 0.0;
+  double selUpper = 0.0;
+  double * peak_list = NULL;
+  int peak_n = 0;
 
   if(!bRaw) return false;
 
@@ -508,6 +515,15 @@ bool RAWReader::readRawFile(const char *c, Spectrum &s, int scNum){
     if (ret == 0) preInfo.dIsoMZ = td;
     raw4=NULL;
 
+	if (raw > 4 && MSn == MS2 && ret == 0) {
+		IXRawfile5Ptr raw5 = (IXRawfile4Ptr)m_Raw;
+		double width;
+		raw5->GetIsolationWidthForScanNum(rawCurSpec, 0, &width);
+		selLower = td - width * 0.5;
+		selUpper = td + width * 0.5;
+		raw5 = NULL;
+	}
+
     //Correct precursor mono mass if it is more than 5 13C atoms away from isolation mass
     if (preInfo.dMonoMZ > 0 && preInfo.charge>0){
       td = preInfo.dIsoMZ-preInfo.dMonoMZ;
@@ -549,18 +565,31 @@ bool RAWReader::readRawFile(const char *c, Spectrum &s, int scNum){
 
     m_Raw->GetFilterForScanNum(i, &rawFilter);
     j=m_Raw->GetAverageMassList(&lowerBound, &upperBound, &FirstBkg1, &LastBkg1, &FirstBkg2, &LastBkg2,
-      rawFilter, 1, rawAvgCutoff, 0, FALSE, &pw, &varMassList, &varPeakFlags, &lArraySize );
+      rawFilter, 1, rawAvgCutoff, 0, TRUE, &pw, &varMassList, &varPeakFlags, &lArraySize );
     SysFreeString(rawFilter);
     rawFilter=NULL;
 
   } else {
-
 		//Get regular spectrum data
-		sl=lstrlenA("");
-		testStr = SysAllocStringLen(NULL,sl);
-		MultiByteToWideChar(CP_ACP,0,"",sl,testStr,sl);
-		j=m_Raw->GetMassListFromScanNum(&rawCurSpec,testStr,0,0,0,FALSE,&pw,&varMassList,&varPeakFlags,&lArraySize);
-		SysFreeString(testStr);
+		if (!bCentroid) {
+			IXRawfile5Ptr raw5 = (IXRawfile5Ptr)m_Raw;
+			j = raw5->GetLabelData(&varMassList, &varPeakFlags, &rawCurSpec);
+			raw5 = NULL;
+			if (j != 0) {
+				VariantInit(&varMassList);
+				VariantInit(&varPeakFlags);
+				goto mass_list;
+			}
+
+			peak_list = (double*)varMassList.parray->pvData;
+			peak_n = varMassList.parray->rgsabound[0].cElements;
+
+			bCentroid = TRUE;
+		}
+		else {
+		mass_list:
+			j = m_Raw->GetMassListFromScanNum(&rawCurSpec, "", 0, 0, 0, bCentroid, &pw, &varMassList, &varPeakFlags, &lArraySize);
+		}
   }
 
 	//Handle MS2 and MS3 files differently to create Z-lines
@@ -608,6 +637,8 @@ bool RAWReader::readRawFile(const char *c, Spectrum &s, int scNum){
 		s.setCharge(0);
 	}
 
+	s.setSelWindow(selLower, selUpper);
+
 	//Set basic scan info
   if(bCentroid) s.setCentroidStatus(1);
   else s.setCentroidStatus(0);
@@ -636,10 +667,15 @@ bool RAWReader::readRawFile(const char *c, Spectrum &s, int scNum){
 		case MSX: s.setMsLevel(2); break;
     default: s.setMsLevel(0); break;
   }
-	psa = varMassList.parray;
-  SafeArrayAccessData( psa, (void**)(&pDataPeaks) );
-  for(j=0;j<lArraySize;j++)	s.add(pDataPeaks[j].dMass,(float)pDataPeaks[j].dIntensity);
-  SafeArrayUnaccessData( psa );
+  if (peak_n == 0) {
+	  psa = varMassList.parray;
+	  SafeArrayAccessData(psa, (void**)(&pDataPeaks));
+	  for (j = 0; j < lArraySize; j++)	s.add(pDataPeaks[j].dMass, (float)pDataPeaks[j].dIntensity);
+	  SafeArrayUnaccessData(psa);
+  }
+  else {
+	  for (j = 0; j < peak_n; j++) s.add(peak_list[6 * j], peak_list[6 * j + 1]);
+  }
 
   //Clean up memory
 	VariantClear(&varMassList);

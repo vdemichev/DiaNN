@@ -95,9 +95,8 @@ Network* createNetwork(size_t numFeatures, size_t numHiddenLayers, size_t* hidde
 }
 
 void forwardPass(Network* network, Matrix* input){
-	if (network->layers[0]->input != NULL) 
-		assert(input->cols == network->layers[0]->input->cols);
-	if (network->layers[0]->input != NULL) destroyMatrix(network->layers[0]->input);
+	assert(input->cols == network->layers[0]->input->cols);
+	destroyMatrix(network->layers[0]->input);
 	network->layers[0]->input = copy(input);
     int i;
     Matrix* tmp,* tmp2;
@@ -109,21 +108,6 @@ void forwardPass(Network* network, Matrix* input){
         destroyMatrix(tmp);
         activateLayer(network->connections[i]->to);
     }
-}
-
-void forwardPassOnData(Network* network, Matrix* input) {
-	network->layers[0]->input = input;
-	int i;
-	Matrix* tmp, *tmp2;
-	for (i = 0; i < network->numConnections; i++) {
-		tmp = multiply(network->layers[i]->input, network->connections[i]->weights);
-		tmp2 = addToEachRow(tmp, network->connections[i]->bias);
-		destroyMatrix(network->connections[i]->to->input);
-		network->connections[i]->to->input = tmp2;
-		destroyMatrix(tmp);
-		activateLayer(network->connections[i]->to);
-	}
-	network->layers[0]->input = NULL;
 }
 
 // TODO: optimize this to not need the conversion

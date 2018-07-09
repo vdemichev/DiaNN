@@ -8,6 +8,8 @@ Version 1.0, January 4, 2011.
 Version 1.1, March 14, 2012.
 */
 
+// THIS FILE HAS BEEN MODIFIED BY VADIM DEMICHEV
+
 #include "mzParser.h"
 
 int checkFileType(const char* fname){
@@ -35,11 +37,12 @@ int checkFileType(const char* fname){
   for(i=0;i<strlen(ext);i++) ext[i]=toupper(ext[i]);
   for(i=0;i<strlen(preExt);i++) preExt[i]=toupper(preExt[i]);
 
-  if(!strcmp(ext,"MZML")) return 1;
+  if (!strcmp(ext, "MZML")) return 1;
+  if(!strcmp(ext,"MSTOOLKIT")) return 1;
   if(!strcmp(ext,"MZXML")) return 2;
   if(!strcmp(ext,"MZ5")) return 5;
   if(!strcmp(ext,"GZ")) {
-    if(!strcmp(preExt,"MZML")) return 3;
+    if(!strcmp(preExt,"MSTOOLKIT")) return 3;
     if(!strcmp(preExt,"MZXML")) return 4;
     cerr << "Unknown .gz file. Only .mzML.gz and .mzXML.gz allowed. No file loaded." << endl;
     return 0;
@@ -317,11 +320,11 @@ char* rampValidFileType(const char *buf){
     for(i=0;i<strlen(preExt);i++) preExt[i]=toupper(preExt[i]);
   }
 
-  if(!strcmp(ext,".MZML")) return (char*) result;
+  if(!strcmp(ext,".MSTOOLKIT")) return (char*) result;
   if(!strcmp(ext,".MZXML")) return (char*) result;
   if(!strcmp(ext,".MZ5")) return (char*) result;
   if(!strcmp(ext,".GZ")) {
-    if(!strcmp(preExt,".MZML.GZ")) return (char*) result2;
+    if(!strcmp(preExt,".MSTOOLKIT.GZ")) return (char*) result2;
     if(!strcmp(preExt,".MZXML.GZ")) return (char*) result2;
     cout << "Unknown .gz file. Only .mzML.gz and .mzXML.gz allowed. No file loaded." << endl;
   }
