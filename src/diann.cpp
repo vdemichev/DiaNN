@@ -9,7 +9,7 @@ visit http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative C
 #define _ITERATOR_DEBUG_LEVEL 0  
 #define _CRT_SECURE_NO_WARNINGS
 
-#pragma warning(disable:4244)
+#pragma warning(disable:4244)-
 #pragma warning(disable:4267)
 #pragma warning(disable:4305)
 
@@ -1496,6 +1496,10 @@ public:
 		float v, s, margin, min, max;
 		margin = mz * accuracy;
 		min = mz - margin, max = mz + margin;
+		if (!size()) {
+			if (get_mz) *peak_mz = 0.0;
+			return 0.0;
+		}
 
 		while (high > low) {
 			int middle = (high + low) >> 1;
@@ -1535,7 +1539,7 @@ public:
 
 		int size = peaks.size();
 		out.write((char*)&size, sizeof(int));
-		out.write((char*)&(peaks[0]), peaks.size() * sizeof(Peak));
+		if (size) out.write((char*)&(peaks[0]), peaks.size() * sizeof(Peak));
 	}
 
 	void read(std::ifstream &in) {
@@ -1544,8 +1548,10 @@ public:
 		in.read((char*)&window_high, sizeof(double));
 
 		int size; in.read((char*)&size, sizeof(int));
-		peaks.resize(size);
-		in.read((char*)&(peaks[0]), peaks.size() * sizeof(Peak));
+		if (size) {
+			peaks.resize(size);
+			in.read((char*)&(peaks[0]), peaks.size() * sizeof(Peak));
+		}
 	}
 };
 
@@ -1631,13 +1637,15 @@ public:
 template <class T> void write_vector(std::ofstream &out, std::vector<T> &v) {
 	int size = v.size();
 	out.write((char*)&size, sizeof(int));
-	out.write((char*)&(v[0]), size * sizeof(T));
+	if (size) out.write((char*)&(v[0]), size * sizeof(T));
 }
 
 template <class T> void read_vector(std::ifstream &in, std::vector<T> &v) {
 	int size; in.read((char*)&size, sizeof(int));
-	v.resize(size);
-	in.read((char*)&(v[0]), size * sizeof(T));
+	if (size) {
+		v.resize(size);
+		in.read((char*)&(v[0]), size * sizeof(T));
+	}
 }
 
 class QuantEntry {
