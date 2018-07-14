@@ -9,7 +9,7 @@ visit http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative C
 #define _ITERATOR_DEBUG_LEVEL 0  
 #define _CRT_SECURE_NO_WARNINGS
 
-#pragma warning(disable:4244)-
+#pragma warning(disable:4244)
 #pragma warning(disable:4267)
 #pragma warning(disable:4305)
 
