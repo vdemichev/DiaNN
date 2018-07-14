@@ -10,9 +10,11 @@ Vadim Demichev, Christoph B. Messner, Kathryn S. Lilley, Markus Ralser
 https://doi.org/10.1101/282699
 
 DIA-NN encompasses all stages of DIA-MS data processing in a single program.   
-As input it takes raw data files and a spectral library.  
-A report with protein and precursor ion quantities is produced.  
-
+As input it takes raw data files and a spectral library / FASTA database.  
+A report with protein and precursor ion quantities is produced. 
+  
+Manual: https://github.com/vdemichev/DiaNN/blob/master/DIA-NN%20GUI%20manual.pdf   
+  
 ### New in version 1.5
 
 Significantly improved identification performance.  
@@ -33,8 +35,6 @@ Reading Thermo .raw files requires Thermo MS File Reader (https://thermo.flexnet
 The .mzML files should be centroided and contain data as spectra (e.g. SWATH) and not chromatograms.  
 
 Spectral library: comma-separated (.csv) or tab-separated (.tsv or .txt) file.    
-  
-Manual: https://github.com/vdemichev/DiaNN/blob/master/DIA-NN%20GUI%20manual.pdf  
   
 ### Command-line tool usage
 ```
