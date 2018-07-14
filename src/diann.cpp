@@ -232,12 +232,13 @@ bool PGsInferred = false;
 
 double ReportQValue = 0.01;
 double ReportProteinQValue = 1.0;
-int PGLevel = 1; // 0 - ids, 1 - names
-std::vector<std::string> ImplicitProteinGrouping = { "isoform IDs", "protein names" };
+int PGLevel = 2; // 0 - ids, 1 - names, 2 - genes
+std::vector<std::string> ImplicitProteinGrouping = { "isoform IDs", "protein names", "genes" };
 bool IndividualReports = false;
 bool SwissProtPriority = true;
 bool ForceSwissProt = false;
 bool FastaProtDuplicates = false;
+bool SpeciesGene = false;
 
 bool ExtendedReport = true;
 
@@ -1055,7 +1056,8 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "threads ", 8)) Threads = std::stoi(args.substr(start + 8, std::string::npos)), std::cout << "Thread number set to " << Threads << "\n";
 		else if (!memcmp(&(args[start]), "fasta-search ", 13)) FastaSearch = true, std::cout << "Library-free search turned on\n";
 		else if (!memcmp(&(args[start]), "pg-level ", 9)) PGLevel = std::stoi(args.substr(start + 9, std::string::npos)),
-			std::cout << "Implicit protein grouping: " << ImplicitProteinGrouping[PGLevel] << "\n";
+			std::cout << "Implicit protein grouping: " << ImplicitProteinGrouping[PGLevel] 
+					  << "; this determines which peptides are considered 'proteotypic' and thus affects protein FDR calculation\n";
 		else if (!memcmp(&(args[start]), "no-batch-mode ", 14)) BatchMode = false, std::cout << "Batch mode turned off\n";
 		else if (!memcmp(&(args[start]), "verbose ", 8)) Verbose = std::stoi(args.substr(start + 8, std::string::npos));
 		else if (!memcmp(&(args[start]), "export-windows ", 15)) ExportWindows = true;
@@ -1095,7 +1097,8 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Output will be filtered at " << ReportProteinQValue << " protein-level FDR\n";
 		else if (!memcmp(&(args[start]), "no-prot-inf ", 12)) InferPGs = false, std::cout << "Protein inference will not be performed\n";
 		else if (!memcmp(&(args[start]), "no-swissprot ", 13)) SwissProtPriority = false, std::cout << "SwissProt proteins will not be prioritised for protein inference\n";
-		else if (!memcmp(&(args[start]), "force-swissprot ", 16)) ForceSwissProt, std::cout << "Only SwissProt proteins will be considered in library-free search\n";
+		else if (!memcmp(&(args[start]), "force-swissprot ", 16)) ForceSwissProt = true, std::cout << "Only SwissProt proteins will be considered in library-free search\n";
+		else if (!memcmp(&(args[start]), "species-gene ", 13)) SpeciesGene = true, std::cout << "Species suffix will be added to gene annotation; this affects proteotypicity definition\n";
 		else if (!memcmp(&(args[start]), "duplicate-proteins ", 19)) FastaProtDuplicates = true, std::cout << "Duplicate proteins in FASTA files will not be skipped\n";
 		else if (!memcmp(&(args[start]), "out-lib ", 8)) out_lib_file = trim(args.substr(start + 8, end - start - 8));
 		else if (!memcmp(&(args[start]), "learn-lib ", 10)) learn_lib_file = trim(args.substr(start + 10, end - start - 10));
@@ -1828,6 +1831,11 @@ public:
 		}
 		if (header.size() < 3) *swissprot = false;
 		else *swissprot = (header[1] == 's' && header[2] == 'p');
+		if (SpeciesGene && gene.size() && name.size()) {
+			auto pos = std::prev(name.end());
+			for (; pos != name.begin(); pos--) if (*pos == '_') break;
+			if (pos != name.begin()) gene += name.substr(std::distance(name.begin(), pos));
+		}
 	}
 
 	bool load_proteins(std::vector<std::string> &files) {
@@ -2722,8 +2730,9 @@ public:
 					bool first = true, swissprot = false;
 					if (SwissProtPriority) for (auto &p : pid.proteins) if (proteins[p].swissprot) swissprot = true;
 					for (auto &p : pid.proteins) {
-						if (!PGLevel) if (!proteins[p].id.size()) continue;
-						if (PGLevel) if (!proteins[p].name.size()) continue;
+						if (PGLevel == 0) if (!proteins[p].id.size()) continue;
+						if (PGLevel == 1) if (!proteins[p].name.size()) continue;
+						if (PGLevel == 2) if (!proteins[p].gene.size()) continue;
 						if (swissprot && !proteins[p].swissprot) continue;
 						auto pos = std::lower_bound(info.proteins[s].begin(), info.proteins[s].end(), p);
 						if (pos != info.proteins[s].end()) if (*pos == p) {
@@ -4850,7 +4859,7 @@ public:
 	std::vector<int> calculate_protein_qvalues() {
 		if (Verbose >= 1) Time(), std::cout << "Calculating protein q-values\n";
 
-		int i, pi, np = PGLevel ? lib->names.size() : lib->proteins.size();
+		int i, pi, np = (PGLevel == 2 ? lib->genes.size() : (PGLevel == 1 ? lib->names.size() : lib->proteins.size()));
 		std::vector<float> tsc(np, -INF), dsc(np, -INF), q(np);
 		std::vector<bool> identified(np);
 		std::vector<int> ids; 
@@ -4861,23 +4870,33 @@ public:
 			auto &pid = lib->protein_ids[le.pid_index];
 			if (e.target.flags & fFound) {
 				float sc = e.target.info[0].cscore;
-				if (!PGLevel) for (auto &p : pid.proteins) if (lib->proteins[p].id.size()) {
+				if (PGLevel == 0) for (auto &p : pid.proteins) if (lib->proteins[p].id.size()) {
 					if (sc > tsc[p]) tsc[p] = sc;
 					if (e.target.info[0].qvalue <= 0.01) identified[p] = true;
 				}
 				if (PGLevel) for (auto &p : pid.proteins) {
-					pi = lib->proteins[p].name_index;
-					if (!lib->names[pi].size()) continue;
+					if (PGLevel == 1) {
+						pi = lib->proteins[p].name_index;
+						if (!lib->names[pi].size()) continue;
+					} else {
+						pi = lib->proteins[p].gene_index;
+						if (!lib->genes[pi].size()) continue;
+					}
 					if (sc > tsc[pi]) tsc[pi] = sc;
 					if (e.target.info[0].qvalue <= 0.01) identified[pi] = true;
 				}
 			}
 			if (e.decoy.flags & fFound) {
 				float sc = e.decoy.info[0].cscore;
-				if (!PGLevel) for (auto &p : pid.proteins) if (lib->proteins[p].id.size()) if (sc > dsc[p]) dsc[p] = sc;
+				if (PGLevel == 0) for (auto &p : pid.proteins) if (lib->proteins[p].id.size()) if (sc > dsc[p]) dsc[p] = sc;
 				if (PGLevel) for (auto &p : pid.proteins) {
-					pi = lib->proteins[p].name_index;
-					if (!lib->names[pi].size()) continue;
+					if (PGLevel == 1) {
+						pi = lib->proteins[p].name_index;
+						if (!lib->names[pi].size()) continue;
+					} else if (PGLevel == 2) {
+						pi = lib->proteins[p].gene_index;
+						if (!lib->genes[pi].size()) continue;
+					}
 					if (sc > dsc[pi]) dsc[pi] = sc;
 				}
 			}
@@ -4916,7 +4935,7 @@ public:
 			}
 			if (identified[i]) ids01++;
 		}
-		if (Verbose >= 1) Time(), std::cout << "Number of " << (!PGLevel ? "protein isoforms" : "proteins") << " identified at 1% FDR: " 
+		if (Verbose >= 1) Time(), std::cout << "Number of " << (PGLevel == 0 ? "protein isoforms" : (PGLevel == 1 ? "proteins" : "genes")) << " identified at 1% FDR: " 
 			<< ids01 << " (precursor-level), " << ids01p << " (protein-level) (inference performed using proteotypic peptides only)\n";
 
 		for (auto &e : entries) {
@@ -4924,9 +4943,9 @@ public:
 			auto &pid = lib->protein_ids[le.pid_index];
 			if (e.target.flags & fFound) {
 				e.target.info[0].protein_qvalue = 1.0;
-				if (!PGLevel) for (auto &p : pid.proteins) if (q[p] < e.target.info[0].protein_qvalue) e.target.info[0].protein_qvalue = q[p];
+				if (PGLevel == 0) for (auto &p : pid.proteins) if (q[p] < e.target.info[0].protein_qvalue) e.target.info[0].protein_qvalue = q[p];
 				if (PGLevel) for (auto &p : pid.proteins) {
-					pi = lib->proteins[p].name_index;
+					pi = (PGLevel == 1 ? lib->proteins[p].name_index : lib->proteins[p].gene_index);
 					if (q[pi] < e.target.info[0].protein_qvalue) e.target.info[0].protein_qvalue = q[pi];
 				}
 			}
@@ -5231,10 +5250,9 @@ int main(int argc, char *argv[]) {
 		for (auto &le : lib.entries) {
 			if (lib.protein_ids[le.pid_index].proteins.size() == 1) le.proteotypic = true;
 			else {
-				if (PGLevel) {
-					if (lib.protein_ids[le.pid_index].name_indices.size() == 1) le.proteotypic = true;
-					else if (lib.protein_ids[le.pid_index].name_indices.size() > 1) le.proteotypic = false;
-				} else if (lib.protein_ids[le.pid_index].proteins.size() > 1) le.proteotypic = false;
+				if (PGLevel == 0) le.proteotypic = false;
+				else if (PGLevel == 1) le.proteotypic = (lib.protein_ids[le.pid_index].name_indices.size() == 1);
+				else if (PGLevel == 2) le.proteotypic = (lib.protein_ids[le.pid_index].gene_indices.size() == 1);
 			}
 		}
 	}
