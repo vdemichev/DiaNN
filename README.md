@@ -32,8 +32,10 @@ Raw data files: Thermo .raw, .mzML or .dia (format used by DIA-NN to store spect
 Reading Thermo .raw files requires Thermo MS File Reader (https://thermo.flexnetoperations.com/control/thmo/login?nextURL=%2Fcontrol%2Fthmo%2Fdownload%3Felement%3D6306677) to be installed.   
 The .mzML files should be centroided and contain data as spectra (e.g. SWATH) and not chromatograms.  
 
-Spectral library: comma-separated (.csv) or tab-separated (.tsv or .txt) file.   
-
+Spectral library: comma-separated (.csv) or tab-separated (.tsv or .txt) file.    
+  
+Manual: https://github.com/vdemichev/DiaNN/blob/master/DIA-NN%20GUI%20manual.pdf  
+  
 ### Command-line tool usage
 ```
 diann.exe [commands]  
@@ -87,7 +89,7 @@ Specifies the output file; by default, the output is saved to quant.csv in the c
 diann.exe --threads 4 --f run1 --f run2 --lib yeast.csv --prefix C:\Data\ --ext .mzML --out run1_2.csv    
 ```
 
-For a full list of supported commands see the arguments() function in /src/diann.cpp. A reference manual will be added soon. 
+For a full list of supported commands see the arguments() function in /src/diann.cpp.
 
 ### Building
 
