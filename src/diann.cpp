@@ -238,9 +238,9 @@ bool IndividualReports = false;
 bool SwissProtPriority = true;
 bool ForceSwissProt = false;
 bool FastaProtDuplicates = false;
-bool SpeciesGene = false;
+bool SpeciesGenes = false;
 
-bool ExtendedReport = true;
+bool ExtendedReport = true; 
 
 enum {
 	libPID, libPr, libCharge, libPrMz,
@@ -329,6 +329,8 @@ int unimod_index(std::string &mod) {
 int unimod_index_number(int index) {
 	return std::distance(UniModIndices.begin(), std::lower_bound(UniModIndices.begin(), UniModIndices.end(), index));
 }
+
+std::vector<std::string> MSFormatsExt = { ".dia", ".mzml", ".raw" };
 
 enum {
 	outFile, outPG, outPID, outPNames, outGenes, outPGQ, outPGN, outModSeq,
@@ -1098,7 +1100,7 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "no-prot-inf ", 12)) InferPGs = false, std::cout << "Protein inference will not be performed\n";
 		else if (!memcmp(&(args[start]), "no-swissprot ", 13)) SwissProtPriority = false, std::cout << "SwissProt proteins will not be prioritised for protein inference\n";
 		else if (!memcmp(&(args[start]), "force-swissprot ", 16)) ForceSwissProt = true, std::cout << "Only SwissProt proteins will be considered in library-free search\n";
-		else if (!memcmp(&(args[start]), "species-gene ", 13)) SpeciesGene = true, std::cout << "Species suffix will be added to gene annotation; this affects proteotypicity definition\n";
+		else if (!memcmp(&(args[start]), "species-genes ", 14)) SpeciesGenes = true, std::cout << "Species suffix will be added to gene annotation; this affects proteotypicity definition\n";
 		else if (!memcmp(&(args[start]), "duplicate-proteins ", 19)) FastaProtDuplicates = true, std::cout << "Duplicate proteins in FASTA files will not be skipped\n";
 		else if (!memcmp(&(args[start]), "out-lib ", 8)) out_lib_file = trim(args.substr(start + 8, end - start - 8));
 		else if (!memcmp(&(args[start]), "learn-lib ", 10)) learn_lib_file = trim(args.substr(start + 10, end - start - 10));
@@ -1246,6 +1248,11 @@ void arguments(int argc, char *argv[]) {
 		int pos = files[i].find_last_of('.'), j;
 		auto extension = files[i].substr(pos);
 		std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+		auto ext = std::lower_bound(MSFormatsExt.begin(), MSFormatsExt.end(), extension);
+		if (*ext != extension) {
+			std::cout << "WARNING: skipping " << files[i] << " - invalid raw MS data format\n";
+			continue;
+		}
 		if (extension == std::string(".dia")) {
 			if (!Convert) ms_files.push_back(files[i]);
 			continue;
@@ -1831,10 +1838,9 @@ public:
 		}
 		if (header.size() < 3) *swissprot = false;
 		else *swissprot = (header[1] == 's' && header[2] == 'p');
-		if (SpeciesGene && gene.size() && name.size()) {
-			auto pos = std::prev(name.end());
-			for (; pos != name.begin(); pos--) if (*pos == '_') break;
-			if (pos != name.begin()) gene += name.substr(std::distance(name.begin(), pos));
+		if (SpeciesGenes && gene.size() && name.size()) {
+			int pos = name.find_last_of('_');
+			if (pos != std::string::npos) gene += name.substr(pos);
 		}
 	}
 
@@ -2591,7 +2597,16 @@ public:
 			p.name_index = std::distance(names.begin(), std::lower_bound(names.begin(), names.end(), p.name));
 			p.gene_index = std::distance(genes.begin(), std::lower_bound(genes.begin(), genes.end(), p.gene));
 		}
-		if (Verbose >= 1) Time(), std::cout << "Library contains " << names.size() << " proteins, and " << genes.size() << " genes\n";
+		int ns = names.size(), gs = genes.size();
+		if (ns) if (!names[0].size()) {
+			ns--;
+			if (Verbose >= 1) Time(), std::cout << "Protein names missing for some isoforms\n";
+		}
+		if (gs) {
+			if (!genes[0].size()) gs--;
+			if (Verbose >= 1) Time(), std::cout << "Gene names missing for some isoforms\n";
+		}
+		if (Verbose >= 1) Time(), std::cout << "Library contains " << ns << " proteins, and " << gs << " genes\n";
 	}
 
 	void annotate_pgs(std::vector<PG> &pgs) {
@@ -2998,11 +3013,11 @@ void learn_from_library(std::string &file_name) {
 		cnt++;
 	}
 	std::sort(rm_y.begin(), rm_y.end());
-	std::cout << "y-series fragmentation prediction: ratio SD = " << sqrt(s2_y / (double)Max(1, s2_cnt - 1)) 
+	Time(), std::cout << "y-series fragmentation prediction: ratio SD = " << sqrt(s2_y / (double)Max(1, s2_cnt - 1)) 
 		<< ", Pearson correlation = " << r_y / (double)cnt << " average, " << rm_y[cnt / 2] << " median\n";
 	if (InSilicoRTPrediction) {
 		std::sort(rt_d.begin(), rt_d.end());
-		std::cout << "iRT prediction: median error = " << rt_d[rt_d.size() / 2] << "\n";
+		Time(), std::cout << "iRT prediction: median error = " << rt_d[rt_d.size() / 2] << "\n";
 		RTLearnLib = true;
 	}
 }
@@ -4857,12 +4872,16 @@ public:
     }
 
 	std::vector<int> calculate_protein_qvalues() {
-		if (Verbose >= 1) Time(), std::cout << "Calculating protein q-values\n";
-
 		int i, pi, np = (PGLevel == 2 ? lib->genes.size() : (PGLevel == 1 ? lib->names.size() : lib->proteins.size()));
 		std::vector<float> tsc(np, -INF), dsc(np, -INF), q(np);
 		std::vector<bool> identified(np);
 		std::vector<int> ids; 
+		if (!np) {
+			if (Verbose >= 1) Time(), std::cout << "No protein annotation, skipping protein q-value calculation\n";
+			return ids;
+		}
+
+		if (Verbose >= 1) Time(), std::cout << "Calculating protein q-values\n";
 		
 		for (auto &e : entries) {
 			auto &le = lib->entries[e.target.pep->index];
@@ -4931,7 +4950,6 @@ public:
 				auto pos = cs_qv.lower_bound(tsc[i]);
 				q[i] = pos->second;
 				if (q[i] <= 0.01) ids01p++;
-				if (q[i] <= ProteinIDQvalue) ids.push_back(i);
 			}
 			if (identified[i]) ids01++;
 		}
@@ -4951,8 +4969,14 @@ public:
 			}
 		}
 
+		for (i = 0; i < lib->proteins.size(); i++) {
+			auto &p = lib->proteins[i];
+			if (PGLevel == 0 && q[i] <= ProteinIDQvalue) ids.push_back(i);
+			else if (PGLevel == 1 && q[p.name_index] <= ProteinIDQvalue) ids.push_back(i);
+			else if (PGLevel == 2 && q[p.gene_index] <= ProteinIDQvalue) ids.push_back(i);
+		}
 		std::sort(ids.begin(), ids.end());
-		return ids; // identified protein isoforms/names at <= ProteinIDQvalue
+		return ids; // identified protein isoforms at <= ProteinIDQvalue
 	}
 
 	bool reference_run(Library * ref) {
