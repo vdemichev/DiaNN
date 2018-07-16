@@ -1810,9 +1810,37 @@ public:
 	std::vector<FastaEntry> entries;
 	std::vector<Isoform> proteins;
 
+	void annotation_sgd(std::string &header, std::string &id, std::string &name, std::string &gene, std::string &description, bool * swissprot) {
+		*swissprot = (header.find("Verified ORF") != std::string::npos);
+		int start = 0, end2;
+		auto end = header.find_first_of(' ');
+		if (end == std::string::npos) id = trim(header.substr(start + 1)), name = description = "";
+		else {
+			id = trim(header.substr(start + 1, end - start - 1));
+			for (end2 = end + 1; end2 < header.size() && header[end2] != ' '; end2++);
+			end2 = header.find_first_of(' ', end2);
+			name = trim(header.substr(end + 1, end2 - end - 1));
+			end = header.find_first_of('"', end2);
+			if (end == std::string::npos) description = "";
+			else {
+				end2 = header.find_first_of('"', end + 1);
+				if (end2 == std::string::npos) description = "";
+				else description = header.substr(end + 1, end2 - end - 1);
+			}
+		}
+		gene = name;
+	}
+
 	void annotation(std::string &header, std::string &id, std::string &name, std::string &gene, std::string &description, bool * swissprot) {
+		if (header.size() < 3) {
+			id = "", name = "", gene = "", description = "", *swissprot = false;
+			return;
+		}
 		auto start = header.find("|");
-		if (start == std::string::npos) start = 0;
+		if (start == std::string::npos) {
+			annotation_sgd(header, id, name, gene, description, swissprot);
+			return;
+		}
 		auto end = header.find("|", start + 1);
 		if (end == std::string::npos) end = header.find(" ", start + 1), name = description = "";
 		else {
@@ -1836,8 +1864,7 @@ public:
 			if (end != std::string::npos) gene = trim(header.substr(start + 3, end - start - 3));
 			else gene = trim(header.substr(start + 3));
 		}
-		if (header.size() < 3) *swissprot = false;
-		else *swissprot = (header[1] == 's' && header[2] == 'p');
+		*swissprot = (header[1] == 's' && header[2] == 'p');
 		if (SpeciesGenes && gene.size() && name.size()) {
 			int pos = name.find_last_of('_');
 			if (pos != std::string::npos) gene += name.substr(pos);
@@ -1893,15 +1920,19 @@ public:
 			}
 			sequence.clear(), id.clear(), name.clear(), gene.clear(), peptide.clear();
 
-			bool skip = false;
-			while (getline(in, line)) {
-				if (line[0] == '>') {
-					annotation(line, next_id, next_name, next_gene, description, &swissprot);
-					auto ins = protein_ids.insert(next_id);
-					skip = !ins.second; // dublicate protein?
-					if (!skip) proteins.push_back(Isoform(next_id, next_name, next_gene, description, swissprot));
-					if (FastaProtDuplicates) skip = false;
-					if (ForceSwissProt) skip = skip || !swissprot;
+			bool skip = false, eof = !getline(in, line);
+			if (!eof) while (true) {
+				bool new_prot = (line.size() != 0);
+				if (new_prot) new_prot &= (line[0] == '>');
+				if (new_prot || eof) {
+					if (new_prot) {
+						annotation(line, next_id, next_name, next_gene, description, &swissprot);
+						auto ins = protein_ids.insert(next_id);
+						skip = !ins.second; // dublicate protein?
+						if (!skip) proteins.push_back(Isoform(next_id, next_name, next_gene, description, swissprot));
+						if (FastaProtDuplicates) skip = false;
+						if (ForceSwissProt) skip = skip || !swissprot;
+					}
 
 					cuts.clear();
 					cuts.push_back(-1);
@@ -1928,6 +1959,9 @@ public:
 							int len = cuts[start + miss + 1] - cuts[start];
 							if (len < MinPeptideLength || len > MaxPeptideLength) continue;
 							auto stripped = sequence.substr(cuts[start] + 1, cuts[start + miss + 1] - cuts[start]);
+							bool skip_peptide = false;
+							for (auto s : stripped) if (s < 'A' || s > 'Z') skip_peptide = true;
+							if (skip_peptide) continue; // handle undefined amino acids in SGD FASTA
 							if (filters.size()) {
 								auto pos = std::lower_bound(filters.begin(), filters.end(), stripped);
 								if (pos == filters.end()) continue;
@@ -1949,9 +1983,10 @@ public:
 						}
 					}
 					sequence.clear();
+					if (eof) break;
 					id = next_id, name = next_name, gene = next_gene;
-				} else if (!skip) 
-					sequence += line;
+				} else if (!skip) sequence += line;
+				if (!getline(in, line)) eof = true, line.clear();
 			}
 			in.close();
 		}
@@ -2391,7 +2426,7 @@ public:
 		}
 
 		if (infer_proteotypicity) {
-			if (Verbose >= 1) Time(), std::cout << "Finding proteotypic peptides (assuming that the list of UniProt ids provided for each peptide is complete)\n";
+			if (Verbose >= 1 && (!FastaSearch || GuideLibrary)) Time(), std::cout << "Finding proteotypic peptides (assuming that the list of UniProt ids provided for each peptide is complete)\n";
 			for (auto &e : entries) if (protein_ids[e.pid_index].proteins.size() <= 1) e.proteotypic = true;
 		}
 	}
@@ -2509,9 +2544,12 @@ public:
 				entries[*it].pid_index = i;
 	
 		extract_proteins();
+		int ps = proteins.size(), pis = protein_ids.size();
+		if (ps) if (!proteins[0].id.size()) ps--;
+		if (pis) if (!protein_ids[0].ids.size()) pis--;
 		if (Verbose >= 1) Time(), std::cout << "Spectral library loaded: "
-			<< proteins.size() << " protein isoforms, "
-			<< protein_ids.size() << " protein groups and "
+			<< ps << " protein isoforms, "
+			<< pis << " protein groups and "
 			<< entries.size() << " precursors.\n";
 
 		return true;
@@ -2570,6 +2608,7 @@ public:
 				else prot_from_lib = true;
 			}
 			if (prot_from_lib || (!entries[i].from_fasta && !OverwriteLibraryPGs)) {
+				if (!GuideLibrary) std::cout << "WARNING: FASTA database was processed incorrectly\n";
 				auto ins = pid.insert(PG(protein_ids[entries[i].pid_index].ids));
 				ins.first->precursors.push_back(i);
 			}
