@@ -1808,7 +1808,10 @@ bool name_included(std::string &names, std::string &name) {
 	if (!m || !n) return false;
 	char *p = &(name[0]);
 	while (start + n <= m) {
-		if (!memcmp(&(names[start]), p, n)) return true;
+		if (!memcmp(&(names[start]), p, n)) {
+			if (start + n >= m) return true;
+			if (names[start + n] == ';') return true;
+		}
 		while (start < m - n) {
 			start++;
 			if (names[start] == ';') break;
@@ -1986,9 +1989,9 @@ public:
 						insert:
 							auto ins = unique.insert(FastaEntry(stripped, id, name, gene));
 							if (!ins.second) {
-								if (name_included(ins.first->ids, id)) ins.first->ids += std::string(";") + id;
-								if (name_included(ins.first->names, name)) ins.first->names += std::string(";") + name;
-								if (name_included(ins.first->genes, gene)) ins.first->genes += std::string(";") + gene;
+								if (!name_included(ins.first->ids, id)) ins.first->ids += std::string(";") + id;
+								if (!name_included(ins.first->names, name)) ins.first->names += std::string(";") + name;
+								if (!name_included(ins.first->genes, gene)) ins.first->genes += std::string(";") + gene;
 							}
 
 							if (first && NMetExcision && (stripped[0] == 'M' || stripped[0] == 'X') && stripped.length() >= MinPeptideLength + 1) {
