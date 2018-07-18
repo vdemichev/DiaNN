@@ -334,7 +334,7 @@ std::vector<std::string> MSFormatsExt = { ".dia", ".mzml", ".raw" };
 
 enum {
 	outFile, outPG, outPID, outPNames, outGenes, outPGQ, outPGN, outModSeq,
-	outPrId, outCharge, outQv, outPQv, outPrQ, outPrN,
+	outPrId, outCharge, outQv, outPQv, outPPt, outPrQ, outPrN,
 	outRT, outiRT, outpRT, outpiRT,
 	outCols
 };
@@ -352,12 +352,13 @@ std::vector<std::string> oh = { // output headers
 	"Precursor.Charge",
 	"Q.Value",
 	"Protein.Q.Value",
+	"Proteotypic",
 	"Precursor.Quantity",
 	"Precursor.Normalised",
 	"RT",
 	"iRT",
 	"Predicted.RT",
-	"Predicted.iRT"
+	"Predicted.iRT",
 };
 
 double NormalisationQvalue = 0.01;
@@ -1972,7 +1973,7 @@ public:
 							if (!ins.second) {
 								if (ins.first->ids.find(id) == std::string::npos) ins.first->ids += std::string(";") + id;
 								if (ins.first->names.find(name) == std::string::npos) ins.first->names += std::string(";") + name;
-								if (ins.first->names.find(gene) == std::string::npos) ins.first->genes += std::string(";") + gene;
+								if (ins.first->genes.find(gene) == std::string::npos) ins.first->genes += std::string(";") + gene;
 							}
 
 							if (first && NMetExcision && (stripped[0] == 'M' || stripped[0] == 'X') && stripped.length() >= MinPeptideLength + 1) {
@@ -2885,7 +2886,7 @@ public:
 		std::ofstream out(file_name, std::ofstream::out);
 		out << oh[outFile] << "\t" << oh[outPG] << "\t" << oh[outPID] << "\t" << oh[outPNames] << "\t" << oh[outGenes] << "\t"
 			<< oh[outPGQ] << "\t" << oh[outPGN] << "\t" << oh[outModSeq] << "\t"
-			<< oh[outPrId] << "\t" << oh[outCharge] << "\t" << oh[outQv] << "\t" << oh[outPQv] << "\t"
+			<< oh[outPrId] << "\t" << oh[outCharge] << "\t" << oh[outQv] << "\t" << oh[outPQv] << "\t" << oh[outPPt] << "\t"
 			<< oh[outPrQ] << "\t" << oh[outPrN] << "\t"
 			<< oh[outRT] << "\t" << oh[outiRT] << "\t" << oh[outpRT] << "\t" << oh[outpiRT];
 		if (ExtendedReport) out << (fasta_files.size() ? "\tFirst.Protein.Description\t" : "\t") << "Evidence\tCScore\tDecoy.Evidence\tDecoy.CScore\tFragment.Quant.Raw\tFragment.Quant.Corrected\tFragment.Correlations";
@@ -2911,6 +2912,7 @@ public:
 					<< entry->target.charge << "\t"
 					<< jt->second.pr.qvalue << "\t"
 					<< jt->second.pr.protein_qvalue << "\t"
+					<< (int)entry->proteotypic << "\t"
 					<< jt->second.pr.quantity << "\t"
 					<< jt->second.pr.norm << "\t"
 					<< jt->second.pr.RT << "\t"
