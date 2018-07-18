@@ -1803,6 +1803,21 @@ public:
 	friend inline bool operator < (const FastaEntry &left, const FastaEntry &right) { return left.stripped < right.stripped; }
 };
 
+bool name_included(std::string &names, std::string &name) {
+	int start = 0, m = names.size(), n = name.size();
+	if (!m || !n) return false;
+	char *p = &(name[0]);
+	while (start + n <= m) {
+		if (!memcmp(&(names[start]), p, n)) return true;
+		while (start < m - n) {
+			start++;
+			if (names[start] == ';') break;
+		}
+		start++;
+	}
+	return false;
+}
+
 class Fasta {
 public:
 	std::string name;
@@ -1971,9 +1986,9 @@ public:
 						insert:
 							auto ins = unique.insert(FastaEntry(stripped, id, name, gene));
 							if (!ins.second) {
-								if (ins.first->ids.find(id) == std::string::npos) ins.first->ids += std::string(";") + id;
-								if (ins.first->names.find(name) == std::string::npos) ins.first->names += std::string(";") + name;
-								if (ins.first->genes.find(gene) == std::string::npos) ins.first->genes += std::string(";") + gene;
+								if (name_included(ins.first->ids, id)) ins.first->ids += std::string(";") + id;
+								if (name_included(ins.first->names, name)) ins.first->names += std::string(";") + name;
+								if (name_included(ins.first->genes, gene)) ins.first->genes += std::string(";") + gene;
 							}
 
 							if (first && NMetExcision && (stripped[0] == 'M' || stripped[0] == 'X') && stripped.length() >= MinPeptideLength + 1) {
