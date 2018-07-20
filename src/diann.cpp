@@ -181,7 +181,7 @@ bool UseQuant = false; // use .quant files created previously; implies UseRTInfo
 bool QuantOnly = false; // quantification will be performed anew using identification info from .quant files
 bool ReportOnly = false; // generate report from quant files
 bool GenRef = false; // update the .ref file with newly computed data
-std::string args, lib_file, learn_lib_file, out_file = "quant.tsv", out_lib_file = "lib.tsv";
+std::string args, lib_file, learn_lib_file, out_file = "quant.tsv", out_lib_file = "lib.tsv", out_gene_file = "gene_quant.tsv";
 std::string ref_file, gen_ref_file;
 std::vector<std::string> ms_files, fasta_files, fasta_filter_files;
 bool FastaSearch = false;
@@ -241,6 +241,7 @@ bool FastaProtDuplicates = false;
 bool SpeciesGenes = false;
 
 bool ExtendedReport = true; 
+bool RemoveQuant = false;
 
 enum {
 	libPID, libPr, libCharge, libPrMz,
@@ -333,7 +334,7 @@ int unimod_index_number(int index) {
 std::vector<std::string> MSFormatsExt = { ".dia", ".mzml", ".raw" };
 
 enum {
-	outFile, outPG, outPID, outPNames, outGenes, outPGQ, outPGN, outModSeq,
+	outFile, outPG, outPID, outPNames, outGenes, outPGQ, outPGN, outGQ, outGN, outGQP, outGNP, outModSeq,
 	outPrId, outCharge, outQv, outPQv, outPPt, outPrQ, outPrN,
 	outRT, outiRT, outpRT, outpiRT,
 	outCols
@@ -347,6 +348,10 @@ std::vector<std::string> oh = { // output headers
 	"Genes",
 	"PG.Quantity",
 	"PG.Normalised",
+	"Gene.Group.Quantity",
+	"Gene.Group.Normalised",
+	"Gene.Quantity.Unique",
+	"Gene.Normalised.Unique",
 	"Modified.Sequence",
 	"Precursor.Id",
 	"Precursor.Charge",
@@ -1057,11 +1062,11 @@ void arguments(int argc, char *argv[]) {
 			else std::cout << "WARNING: failed to open cfg file\n";
 		}
 		else if (!memcmp(&(args[start]), "threads ", 8)) Threads = std::stoi(args.substr(start + 8, std::string::npos)), std::cout << "Thread number set to " << Threads << "\n";
-		else if (!memcmp(&(args[start]), "fasta-search ", 13)) FastaSearch = true, std::cout << "Library-free search turned on\n";
+		else if (!memcmp(&(args[start]), "fasta-search ", 13)) FastaSearch = true, std::cout << "Library-free search enabled\n";
 		else if (!memcmp(&(args[start]), "pg-level ", 9)) PGLevel = std::stoi(args.substr(start + 9, std::string::npos)),
 			std::cout << "Implicit protein grouping: " << ImplicitProteinGrouping[PGLevel] 
 					  << "; this determines which peptides are considered 'proteotypic' and thus affects protein FDR calculation\n";
-		else if (!memcmp(&(args[start]), "no-batch-mode ", 14)) BatchMode = false, std::cout << "Batch mode turned off\n";
+		else if (!memcmp(&(args[start]), "no-batch-mode ", 14)) BatchMode = false, std::cout << "Batch mode disabled\n";
 		else if (!memcmp(&(args[start]), "verbose ", 8)) Verbose = std::stoi(args.substr(start + 8, std::string::npos));
 		else if (!memcmp(&(args[start]), "export-windows ", 15)) ExportWindows = true;
 		else if (!memcmp(&(args[start]), "export-library ", 15)) ExportLibrary = true;
@@ -1095,6 +1100,7 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "fasta-filter ", 13)) fasta_filter_files.push_back(trim(args.substr(start + 13, end - start - 13)));
 		else if (!memcmp(&(args[start]), "ref ", 4)) ref_file = trim(args.substr(start + 4, end - start - 4));
 		else if (!memcmp(&(args[start]), "out ", 4)) out_file = trim(args.substr(start + 4, end - start - 4));
+		else if (!memcmp(&(args[start]), "out-gene ", 9)) out_gene_file = trim(args.substr(start + 9, end - start - 9));
 		else if (!memcmp(&(args[start]), "qvalue ", 7)) ReportQValue = std::stod(args.substr(start + 7, std::string::npos)), std::cout << "Output will be filtered at " << ReportQValue << " FDR\n";
 		else if (!memcmp(&(args[start]), "protein-qvalue ", 15)) ReportProteinQValue = std::stod(args.substr(start + 15, std::string::npos)),
 			std::cout << "Output will be filtered at " << ReportProteinQValue << " protein-level FDR\n";
@@ -1175,11 +1181,12 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Maximum number of variable modifications set to " << MaxVarMods << "\n";
 		else if (!memcmp(&(args[start]), "met-excision ", 6)) NMetExcision = true, std::cout << "N-terminal methionine excision enabled\n";
 		else if (!memcmp(&(args[start]), "no-rt-window ", 13)) RTWindowedSearch = false, std::cout << "Full range of retention times will be considered\n";
-		else if (!memcmp(&(args[start]), "no-window-inference ", 20)) InferWindow = false, std::cout << "Scan window inference turned off\n";
+		else if (!memcmp(&(args[start]), "no-window-inference ", 20)) InferWindow = false, std::cout << "Scan window inference disabled\n";
 		else if (!memcmp(&(args[start]), "individual-windows ", 19)) IndividualWindows = true, std::cout << "Scan windows will be inferred separately for different runs\n";
 		else if (!memcmp(&(args[start]), "individual-mass-acc ", 20)) IndividualMassAcc = true, std::cout << "Mass accuracy will be determined separately for different runs\n";
 		else if (!memcmp(&(args[start]), "individual-reports ", 19)) IndividualReports = true, std::cout << "Reports will be generated separately for different runs (in the respective folders)\n";
 		else if (!memcmp(&(args[start]), "convert ", 8)) Convert = true, std::cout << "MS data files will be converted to .dia format\n";
+		else if (!memcmp(&(args[start]), "remove-quant ", 13)) RemoveQuant = true, std::cout << ".quant files will be removed when the analysis is finished\n";
 		else if (!memcmp(&(args[start]), "use-rt ", 7)) UseRTInfo = true, std::cout << "Existing .quant files will be used for RT profiling\n";
 		else if (!memcmp(&(args[start]), "use-quant ", 10)) UseQuant = true, std::cout << "Existing .quant files will be used\n";
 		else if (!memcmp(&(args[start]), "quant-only ", 11)) QuantOnly = true, std::cout << "Quantification will be performed anew using existing identification info\n";
@@ -1192,7 +1199,7 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Q-value threshold for cross-run quantification set to " << MaxQuantQvalue << "\n";
 		else if (!memcmp(&(args[start]), "out-lib-qvalue ", 15)) ReportQValue = std::stod(args.substr(start + 15, std::string::npos)),
 			std::cout << "Q-value threshold for spectral library generation set to " << ReportQValue << "\n";
-		else if (!memcmp(&(args[start]), "rt-profiling ", 13)) RTProfiling = true, std::cout << "RT profiling turned on\n";
+		else if (!memcmp(&(args[start]), "rt-profiling ", 13)) RTProfiling = true, std::cout << "RT profiling enabled\n";
 		else if (!memcmp(&(args[start]), "prefix ", 7)) prefix = trim(args.substr(start + 7, end - start - 7)); // prefix added to input file names
 		else if (!memcmp(&(args[start]), "ext ", 4)) ext = trim(args.substr(start + 4, end - start - 4)); // extension added to input file names
 		else if (!memcmp(&(args[start]), "test-dataset ", 13)) TestDataset = true, std::cout << "Library will be split into training and test datasets for neural network training\n";
@@ -1202,7 +1209,7 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "no-standardisation ", 19)) Standardise = false, std::cout << "Scores will not be standardised for neural network training\n";
 		else if (!memcmp(&(args[start]), "standardisation-scale ", 22)) StandardisationScale = std::stod(args.substr(start + 22, std::string::npos)),
 			std::cout << "Standardisation scale set to " << StandardisationScale << "\n";
-		else if (!memcmp(&(args[start]), "no-nn ", 6)) nnIter = INF, std::cout << "Neural network classifier turned off\n";
+		else if (!memcmp(&(args[start]), "no-nn ", 6)) nnIter = INF, std::cout << "Neural network classifier disabled\n";
 		else if (!memcmp(&(args[start]), "nn-iter ", 8)) nnIter = Max(CalibrationIter + 3, std::stoi(args.substr(start + 8, std::string::npos))),
 			std::cout << "Neural network classifier will be used starting from the interation number " << nnIter << "\n";
 		else if (!memcmp(&(args[start]), "nn-bagging ", 11)) nnBagging = std::stoi(args.substr(start + 11, std::string::npos)),
@@ -1232,7 +1239,7 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Q-value threshold for cross-run normalisation set to " << NormalisationQvalue << "\n";
 		else if (!memcmp(&(args[start]), "norm-fraction ", 14)) NormalisationPeptidesFraction = std::stod(args.substr(start + 14, std::string::npos)),
 			std::cout << "Normalisation peptides fraction set to " << NormalisationPeptidesFraction << "\n";
-		else if (!memcmp(&(args[start]), "no-calibration ", 15)) Calibrate = false, std::cout << "Mass calibration turned off\n";
+		else if (!memcmp(&(args[start]), "no-calibration ", 15)) Calibrate = false, std::cout << "Mass calibration disabled\n";
 		else if (!memcmp(&(args[start]), "mass-cal-bins ", 14)) MassCalBinsMax = std::stoi(args.substr(start + 14, std::string::npos)),
 			std::cout << "Maximum number of mass calibration bins set to " << MassCalBinsMax << "\n";
 		else if (!memcmp(&(args[start]), "min-cal ", 8)) MinCal = std::stoi(args.substr(start + 8, std::string::npos)),
@@ -1242,6 +1249,18 @@ void arguments(int argc, char *argv[]) {
 		else std::cout << "WARNING: unrecognised option [--" << trim(args.substr(start, end - start)) << "]\n";
 
 		start = next;
+	}
+	if (!ExportLibrary && !GenSpecLib && !FastaSearch) out_lib_file.clear();
+	if (out_file.find_first_not_of(' ') == std::string::npos || out_file.find_first_of('\r') != std::string::npos || out_file.find_first_of('\n') != std::string::npos) out_file.clear();
+	if (out_gene_file.find_first_not_of(' ') == std::string::npos || out_gene_file.find_first_of('\r') != std::string::npos || out_gene_file.find_first_of('\n') != std::string::npos) out_gene_file.clear();
+	if (out_lib_file.find_first_not_of(' ') == std::string::npos || out_lib_file.find_first_of('\r') != std::string::npos || out_lib_file.find_first_of('\n') != std::string::npos) out_lib_file.clear();
+	if (!out_file.size() && !out_gene_file.size() && !out_lib_file.size() && !IndividualReports) {
+		IndividualReports = true;
+		std::cout << "No output files specified: reports will be generated separately for different runs (in the respective folders)\n";
+	}
+	if (ExportLibrary && !out_lib_file.size()) {
+		ExportLibrary = false;
+		std::cout << "No output library file, library export disabled\n";
 	}
 	if (prefix.length()) for (auto it = files.begin(); it != files.end(); it++) *it = prefix + *it;
 	if (ext.length()) for (auto it = files.begin(); it != files.end(); it++) *it += ext;
@@ -1604,21 +1623,32 @@ public:
 
 	void annotate(std::vector<Isoform> &_proteins, std::vector<std::string> &_names, std::vector<std::string> &_genes) {
 		std::set<int> name, gene;
+		std::string word;
 		if (_names.size()) {
 			for (auto &p : proteins) if (_names[_proteins[p].name_index].size()) name.insert(_proteins[p].name_index);
-			name_indices.clear(); name_indices.insert(name_indices.begin(), name.begin(), name.end());
-			if (name_indices.size()) {
-				names = _names[name_indices[0]];
-				for (int i = 1; i < name_indices.size(); i++) names += ';' + _names[name_indices[i]];
+			if (names.size() && !proteins.size()) {
+				std::stringstream list(names);
+				while (std::getline(list, word, ';')) {
+					word = trim(word);
+					auto pos = std::lower_bound(_names.begin(), _names.end(), word);
+					if (pos != _names.end()) if (*pos == word) name.insert(std::distance(_names.begin(), pos));
+				}
 			}
+			names.clear(); name_indices.clear(); name_indices.insert(name_indices.begin(), name.begin(), name.end());
+			if (name_indices.size()) for (int i = 0; i < name_indices.size(); i++) names += (names.size() ? std::string(";") : std::string("")) + _names[name_indices[i]];
 		}
 		if (_genes.size()) {
 			for (auto &p : proteins) if (_genes[_proteins[p].gene_index].size()) gene.insert(_proteins[p].gene_index);
-			gene_indices.clear(); gene_indices.insert(gene_indices.begin(), gene.begin(), gene.end());
-			if (gene_indices.size()) {
-				genes = _genes[gene_indices[0]];
-				for (int i = 1; i < gene_indices.size(); i++) genes += ';' + _genes[gene_indices[i]];
+			if (genes.size() && !proteins.size()) {
+				std::stringstream list(genes);
+				while (std::getline(list, word, ';')) {
+					word = trim(word);
+					auto pos = std::lower_bound(_genes.begin(), _genes.end(), word);
+					if (pos != _genes.end()) if (*pos == word) gene.insert(std::distance(_genes.begin(), pos));
+				}
 			}
+			genes.clear(); gene_indices.clear(); gene_indices.insert(gene_indices.begin(), gene.begin(), gene.end());
+			if (gene_indices.size()) for (int i = 0; i < gene_indices.size(); i++) genes += (genes.size() ? std::string(";") : std::string("")) + _genes[gene_indices[i]];
 		}
 	}
 };
@@ -1639,7 +1669,8 @@ public:
 	int index, run_index;
 	mutable bool decoy_found;
 	mutable int apex, peak, best_fragment, peak_width;
-	mutable float RT, iRT, predicted_RT, predicted_iRT, best_fr_mz, qvalue, protein_qvalue, quantity, level, norm, pg_quantity, pg_norm;
+	mutable float RT, iRT, predicted_RT, predicted_iRT, best_fr_mz, qvalue, protein_qvalue, quantity, level, norm;
+	mutable float pg_quantity, pg_norm, gene_quantity, gene_norm, gene_quantity_u, gene_norm_u;
 	mutable float evidence, decoy_evidence, cscore, decoy_cscore;
 
 	friend inline bool operator < (const PrecursorEntry &left, const PrecursorEntry &right) { return left.index < right.index; }
@@ -1695,12 +1726,13 @@ public:
 	double weights[pN], guide_weights[pN];
 	double tandem_min, tandem_max;
 
-	int run_index;
+	int run_index, lib_size;
 	double MassAccuracy = GlobalMassAccuracy, MassAccuracyMs1 = GlobalMassAccuracyMs1;
 	std::vector<double> MassCorrection, MassCorrectionMs1, MassCalSplit, MassCalSplitMs1, MassCalCenter, MassCalCenterMs1;
     
     void write(std::ofstream &out) {
 		out.write((char*)&run_index, sizeof(int));
+		out.write((char*)&lib_size, sizeof(int));
 		out.write((char*)weights, pN * sizeof(double));
 		out.write((char*)&tandem_min, sizeof(double));
 		out.write((char*)&tandem_max, sizeof(double));
@@ -1719,8 +1751,13 @@ public:
         for (int i = 0; i < size; i++) entries[i].write(out);
     }
 
-	void read_meta(std::ifstream &in) {
+	void read_meta(std::ifstream &in, int _lib_size = 0) {
 		in.read((char*)&run_index, sizeof(int));
+		in.read((char*)&lib_size, sizeof(int));
+		if (_lib_size > 0 && lib_size != _lib_size) {
+			std::cout << "ERROR: a .quant file was obtained using a different spectral library / different library-free search settings\n";
+			exit(0);
+		}
 		in.read((char*)weights, pN * sizeof(double));
 		in.read((char*)&tandem_min, sizeof(double));
 		in.read((char*)&tandem_max, sizeof(double));
@@ -1734,14 +1771,14 @@ public:
 		read_vector(in, MassCalCenterMs1);
 	}
 
-	void read_meta(std::string &file) {
+	void read_meta(std::string &file, int _lib_size = 0) {
 		std::ifstream in(file, std::ifstream::binary);
-		read_meta(in);
+		read_meta(in, _lib_size);
 		in.close();
 	}
     
-	void read(std::ifstream &in) {
-		read_meta(in);
+	void read(std::ifstream &in, int _lib_size = 0) {
+		read_meta(in, _lib_size);
 		read_vector(in, proteins);
 		int size; in.read((char*)&size, sizeof(int));
 		entries.resize(size);
@@ -1753,12 +1790,12 @@ class Profile {
 public:
 	std::vector<QuantEntry> entries;
 
-	Profile(std::vector<std::string> &files) {
+	Profile(std::vector<std::string> &files, int lib_size = 0) {
 		entries.resize(MaxLibSize);
 		for (int i = 0; i < files.size(); i++) {
 			std::ifstream in(files[i] + std::string(".quant"), std::ifstream::binary);
 			Quant Q;
-			Q.read(in);
+			Q.read(in, lib_size);
 			in.close();
 
 			for (auto it = Q.entries.begin(); it != Q.entries.end(); it++) {
@@ -2092,6 +2129,8 @@ public:
 	std::vector<Isoform> proteins;
 	std::vector<PG> protein_ids;
 	std::vector<PG> protein_groups;
+	std::vector<std::string> gene_groups;
+	std::vector<int> gg_index;
 	std::vector<std::string> precursors; // precursor IDs in canonical format; library-based entries only
 	std::vector<std::string> names; 
 	std::vector<std::string> genes; 
@@ -2261,7 +2300,7 @@ public:
 			for (int i = 0; i < n_s; i++) {
 				std::ifstream in(std::string(files[i]) + std::string(".quant"), std::ifstream::binary);
 				Quant Q;
-				Q.read(in);
+				Q.read(in, lib->entries.size());
 				proteins[i] = Q.proteins;
 				for (auto it = Q.entries.begin(); it != Q.entries.end(); it++) {
 					n_entries++;
@@ -2423,6 +2462,7 @@ public:
 
 	void extract_proteins() {
 		std::set<Isoform> prot;
+		std::set<std::string> pn, gn;
 		std::string word;
 
 		for (auto &pg : protein_ids) {
@@ -2433,8 +2473,28 @@ public:
 			}
 		}
 
+		for (auto &pg : protein_ids) {
+			if (pg.names.size()) {
+				std::stringstream list(pg.names);
+				while (std::getline(list, word, ';')) pn.insert(trim(word));
+			}
+			if (pg.genes.size()) {
+				std::stringstream list(pg.genes);
+				while (std::getline(list, word, ';')) gn.insert(trim(word));
+			}
+		}
+
 		proteins.clear();
 		proteins.insert(proteins.begin(), prot.begin(), prot.end());
+		prot.clear();
+
+		names.clear();
+		names.insert(names.begin(), pn.begin(), pn.end());
+		pn.clear();
+
+		genes.clear();
+		genes.insert(genes.begin(), gn.begin(), gn.end());
+		gn.clear();
 
 		for (int i = 0; i < proteins.size(); i++) {
 			auto &p = proteins[i];
@@ -2646,7 +2706,7 @@ public:
 	}
 
 	void annotate() {
-		std::set<std::string> name, gene;
+		std::set<std::string> name(names.begin(), names.end()), gene(genes.begin(), genes.end());
 		for (auto &p : proteins) name.insert(p.name), gene.insert(p.gene);
 		names.clear(), genes.clear();
 		names.insert(names.begin(), name.begin(), name.end());
@@ -2725,28 +2785,28 @@ public:
 					auto fr_name = name + std::string("_") + std::to_string(char_from_type[fr_type])
 						+ std::string("_") + std::to_string(fr_charge) + std::string("_")
 						+ std::to_string(fr_loss) + std::string("_") + std::to_string(fr_num);
-					out << ((it.best_run >= 0) ? ms_files[it.best_run].c_str() : lib_file.c_str()) << "\t"
-						<< pep.mz << "\t"
-						<< pep.fragments[fr].mz << "\t"
-						<< pep.iRT << "\t"
-						<< (prefix + fr_name).c_str() << "\t"
-						<< pep.fragments[fr].height << "\t"
-						<< (prefix + name).c_str() << "\t"
-						<< dc << "\t"
-						<< seq << "\t"
-						<< (int)it.proteotypic << "\t"
-						<< it.qvalue << "\t"
-						<< (prefix + prot[pg].ids).c_str() << "\t"
-						<< (prot[pg].names.size() ? prot[pg].names.c_str() : protein_ids[it.pid_index].names.c_str()) << "\t"
-						<< (prot[pg].genes.size() ? prot[pg].genes.c_str() : protein_ids[it.pid_index].genes.c_str()) << "\t"
-						<< pep_name.c_str() << "\t"
-						<< pep_name.c_str() << "\t"
-						<< pep.charge << "\t"
-						<< (prefix + pep_name).c_str() << "\t"
-						<< protein_ids[it.pid_index].ids.c_str() << "\t"
-						<< char_from_type[fr_type] << "\t"
-						<< fr_charge << "\t"
-						<< (fr_type == type_b ? fr_num : masses.size() - fr_num) << "\t"
+					out << ((it.best_run >= 0) ? ms_files[it.best_run].c_str() : lib_file.c_str()) << '\t'
+						<< pep.mz << '\t'
+						<< pep.fragments[fr].mz << '\t'
+						<< pep.iRT << '\t'
+						<< (prefix + fr_name).c_str() << '\t'
+						<< pep.fragments[fr].height << '\t'
+						<< (prefix + name).c_str() << '\t'
+						<< dc << '\t'
+						<< seq << '\t'
+						<< (int)it.proteotypic << '\t'
+						<< it.qvalue << '\t'
+						<< (prefix + prot[pg].ids).c_str() << '\t'
+						<< prot[pg].names.c_str() << '\t'
+						<< prot[pg].genes.c_str() << '\t'
+						<< pep_name.c_str() << '\t'
+						<< pep_name.c_str() << '\t'
+						<< pep.charge << '\t'
+						<< (prefix + pep_name).c_str() << '\t'
+						<< protein_ids[it.pid_index].ids.c_str() << '\t'
+						<< char_from_type[fr_type] << '\t'
+						<< fr_charge << '\t'
+						<< (fr_type == type_b ? fr_num : masses.size() - fr_num) << '\t'
 						<< name_from_loss[fr_loss].c_str() << "\n";
 				}
 			}
@@ -2856,12 +2916,26 @@ public:
 		if (fasta_files.size()) annotate_pgs(protein_groups);
 	}
 
-	void quantify_proteins(int N, double q_cutoff) { // top N method for protein quantification
-		if (InferPGs) infer_proteins();
-		auto &prot = InferPGs ? protein_groups : protein_ids;
-		int i, j, pass, n = prot.size();
+	void quantify_proteins(int N, double q_cutoff, int stage = 0) { // top N method for protein quantification
+		if (InferPGs && !stage) infer_proteins();
+		auto &prot = (InferPGs ? protein_groups : protein_ids);
+		int i, j, pass, n = stage ? genes.size() : prot.size();
 
-		if (Verbose >= 1) Time(), std::cout << "Quantifying proteins\n";
+		if (stage == 2) {
+			gg_index.clear(); gg_index.resize(entries.size(), 0);
+			std::set<std::string> gg;
+			for (auto &pg : prot) gg.insert(pg.genes);
+			gene_groups.clear();  gene_groups.insert(gene_groups.begin(), gg.begin(), gg.end()); gg.clear();
+			if (!gene_groups.size()) gene_groups.resize(1);
+
+			for (auto &pg : prot) {
+				int ind = std::distance(gene_groups.begin(), std::lower_bound(gene_groups.begin(), gene_groups.end(), pg.genes));
+				for (auto &pr : pg.precursors) gg_index[pr] = ind;
+			}
+			n = gene_groups.size();
+		}
+
+		if (Verbose >= 1 && stage == 9) Time(), std::cout << "Quantifying proteins\n";
 		std::vector<float> max_q(n * info.n_s, 1.0), top_l(n * info.n_s * N), quant(n * info.n_s), norm(n * info.n_s);
 
 		for (pass = 0; pass <= 3; pass++) {
@@ -2871,12 +2945,27 @@ public:
 				for (auto jt = v->begin(); jt != v->end(); jt++) {
 					int s = jt->first;
 					auto pr = &(jt->second.pr);
+
+					int ggi = (stage == 2) ? gg_index[pr->index] : 0;
+					if (stage == 2) if (!gene_groups[gg_index[pr->index]].size()) {
+						if (pass == 0) pr->gene_quantity = pr->gene_norm = 0.0;
+						continue;
+					}
+					if (stage == 1 && protein_ids[entries[pr->index].pid_index].gene_indices.size() != 1) {
+						if (pass == 0) pr->gene_quantity_u = pr->gene_norm_u = 0.0;
+						continue;
+					}
 					int pg = InferPGs ? entries[pr->index].pg_index : entries[pr->index].pid_index;
+					int gi = (stage == 1) ? protein_ids[entries[pr->index].pid_index].gene_indices[0] : 0;
+					if (stage == 1 && !genes[gi].size()) {
+						if (pass == 0) pr->gene_quantity_u = pr->gene_norm_u = 0.0;
+						continue;
+					}
 
 					float quantity = pr->quantity;
 					float q = pr->qvalue;
 
-					int index = pg * info.n_s + s;
+					int index = (stage == 2 ? ggi : (stage == 1 ? gi : pg)) * info.n_s + s;
 					auto pos_q = &(max_q[index]);
 					auto pos_l = &(top_l[index * N]);
 
@@ -2891,10 +2980,15 @@ public:
 						}
 					}
 					else if (pass == 2 && q <= *pos_q && quantity >= pos_l[N - 1]) quant[index] += quantity, norm[index] += pr->norm;
-					else if (pass == 3) pr->pg_quantity = quant[index], pr->pg_norm = norm[index];
+					else if (pass == 3) {
+						if (stage == 1) pr->gene_quantity_u = quant[index], pr->gene_norm_u = norm[index];
+						else if (stage == 2) pr->gene_quantity = quant[index], pr->gene_norm = norm[index];
+						else pr->pg_quantity = quant[index], pr->pg_norm = norm[index];
+					}
 				}
 			}
 		}
+		if (stage < 2) quantify_proteins(N, q_cutoff, stage + 1);
 	}
 
 	void report(std::string &file_name) {
@@ -2902,11 +2996,11 @@ public:
 		auto &prot = InferPGs ? protein_groups : protein_ids;
 
 		std::ofstream out(file_name, std::ofstream::out);
-		out << oh[outFile] << "\t" << oh[outPG] << "\t" << oh[outPID] << "\t" << oh[outPNames] << "\t" << oh[outGenes] << "\t"
-			<< oh[outPGQ] << "\t" << oh[outPGN] << "\t" << oh[outModSeq] << "\t"
-			<< oh[outPrId] << "\t" << oh[outCharge] << "\t" << oh[outQv] << "\t" << oh[outPQv] << "\t" << oh[outPPt] << "\t"
-			<< oh[outPrQ] << "\t" << oh[outPrN] << "\t"
-			<< oh[outRT] << "\t" << oh[outiRT] << "\t" << oh[outpRT] << "\t" << oh[outpiRT];
+		out << oh[outFile] << '\t' << oh[outPG] << '\t' << oh[outPID] << '\t' << oh[outPNames] << '\t' << oh[outGenes] << '\t'
+			<< oh[outPGQ] << '\t' << oh[outPGN] << '\t' << oh[outGQ] << '\t' << oh[outGN] << '\t' << oh[outGQP] << '\t' << oh[outGNP] << '\t' << oh[outModSeq] << '\t'
+			<< oh[outPrId] << '\t' << oh[outCharge] << '\t' << oh[outQv] << '\t' << oh[outPQv] << '\t' << oh[outPPt] << '\t'
+			<< oh[outPrQ] << '\t' << oh[outPrN] << '\t'
+			<< oh[outRT] << '\t' << oh[outiRT] << '\t' << oh[outpRT] << '\t' << oh[outpiRT];
 		if (ExtendedReport) out << (fasta_files.size() ? "\tFirst.Protein.Description\t" : "\t") << "Evidence\tCScore\tDecoy.Evidence\tDecoy.CScore\tFragment.Quant.Raw\tFragment.Quant.Corrected\tFragment.Correlations";
 		out << "\n";
 
@@ -2918,45 +3012,96 @@ public:
 			for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
 				if (jt->second.pr.qvalue > ReportQValue) continue;
 				if (jt->second.pr.protein_qvalue > ReportProteinQValue) continue;
-				out << ms_files[jt->first].c_str() << "\t"
-					<< prot[pg].ids.c_str() << "\t"
-					<< protein_ids[entry->pid_index].ids.c_str() << "\t"
-					<< (prot[pg].names.size() ? prot[pg].names.c_str() : protein_ids[entry->pid_index].names.c_str()) << "\t"
-					<< (prot[pg].genes.size() ? prot[pg].genes.c_str() : protein_ids[entry->pid_index].genes.c_str()) << "\t"
-					<< jt->second.pr.pg_quantity << "\t"
-					<< jt->second.pr.pg_norm << "\t"
-					<< pep_name(entry->name).c_str() << "\t"
-					<< entry->name.c_str() << "\t"
-					<< entry->target.charge << "\t"
-					<< jt->second.pr.qvalue << "\t"
-					<< jt->second.pr.protein_qvalue << "\t"
-					<< (int)entry->proteotypic << "\t"
-					<< jt->second.pr.quantity << "\t"
-					<< jt->second.pr.norm << "\t"
-					<< jt->second.pr.RT << "\t"
-					<< jt->second.pr.iRT << "\t"
-					<< jt->second.pr.predicted_RT << "\t"
+				out << ms_files[jt->first].c_str() << '\t'
+					<< prot[pg].ids.c_str() << '\t'
+					<< protein_ids[entry->pid_index].ids.c_str() << '\t'
+					<< prot[pg].names.c_str() << '\t'
+					<< prot[pg].genes.c_str() << '\t'
+					<< jt->second.pr.pg_quantity << '\t'
+					<< jt->second.pr.pg_norm << '\t';
+				if (jt->second.pr.gene_quantity > E) {
+					out << jt->second.pr.gene_quantity << '\t'
+						<< jt->second.pr.gene_norm << '\t';
+					if (jt->second.pr.gene_quantity_u > E) {
+						out << jt->second.pr.gene_quantity_u << '\t'
+							<< jt->second.pr.gene_norm_u << '\t';
+					} else out << "\t\t";
+				} else out << "\t\t\t\t";
+				out << pep_name(entry->name).c_str() << '\t'
+					<< entry->name.c_str() << '\t'
+					<< entry->target.charge << '\t'
+					<< jt->second.pr.qvalue << '\t'
+					<< jt->second.pr.protein_qvalue << '\t'
+					<< (int)entry->proteotypic << '\t'
+					<< jt->second.pr.quantity << '\t'
+					<< jt->second.pr.norm << '\t'
+					<< jt->second.pr.RT << '\t'
+					<< jt->second.pr.iRT << '\t'
+					<< jt->second.pr.predicted_RT << '\t'
 					<< jt->second.pr.predicted_iRT;
 				if (ExtendedReport) {
-					out << "\t";
+					out << '\t';
 					if (fasta_files.size()) {
-						if (prot[pg].proteins.size()) out << proteins[*(prot[pg].proteins.begin())].description.c_str() << "\t";
-						else out << "\t";
+						if (prot[pg].proteins.size()) out << proteins[*(prot[pg].proteins.begin())].description.c_str() << '\t';
+						else out << '\t';
 					}
-					out << jt->second.pr.evidence << "\t"
-						<< jt->second.pr.cscore << "\t"
-						<< jt->second.pr.decoy_evidence << "\t"
+					out << jt->second.pr.evidence << '\t'
+						<< jt->second.pr.cscore << '\t'
+						<< jt->second.pr.decoy_evidence << '\t'
 						<< jt->second.pr.decoy_cscore;
-					out << "\t"; for (int fr = 0; fr < jt->second.fr.size(); fr++) out << jt->second.fr[fr].quantity[qTotal] << ";";
-					out << "\t"; for (int fr = 0; fr < jt->second.fr.size(); fr++) out << jt->second.fr[fr].quantity[qFiltered] << ";";
-					out << "\t"; for (int fr = 0; fr < jt->second.fr.size(); fr++) out << jt->second.fr[fr].corr << ";";
+					out << '\t'; for (int fr = 0; fr < jt->second.fr.size(); fr++) out << jt->second.fr[fr].quantity[qTotal] << ";";
+					out << '\t'; for (int fr = 0; fr < jt->second.fr.size(); fr++) out << jt->second.fr[fr].quantity[qFiltered] << ";";
+					out << '\t'; for (int fr = 0; fr < jt->second.fr.size(); fr++) out << jt->second.fr[fr].corr << ";";
 				}
 				out << "\n";
 			}
 		}
 
 		out.close();
-		if (Verbose >= 1) Time(), std::cout << "Report saved to " << file_name << ".\n\n";
+		if (Verbose >= 1) Time(), std::cout << "Report saved to " << file_name << ".\n";
+	}
+
+	void gene_report(std::string &file_name) {
+		if (Verbose >= 1) Time(), std::cout << "Writing gene report\n";
+
+		int s = ms_files.size(), size = gene_groups.size() * s;
+		std::vector<float> gq(size), gn(size), gqu(size), gnu(size);
+
+		for (auto it = info.map.begin(); it != info.map.end(); it++) {
+			auto v = &(it->second);
+			auto entry = &(entries[it->first]);
+			int pg = InferPGs ? entry->pg_index : entry->pid_index;
+
+			for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
+				if (jt->second.pr.qvalue > ReportQValue) continue;
+				if (jt->second.pr.protein_qvalue > ReportProteinQValue) continue;
+				int index = gg_index[it->first] * s + jt->first;
+				gq[index] = jt->second.pr.gene_quantity;
+				gn[index] = jt->second.pr.gene_norm;
+				gqu[index] = jt->second.pr.gene_quantity_u;
+				gnu[index] = jt->second.pr.gene_norm_u;
+			}
+		}
+
+		std::ofstream out(file_name, std::ofstream::out);
+		out << "File.Name\tGenes\tGene.Group.Quantity\tGene.Group.Normalised\tGene.Quantity.Unique\tGene.Normalised.Unique\n";
+
+		for (int i = 0; i < gene_groups.size(); i++) for (int j = 0; j < s; j++) {
+			int index = i * s + j;
+			if (gq[index] > E) {
+				out << ms_files[j].c_str() << '\t'
+					<< gene_groups[i] << '\t'
+					<< gq[index] << '\t'
+					<< gn[index] << '\t';
+				if (gqu[index] > E) {
+					out << gqu[index] << '\t'
+						<< gnu[index] << '\n';
+				} else out << "\t\n";
+			}
+		}
+
+		out.close();
+		if (Verbose >= 1) Time(), std::cout << "Gene report saved to " << file_name << ".\n";
 	}
 };
 
@@ -4299,7 +4444,7 @@ public:
 		}
 		if (pos < 20) {
 			reset_weights();
-			Warning("too few training precursors, classifier will not be used");
+			if (Verbose >= 3) Warning("too few training precursors, classifier will not be used");
 			goto try_nn;
 		}
 
@@ -4676,7 +4821,7 @@ public:
 				RT_max = entries[rt_stats[rt_stats.size() - 1 - rt_stats.size() / 100]].target.info[0].RT;
 				RT_window = Max(-RTWindowMargin * rt_delta[(int)(RTWindowLoss * (double)rt_delta.size())], (RT_max - RT_min) / double(in_ref_run ? RTRefWindowFactor : RTWindowFactor));
 				RT_windowed_search = (in_ref_run ? rt_delta.size() >= RTWinSearchMinRef : rt_delta.size() >= RTWinSearchMinCal);
-				if (!RT_windowed_search) { Warning("not enough confidently identified precursors for RT-windowed search"); }
+				if (!RT_windowed_search && Verbose >= 3) { Warning("not enough confidently identified precursors for RT-windowed search"); }
 				else if (Verbose >= 1) Time(), std::cout << "RT_window set to " << RT_window << "\n";
 			}
 
@@ -5222,6 +5367,7 @@ public:
 		QuantEntry qe;
 		for (i = 0; i < pN; i++) quant.weights[i] = weights[i], quant.guide_weights[i] = guide_weights[i];
 		quant.run_index = run_index;
+		quant.lib_size = lib->entries.size();
 		quant.tandem_min = tandem_min, quant.tandem_max = tandem_max;
 		quant.MassAccuracy = MassAccuracy, quant.MassAccuracyMs1 = MassAccuracyMs1;
 		quant.MassCorrection = MassCorrection, quant.MassCorrectionMs1 = MassCorrectionMs1;
@@ -5268,6 +5414,7 @@ public:
 			lib->info.quantify();
 			lib->quantify_proteins(3, ProteinQuantQvalue);
 			lib->report(ms_files[run_index] + std::string(".tsv"));
+			if (lib->genes.size()) lib->report(ms_files[run_index] + std::string(".genes.tsv"));
 		}
     }
 
@@ -5361,6 +5508,15 @@ int main(int argc, char *argv[]) {
 		if ((UseRTInfo && RTProfiling) || UseQuant) {
 			std::ifstream in((*it) + std::string(".quant"));
 			if (in.is_open()) {
+				if (IndividualReports) {
+					Quant Q;
+					Q.read(in, lib.entries.size());
+					lib.info.load(&(lib), Q);
+					lib.info.quantify();
+					lib.quantify_proteins(3, ProteinQuantQvalue);
+					lib.report((*it) + std::string(".tsv"));
+					if (lib.genes.size()) lib.report((*it) + std::string(".genes.tsv"));
+				}
 				in.close();
 				continue;
 			}
@@ -5387,7 +5543,7 @@ quant_only:
 		if (Verbose >= 1) Time(), std::cout << "Quantification\n";
 		for (auto it = ms_files.begin(); it != ms_files.end(); it++) {
 			Quant Q; std::ifstream in(*it + std::string(".quant"));
-			Q.read(in); in.close();
+			Q.read(in, lib.entries.size()); in.close();
 
 			int runN = Q.run_index;
 			Run run(runN);
@@ -5419,7 +5575,7 @@ quant_only:
 	{
 		// second loop: refine iRT predictions
 		if (Verbose >= 1) Time(), std::cout << "Second pass: indentification and quantification\n";
-		Profile profile(ms_files);
+		Profile profile(ms_files, lib.entries.size());
 		if (RTProfiling) for (auto jt = profile.entries.begin(); jt != profile.entries.end(); jt++)
 			if (jt->index >= 0) if (jt->pr.qvalue < MaxProfilingQvalue) {
 				lib.entries[jt->pr.index].target.iRT = lib.entries[jt->pr.index].decoy.iRT = jt->pr.predicted_iRT;
@@ -5432,6 +5588,15 @@ quant_only:
 			if (UseQuant) {
 				std::ifstream in((*it) + std::string(".quant"));
 				if (in.is_open()) {
+					if (IndividualReports) {
+						Quant Q;
+						Q.read(in, lib.entries.size());
+						lib.info.load(&(lib), Q);
+						lib.info.quantify();
+						lib.quantify_proteins(3, ProteinQuantQvalue);
+						lib.report((*it) + std::string(".tsv"));
+						if (lib.genes.size()) lib.report((*it) + std::string(".genes.tsv"));
+					}
 					in.close();
 					continue;
 				}
@@ -5454,7 +5619,7 @@ quant_only:
 
 cross_run:
 gen_spec_lib:
-	if (FastaSearch || GenSpecLib) { // generating spectral library
+	if (out_lib_file.size()) if (FastaSearch || GenSpecLib) { // generating spectral library
 		MaxF = INF;
 		if (Verbose >= 1) Time(), std::cout << "Generating spectral library:\n";
 
@@ -5486,7 +5651,7 @@ gen_spec_lib:
 		// extract spectra from runs
 		for (auto it = ms_files.begin(); it != ms_files.end(); it++) {
 			Quant Q;
-			Q.read_meta(*it + std::string(".quant"));
+			Q.read_meta(*it + std::string(".quant"), lib.entries.size());
 
 			Run run(Q.run_index);
 			if (!run.load(&((*it)[0]))) Throw("Cannot load the file");
@@ -5504,12 +5669,20 @@ gen_spec_lib:
 		lib.save(out_lib_file, NULL, true, false);
 	}
 
-	if (IndividualReports) return 0;
+	if (IndividualReports || !(out_file.size() || out_gene_file.size())) goto remove;
 	if (Verbose >= 1) Time(), std::cout << "Cross-run analysis\n";
 	lib.info.load(&(lib), ms_files);
 	lib.info.quantify();
 	lib.quantify_proteins(3, ProteinQuantQvalue);
-	lib.report(out_file);
+	if (out_file.size()) lib.report(out_file);
+	if (out_gene_file.size()) lib.gene_report(out_gene_file);
+
+	remove:
+	if (RemoveQuant) {
+		if (Verbose >= 1) Time(), std::cout << "Removing .quant files\n";
+		for (auto &file : ms_files) try { std::experimental::filesystem::remove(file + std::string(".quant")); } catch (std::exception &e) { }
+	}
+	std::cout << "Finished\n\n";
 
 	return 0;
 }
