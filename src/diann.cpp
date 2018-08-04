@@ -3390,7 +3390,6 @@ public:
     class Precursor {
     public:
 		Lock lock;
-
         Run * run;
 		Peptide * pep;
 
@@ -3860,7 +3859,7 @@ public:
 				info[0].quant[(*searcher.fri)[fr]].quantity[qScaled] /= w;
 			}
 
-			for (fr = 0, info[0].quantity = 0.0; fr < searcher.m; fr++) {
+			for (fr = 0, info[0].quantity = 0.0; fr < Min(TopF, searcher.m); fr++) {
 				assert(info[0].quant[(*searcher.fri)[best_fr]].quantity[qScaled] > E);
 				r = info[0].quant[(*searcher.fri)[fr]].quantity[qScaled] / info[0].quant[(*searcher.fri)[best_fr]].quantity[qScaled];
 				for (pos = 0, info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered] = 0.0; pos < len; pos++)
@@ -4072,7 +4071,7 @@ public:
 					int total = r.getLastScan();
 					if (total > 1) {
 						while (!lock.set()) {}
-						spectra->reserve(total);
+						spectra->reserve(total + 2);
 						lock.free();
 					}
 				} else { if (!r.readFile(NULL, s[next - start], next)) { finish = true; break; } }
@@ -4081,7 +4080,7 @@ public:
 
 			if (next > start) {
 				while (!lock.set()) {}
-				if (next > spectra->size()) spectra->resize(next);
+				if (next - 1 > spectra->size()) spectra->resize(next - 1);
 				for (int i = start; i < next; i++) {
 					bool centroid = (s[i - start].getCentroidStatus() != 1);
 					int level = s[i - start].getMsLevel();
@@ -4130,7 +4129,7 @@ public:
 			int n_ms1 = 0, n_ms2 = 0;
 			for (auto &s : spectra) {
 				if (s.MS_level == 1) ms1[n_ms1++].init(s);
-				else scans[n_ms2++].init(s);
+				else if (s.MS_level == 2) scans[n_ms2++].init(s);
 				std::vector<Peak>().swap(s.peaks);
 			}
 			std::vector<Tandem>().swap(spectra);
@@ -4622,7 +4621,7 @@ public:
 		if (!all && non_guide_present) fit_weights(max_batch, true);
 	}
 
-	void nn_score(int thread_id, bool all, std::vector<NN> * net) {
+	void nn_score(int thread_id, bool all, std::vector<NN> * net, std::vector<float> * nn_sc) {
 		int i, j, cnt, batch_size = 1000;
 		std::vector<float*> data(2 * batch_size);
 		std::vector<int> index(2 * batch_size);
@@ -4647,17 +4646,8 @@ public:
 					for (j = 0; j < cnt; j++) {
 						bool decoy = index[j] & 1;
 						int pos = index[j] >> 1;
-						if (!decoy) {
-							while (!entries[pos].target.lock.set()) {} 
-							entries[pos].target.info[0].cscore += result->data[2 * j];
-							entries[pos].target.info[0].nn_inc++;
-							entries[pos].target.lock.free();
-						} else {
-							while (!entries[pos].decoy.lock.set()) {}
-							entries[pos].decoy.info[0].cscore += result->data[2 * j];
-							entries[pos].decoy.info[0].nn_inc++;
-							entries[pos].decoy.lock.free();
-						}
+						if (!decoy) (*nn_sc)[pos * (2 * Threads) + thread_id] = result->data[2 * j];
+						else (*nn_sc)[pos * (2 * Threads) + Threads + thread_id] = result->data[2 * j];
 					}
 					cnt = 0;
 				}
@@ -4672,14 +4662,28 @@ public:
 			if (it->decoy.flags & fFound) it->decoy.info[0].cscore = 0.0, it->decoy.info[0].nn_inc = 0;
 		}
 
+		std::vector<float> nn_sc(entries.size() * Threads * 2, -1.0);
 		std::vector<std::thread> thr;
-		for (int i = 0; i < Threads; i++) thr.push_back(std::thread(&Run::nn_score, this, i, all, net));
-		for (int i = 0; i < Threads; i++) thr[i].join(); // multithreaded execution here leads to the appearance of tiny (e-6) errors in cscore calculaton
+		for (int i = 0; i < Threads; i++) thr.push_back(std::thread(&Run::nn_score, this, i, all, net, &nn_sc));
+		for (int i = 0; i < Threads; i++) thr[i].join();
 
-		for (auto it = entries.begin(); it != entries.end(); it++) {
-			if (it->batch > curr_batch) continue;
-			if (it->target.flags & fFound) it->target.info[0].cscore /= (double)it->target.info[0].nn_inc;
-			if (it->decoy.flags & fFound) it->decoy.info[0].cscore /= (double)it->decoy.info[0].nn_inc;
+		for (int i = 0; i < entries.size(); i++) {
+			auto &e = entries[i];
+			if (e.batch > curr_batch) continue;
+			if (e.target.flags & fFound) {
+				e.target.info[0].cscore = 0.0;
+				int cnt = 0;
+				for (int j = 0; j < Threads; j++) if (nn_sc[i * (Threads * 2) + j] >= 0.0) e.target.info[0].cscore += nn_sc[i * (Threads * 2) + j], cnt++;
+				assert(cnt > 0);
+				e.target.info[0].cscore /= (double)cnt;
+			}
+			if (e.decoy.flags & fFound) {
+				e.decoy.info[0].cscore = 0.0;
+				int cnt = 0;
+				for (int j = 0; j < Threads; j++) if (nn_sc[i * (Threads * 2) + Threads + j] >= 0.0) e.decoy.info[0].cscore += nn_sc[i * (Threads * 2) + Threads + j], cnt++;
+				assert(cnt > 0);
+				e.decoy.info[0].cscore /= (double)cnt;
+			}
 		}
 	}
     
