@@ -13,6 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+// THIS FILE HAS BEEN MODIFIED BY VADIM DEMICHEV
+
 #include "Spectrum.h"
 #include <iostream>
 #include <iomanip>
@@ -75,10 +78,12 @@ Spectrum::Spectrum(const Spectrum& s){
   scanNumber2 = s.scanNumber2;
   msLevel = s.msLevel;
   monoMZ = new vector<double>;
+  monoMZ->reserve(s.monoMZ->size());
   for(i=0;i<s.monoMZ->size();i++){
 		monoMZ->push_back(s.monoMZ->at(i));
 	}
   mz = new vector<double>;
+  mz->reserve(s.mz->size());
 	for(i=0;i<s.mz->size();i++){
 		mz->push_back(s.mz->at(i));
 	}
@@ -98,14 +103,17 @@ Spectrum::Spectrum(const Spectrum& s){
   selectionWinUpper=s.selectionWinUpper;
   centroidStatus = s.centroidStatus;
   vPeaks = new vector<Peak_T>;
+  vPeaks->reserve(s.vPeaks->size());
   for(i=0;i<s.vPeaks->size();i++){
     vPeaks->push_back(s.vPeaks->at(i));
   }
   vEZ = new vector<EZState>;
+  vEZ->reserve(s.vEZ->size());
   for(i=0;i<s.vEZ->size();i++){
     vEZ->push_back(s.vEZ->at(i));
   }
   vZ = new vector<ZState>;
+  vZ->reserve(s.vZ->size());
   for(i=0;i<s.vZ->size();i++){
     vZ->push_back(s.vZ->at(i));
   }
@@ -117,28 +125,23 @@ Spectrum& Spectrum::operator=(const Spectrum& s){
 	//cout<<"in Spectrum ="<<endl;
   unsigned int i;
   if (this != &s) {
-    delete vPeaks;
-    delete vEZ;
-    delete vZ;
-    delete monoMZ;
-		delete mz;
-    monoMZ = new vector<double>;
+	  vPeaks->clear(); vPeaks->reserve(s.vPeaks->size());
+	  vEZ->clear(); vEZ->reserve(s.vEZ->size());
+	  vZ->clear(); vZ->reserve(s.vZ->size());
+	  monoMZ->clear(); monoMZ->reserve(s.monoMZ->size());
+	  mz->clear(); mz->reserve(s.mz->size());
     for(i=0;i<s.monoMZ->size();i++){
 		  monoMZ->push_back(s.monoMZ->at(i));
 	  }
-		mz = new vector<double>;
 		for(i=0;i<s.mz->size();i++){
 			mz->push_back(s.mz->at(i));
 		}
-    vPeaks = new vector<Peak_T>;
     for(i=0;i<s.vPeaks->size();i++){
       vPeaks->push_back(s.vPeaks->at(i));
     }
-    vEZ = new vector<EZState>;
     for(i=0;i<s.vEZ->size();i++){
       vEZ->push_back(s.vEZ->at(i));
     }
-    vZ = new vector<ZState>;
     for(i=0;i<s.vZ->size();i++){
       vZ->push_back(s.vZ->at(i));
     }
@@ -244,16 +247,11 @@ ZState& Spectrum::atZ(const unsigned int& i){
 
 /* Clears the spectrum */
 void Spectrum::clear(){
-	delete vPeaks;
-	vPeaks = new vector<Peak_T>;
-  delete vEZ;
-  vEZ = new vector<EZState>;
-	delete vZ;
-	vZ = new vector<ZState>;
-	delete mz;
-	mz = new vector<double>;
-  delete monoMZ;
-  monoMZ = new vector<double>;
+	vPeaks->clear();
+  vEZ->clear();
+	vZ->clear();
+	mz->clear();
+  monoMZ->clear();
 	scanNumber = 0;
   scanNumber2 = 0;
 	rTime = 0;
@@ -272,15 +270,12 @@ void Spectrum::clear(){
 }
 
 void Spectrum::clearMZ(){
-	delete mz;
-	mz = new vector<double>;
-  delete monoMZ;
-	monoMZ = new vector<double>;
+	mz->clear();
+	monoMZ->clear();
 }
 
 void Spectrum::clearPeaks(){
-	delete vPeaks;
-	vPeaks = new vector<Peak_T>;
+	vPeaks->clear();
 }
 
 /* Erases element i in the spectrum. */

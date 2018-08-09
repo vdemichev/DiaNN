@@ -1518,7 +1518,7 @@ public:
 		}
     }
 
-	void init(Tandem &T) { RT = T.RT, window_low = T.window_low, window_high = T.window_high, peaks = T.peaks; }
+	void init(Tandem &T) { RT = T.RT, window_low = T.window_low, window_high = T.window_high, peaks = std::move(T.peaks); }
 #endif
     
     inline bool has(float mz) { return (window_low <= mz && window_high > mz); }
@@ -4059,7 +4059,7 @@ public:
 		r.setFilter(MSToolkit::MS1);
 		r.addFilter(MSToolkit::MS2);
 
-		bool first = true, finish = false;;
+		bool first = true, finish = false;
 		int start = 0, stop = 0, next = 0;
 		while (true) {
 			int curr = sp_alloc.fetch_add(Block);
@@ -4130,7 +4130,6 @@ public:
 			for (auto &s : spectra) {
 				if (s.MS_level == 1) ms1[n_ms1++].init(s);
 				else if (s.MS_level == 2) scans[n_ms2++].init(s);
-				std::vector<Peak>().swap(s.peaks);
 			}
 			std::vector<Tandem>().swap(spectra);
 		}
@@ -5199,8 +5198,11 @@ public:
 				q[i] = 1.0;
 				continue;
 			}
-			auto pT = std::lower_bound(targets.begin(), targets.end(), tsc[i]);
-			auto pD = std::lower_bound(decoys.begin(), decoys.end(), tsc[i]);
+			float sc = tsc[i];
+			auto pD = std::lower_bound(decoys.begin(), decoys.end(), sc);
+			if (pD > decoys.begin()) sc = *(--pD);
+			auto pT = std::lower_bound(targets.begin(), targets.end(), sc);
+			
 			q[i] = Min(1.0, ((double)std::distance(pD, decoys.end())) / Max(1.0, (double)std::distance(pT, targets.end())));
 
 			auto pair = std::pair<float, float>(tsc[i], q[i]);
