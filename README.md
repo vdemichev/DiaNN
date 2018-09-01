@@ -52,7 +52,7 @@ Specifies a data file to be processed. Use --f for each file to be processed.
 ```
 Specifies the spectral library. Example:
 ```
-diann.exe --f run1.mzML --f run2.mzML --lib yeast.csv  
+diann.exe --f run1.mzML --f run2.mzML --lib yeast.tsv  
 ```
 #### Auxiliary commands:  
 ```
@@ -82,11 +82,11 @@ Add a string to the beginning of each file name.
 ```
 --out <output file> 
 ```
-Specifies the output file; by default, the output is saved to quant.csv in the current working directory.
+Specifies the output file; by default, the output is saved to quant.tsv in the current working directory.
 
 #### Example:
 ```
-diann.exe --threads 4 --f run1 --f run2 --lib yeast.csv --prefix C:\Data\ --ext .mzML --out run1_2.csv    
+diann.exe --threads 4 --f run1 --f run2 --lib yeast.tsv --prefix C:\Data\ --ext .mzML --out run1_2.tsv    
 ```
 
 For a full list of supported commands see the arguments() function in /src/diann.cpp.
