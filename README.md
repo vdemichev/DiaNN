@@ -93,7 +93,8 @@ For a full list of supported commands see the arguments() function in /src/diann
 
 ### Building
 
-A Visual C++ solution file is provided with the source code for building on Windows. It should also be possible to buld DIA-NN on Linux, as all the libraries it utilises are compatible with Linux. However, so far it has only been tested on Windows.    
+A Visual C++ solution file is provided with the source code for building on Windows. It should also be possible to buld DIA-NN on Linux, as all the libraries it utilises are compatible with Linux. However, so far it has only been tested on Windows (versions 7 and 10).  
+
 
 
 
