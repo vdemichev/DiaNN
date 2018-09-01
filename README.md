@@ -60,7 +60,7 @@ diann.exe --f run1.mzML --f run2.mzML --lib yeast.csv
 ```
 Specifies a file with a set of commands.
 ```
---dif <folder> 
+--dir <folder> 
 ```
 Specifies a folder containing raw files to be processed. All files in the folder must be in .raw, .mzML or .dia format.  
 ```
