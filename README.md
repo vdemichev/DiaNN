@@ -97,7 +97,7 @@ A Visual C++ solution file is provided with the source code for building on Wind
 
 ### Tutorial
 
-This is a simple tutorial which covers generation of a spectral library from DIA data and its use to analyse other DIA runs. 
+This is a simple tutorial (for DIA-NN 1.5.7) which covers generation of a spectral library from DIA data and its use to analyse other DIA runs. 
 1. Download DIA-NN.exe (the GUI) and DiaNN.exe (the command line tool) to the same folder. 
 2. Download "Fig2 HeLa-0-5h_MHRM_R01_T0.raw", "Fig2 HeLa-1h_MHRM_R01_T0.raw" and "uniprot_sprot_2014-12-11_HUMAN_ISOFORMS.fasta" from https://www.ebi.ac.uk/pride/archive/projects/PXD005573/files. 
 3. (Optional) Download "ecolihumanyeast_concat_mayu_IRR_cons_openswath_64var_curated.csv" from https://www.ebi.ac.uk/pride/archive/projects/PXD002952/files. Rename the file extension to .tsv (as this is a tab-separated file). 

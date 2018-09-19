@@ -3859,12 +3859,12 @@ public:
 				info[0].quant[(*searcher.fri)[fr]].quantity[qScaled] /= w;
 			}
 
-			for (fr = 0, info[0].quantity = 0.0; fr < Min(TopF, searcher.m); fr++) {
+			for (fr = 0, info[0].quantity = 0.0; fr < searcher.m; fr++) {
 				assert(info[0].quant[(*searcher.fri)[best_fr]].quantity[qScaled] > E);
 				r = info[0].quant[(*searcher.fri)[fr]].quantity[qScaled] / info[0].quant[(*searcher.fri)[best_fr]].quantity[qScaled];
 				for (pos = 0, info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered] = 0.0; pos < len; pos++)
 					info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered] += Min(searcher.ms2[fr * len + pos], FilterFactor * r * elution[pos]);
-				info[0].quantity += info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered];
+				if (fr < TopF) info[0].quantity += info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered];
 			}
         }
 
