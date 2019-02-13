@@ -26,7 +26,7 @@ Increased speed
 ### Installation
 
 None required (for .raw, .mzML and .dia processing). Two executables are provided: DiaNN.exe (a command-line tool) and DIA-NN.exe (a GUI implemented as a wrapper for DiaNN.exe).  
-For .wiff support, first download and install ProteoWizard (http://proteowizard.sourceforge.net/download.html - choose the version that supports "vendor files"), then use the installer provided (DIA-NN-Setup.msi) and specify the Proteowizard directory (e.g. C:\Program Files (x86)\ProteoWizard\ProteoWizard [version], where [version] is the ProteoWizard version number, e.g. 3.0.11537) as the installation directory.  
+For .wiff support, first download and install ProteoWizard (http://proteowizard.sourceforge.net/download.html - choose the version that supports "vendor files"), then use the installer provided (DIA-NN-Setup.msi) and specify the Proteowizard directory (e.g. C:\Program Files (x86)\ProteoWizard\ProteoWizard \[version\], where \[version\] is the ProteoWizard version number, e.g. 3.0.11537) as the installation directory.  
 
 ### Input files
 
