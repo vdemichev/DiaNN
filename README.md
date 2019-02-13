@@ -97,18 +97,12 @@ A Visual C++ solution file is provided with the source code for building on Wind
 
 ### Tutorial
 
-This is a simple tutorial which covers generation of a spectral library from DIA data (using DIA-NN 1.5.7) and its use to analyse other DIA runs. 
-1. Place DIA-NN.exe (the GUI) and DiaNN.exe (the command line tool) in the same folder. 
-2. Download "Fig2 HeLa-0-5h_MHRM_R01_T0.raw", "Fig2 HeLa-1h_MHRM_R01_T0.raw" and "uniprot_sprot_2014-12-11_HUMAN_ISOFORMS.fasta" from https://www.ebi.ac.uk/pride/archive/projects/PXD005573/files. 
-3. (Optional) Download "ecolihumanyeast_concat_mayu_IRR_cons_openswath_64var_curated.csv" from https://www.ebi.ac.uk/pride/archive/projects/PXD002952/files. Rename the file extension to .tsv (as this is a tab-separated file). 
-4. (Optional) Download http://www.peptideatlas.org/builds/human/201712/APD_Hs_all.fasta (browse http://www.peptideatlas.org/builds/ and download APD_Hs_all.fasta corresponding to the Jan 2018 Human build) to the same folder as DIA-NN.exe. 
+This is a simple tutorial which covers the generation of a spectral library from DIA data and its use to analyse other DIA runs. 
+1. Place DIA-NN.exe (the GUI) and DiaNN.exe (the command line tool) in the same folder.  
+2. Download "Fig2 HeLa-0-5h_MHRM_R01_T0.raw", "Fig2 HeLa-1h_MHRM_R01_T0.raw" and "uniprot_sprot_2014-12-11_HUMAN_ISOFORMS.fasta" from https://www.ebi.ac.uk/pride/archive/projects/PXD005573/files.  
+3. (Optional) Download "ecolihumanyeast_concat_mayu_IRR_cons_openswath_64var_curated.csv" from https://www.ebi.ac.uk/pride/archive/projects/PXD002952/files. Rename the file extension to .tsv (as this is a tab-separated file).  
+4. (Optional) Download http://www.peptideatlas.org/builds/human/201712/APD_Hs_all.fasta (browse http://www.peptideatlas.org/builds/ and download APD_Hs_all.fasta corresponding to the Jan 2018 Human build) to the same folder as DIA-NN.exe.  
 5. Download and install MSFileReader (see above; to let DIA-NN access .raw files directly).  
-6. Run DIA-NN.exe. In the "Files" panel click "Add raw data" and select "Fig2 HeLa-1h_MHRM_R01_T0.raw". In the "Library-free search" panel check "Use library-free search / generate spectral library" and (optional) select "ecolihumanyeast_concat_mayu_IRR_cons_openswath_64var_curated.tsv" as the Training Library. The latter allows to train peptide fragmentation and retention time predictors (see Manual). In the "Main Settings" panel click "Add FASTA" and select "uniprot_sprot_2014-12-11_HUMAN_ISOFORMS.fasta". (Optional) in the "Additional options" text box type "--fasta-filter APD_Hs_all.fasta". This will instruct DIA-NN to only look for peptides known to be detected in human samples, speeding up the search significantly. 
-7. Click Run. DIA-NN will perform library-free analysis of the 1h HeLa run and create a spectral library (file "lib.tsv", 41571 precursor ions). Full analysis report will be saved to "quant.tsv". This will take 10-30 minutes on an average desktop.  
-8. "Clear list" in the "Files" panel, then click "Add raw data" and select "Fig2 HeLa-0-5h_MHRM_R01_T0.raw". Uncheck "Use library-free search / generate spectral library" in the "Library-free search" panel. In the "Spectral library" field ("Main Settings" panel) type "lib.tsv". Clear the "Additional options" text box and press Run. In about a minute DIA-NN will process the 0.5h HeLa run and report 27418 precursors and 3378 proteins identified at 1% FDR. 
-
-
-
-
-
-
+6. Run DIA-NN.exe. In the "Files" panel click "Add raw data" and select "Fig2 HeLa-1h_MHRM_R01_T0.raw". In the "Library-free search" panel check "Use library-free search / generate spectral library" and (optional) select "ecolihumanyeast_concat_mayu_IRR_cons_openswath_64var_curated.tsv" as the Training Library. The latter allows to train peptide fragmentation and retention time predictors (see Manual). To speed up analysis, set the number of missed cleavages to 0. In the "Main Settings" panel click "Add FASTA" and select "uniprot_sprot_2014-12-11_HUMAN_ISOFORMS.fasta". (Optional) in the "Additional options" text box type "--fasta-filter APD_Hs_all.fasta". This will instruct DIA-NN to only look for peptides known to be detected in human samples, speeding up the search significantly. Click "Add to pipeline".   
+7. "Clear list" in the "Files" panel, then click "Add raw data" and select "Fig2 HeLa-0-5h_MHRM_R01_T0.raw". Uncheck "Use library-free search / generate spectral library" in the "Library-free search" panel. In the "Spectral library" field ("Main Settings" panel) type "lib.tsv". Clear the "Additional options" text box, click "Add to pipeline".    
+8. Click "Execute". First, DIA-NN will generate a spectral library (consisting of 36872 precursors) from the 1h run (this will take 10-30 minutes on an average desktop). Afterwards, DIA-NN will process the 0.5h HeLa run and report 28249 precursors and 3670 proteins identified at 1% FDR (this will take about a minute).     

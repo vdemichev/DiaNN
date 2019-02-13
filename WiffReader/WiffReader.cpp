@@ -188,30 +188,34 @@ public:
 					auto spi = exp->GetMassSpectrumInfo(s);
 					wl = centre - 0.5 * win, wh = centre + 0.5 * win;
 					if (!vendor) {
-						auto sp = exp->GetMassSpectrum(s);
-						auto x = sp->GetActualXValues();
-						auto y = sp->GetActualYValues();
-						m = x->Length;
-						X.resize(m), Y.resize(m);
-						for (int i = 0; i < m; i++) X[i] = x[i], Y[i] = y[i];
-						if (spi->MSLevel == 1) (*spectra)[pos].init(&(X[0]), &(Y[0]), m, !spi->CentroidMode, 0.6 / res, 2.0 / res, 1, 0.5 * (spi->StartRT + spi->EndRT), 0.0, 0.0);
-						else if (spi->MSLevel == 2) (*spectra)[pos].init(&(X[0]), &(Y[0]), m, !spi->CentroidMode, 0.6 / res, 2.0 / res, 2, 0.5 * (spi->StartRT + spi->EndRT), wl, wh);
+						try {
+							auto sp = exp->GetMassSpectrum(s);
+							auto x = sp->GetActualXValues();
+							auto y = sp->GetActualYValues();
+							m = x->Length;
+							X.resize(m), Y.resize(m);
+							for (int i = 0; i < m; i++) X[i] = x[i], Y[i] = y[i];
+							if (spi->MSLevel == 1) (*spectra)[pos].init(&(X[0]), &(Y[0]), m, !spi->CentroidMode, 0.6 / res, 2.0 / res, 1, 0.5 * (spi->StartRT + spi->EndRT), 0.0, 0.0);
+							else if (spi->MSLevel == 2) (*spectra)[pos].init(&(X[0]), &(Y[0]), m, !spi->CentroidMode, 0.6 / res, 2.0 / res, 2, 0.5 * (spi->StartRT + spi->EndRT), wl, wh);
+						} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout);  provider->Close(); return; }
 					} else {
-						auto pl = exp->GetPeakArray(s);
-						m = pl->Length;
-						int i, k;
-						auto &se = (*spectra)[pos];
-						se.peaks.clear();
-						se.MS_level = spi->MSLevel;
-						se.RT = 0.5 * (spi->StartRT + spi->EndRT);
-						if (spi->MSLevel == 1) se.window_low = se.window_high = 0.0;
-						else se.window_low = wl, se.window_high = wh;
-						for (i = k = 0; i < m; i++) if (pl[i]->area >= MinPeakHeight) k++;
-						se.peaks.resize(k);
-						for (i = k = 0; i < m; i++) if (pl[i]->area >= MinPeakHeight) {
-							se.peaks[k].mz = pl[i]->xValue; 
-							se.peaks[k++].height = pl[i]->area;
-						}
+						try {
+							auto pl = exp->GetPeakArray(s);
+							m = pl->Length;
+							int i, k;
+							auto &se = (*spectra)[pos];
+							se.peaks.clear();
+							se.MS_level = spi->MSLevel;
+							se.RT = 0.5 * (spi->StartRT + spi->EndRT);
+							if (spi->MSLevel == 1) se.window_low = se.window_high = 0.0;
+							else se.window_low = wl, se.window_high = wh;
+							for (i = k = 0; i < m; i++) if (pl[i]->area >= MinPeakHeight) k++;
+							se.peaks.resize(k);
+							for (i = k = 0; i < m; i++) if (pl[i]->area >= MinPeakHeight) {
+								se.peaks[k].mz = pl[i]->xValue;
+								se.peaks[k++].height = pl[i]->area;
+							}
+						} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout);  provider->Close(); return; }
 					}
 				}
 				pos++;
