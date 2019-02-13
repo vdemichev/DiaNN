@@ -16,7 +16,7 @@ A report with protein and precursor ion quantities is produced.
 **Download**: https://github.com/vdemichev/DiaNN/releases   
 GUI manual: https://github.com/vdemichev/DiaNN/blob/master/DIA-NN%20GUI%20manual.pdf   
 
-### New since version 1.5  
+### New since version 1.5.8  
 
 Improved identification and quantification algorithms  
 Support for constructing and saving pipelines in the GUI  
