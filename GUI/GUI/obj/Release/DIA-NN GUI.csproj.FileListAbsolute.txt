@@ -1,0 +1,9 @@
+C:\git\DiaNN\DIA-NN.exe
+C:\git\DiaNN\GUI\GUI\obj\Release\GUI.Form1.resources
+C:\git\DiaNN\GUI\GUI\obj\Release\GUI.Properties.Resources.resources
+C:\git\DiaNN\GUI\GUI\obj\Release\DIA-NN GUI.csproj.GenerateResource.cache
+C:\git\DiaNN\GUI\GUI\obj\Release\DIA-NN GUI.csproj.CoreCompileInputs.cache
+C:\git\DiaNN\DIA-NN.exe.config
+C:\git\DiaNN\GUI\GUI\obj\Release\DIA-NN.exe
+C:\git\DiaNN\GUI\GUI\obj\Release\DIA-NN.pdb
+C:\git\DiaNN\DIA-NN.pdb

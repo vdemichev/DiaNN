@@ -16,6 +16,13 @@
 *.exp
 *.metagen
 *.manifest
+*.pch
+*.suo
+*.db
+*.ipch
+*.cache
+
+
 
 
 
