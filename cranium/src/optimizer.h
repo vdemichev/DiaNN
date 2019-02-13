@@ -268,6 +268,8 @@ public:
 			destroyMatrix(dbi_avg[i]);
 			destroyMatrix(Mw[i]);
 			destroyMatrix(Mb[i]);
+			destroyMatrix(Vw[i]);
+			destroyMatrix(Vb[i]);
 			destroyMatrix(regi[i]);
 		}
 

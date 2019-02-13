@@ -13,6 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+// THIS FILE HAS BEEN MODIFIED BY VADIM DEMICHEV
+
 #ifndef _RAWREADER_H
 #define _RAWREADER_H
 
@@ -27,6 +30,7 @@ limitations under the License.
 
 #include <objbase.h>
 
+//#import "../../MSFileReader.XRawfile2.dll"  rename_namespace("XRawfile")
 #import "libid:F0C5F3E3-4F2A-443E-A74D-0AABE3237494" rename_namespace("XRawfile")
 //#import "libid:5FE970A2-29C3-11D3-811D-00104B304896" rename_namespace("XRawfile")
 using namespace XRawfile;

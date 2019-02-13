@@ -90,14 +90,14 @@ void initializeConnection(Connection* connection, std::minstd_rand &gen){
 // assuming input of layer is filled with raw input,
 // calls activation function on each of them, and
 // modifies in-place
-void activateLayer(Layer* layer){
+void activateLayer(Layer* layer) {
     if (layer->activation != NULL){
         layer->activation(layer->input);
     }
 }
 
-void destroyLayer(Layer* layer){
-    if (layer->input != NULL) (layer->input);
+void destroyLayer(Layer* layer) {
+    if (layer->input != NULL) destroyMatrix(layer->input);
     free(layer);
 }
 

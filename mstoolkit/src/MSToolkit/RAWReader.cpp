@@ -16,6 +16,8 @@ limitations under the License.
 
 // THIS FILE HAS BEEN MODIFIED BY VADIM DEMICHEV
 
+// #define _NO_THERMORAW
+
 #ifndef _NO_THERMORAW
 #include "RAWReader.h"
 

@@ -4,37 +4,37 @@ DIA-NN - a fast and easy to use tool for processing data independent acquisition
 DIA-NN implements deep neural networks to improve precursor ion identification.  
 DIA-NN now also supports library-free search and spectral library generation.
 
-**DIA-NN: Deep neural networks substantially improve the   
-identification performance of Data-independent acquisition (DIA) in proteomics**  
-Vadim Demichev, Christoph B. Messner, Kathryn S. Lilley, Markus Ralser  
+**DIA-NN: Neural networks and interference correction  	
+enable deep coverage in high-throughput proteomics**  
+Vadim Demichev, Christoph B. Messner, Spyros I. Vernardis, Kathryn S. Lilley, Markus Ralser  
 https://doi.org/10.1101/282699
 
 DIA-NN encompasses all stages of DIA-MS data processing in a single program.   
 As input it takes raw data files and a spectral library / FASTA database.  
 A report with protein and precursor ion quantities is produced. 
   
-Manual: https://github.com/vdemichev/DiaNN/blob/master/DIA-NN%20GUI%20manual.pdf   
-  
-### New in version 1.5
+**Download**: https://github.com/vdemichev/DiaNN/releases   
+GUI manual: https://github.com/vdemichev/DiaNN/blob/master/DIA-NN%20GUI%20manual.pdf   
 
-Significantly improved identification performance.  
-Automatic mass correction and mass accuracy inference.  
-Automatic removal of interfering peptides.  
-Increased speed and greatly reduced memory usage.  
-Library-free search and spectral library generation from DIA data.  
-GUI wrapper.  
+### New since version 1.5  
+
+Improved identification and quantification algorithms  
+Support for constructing and saving pipelines in the GUI  
+Sciex .wiff support  
+Increased speed   
 
 ### Installation
 
-None required. Two executables are provided: DiaNN.exe (a command-line tool) and DIA-NN.exe (a GUI implemented as a wrapper for DiaNN.exe).
+None required (for .raw, .mzML and .dia processing). Two executables are provided: DiaNN.exe (a command-line tool) and DIA-NN.exe (a GUI implemented as a wrapper for DiaNN.exe).  
+For .wiff support, first download and install ProteoWizard (http://proteowizard.sourceforge.net/download.html - choose the version that supports "vendor files"), then use the installer provided (DIA-NN-Setup.msi) and specify the Proteowizard directory (C:\Program Files\ProteoWizard\ProteoWizard <version>, where <version> is the ProteoWizard version number, e.g. 3.0.11537) as the installation directory.  
 
 ### Input files
 
-Raw data files: Thermo .raw, .mzML or .dia (format used by DIA-NN to store spectra).  
+Raw data files: Sciex .wiff, Thermo .raw, .mzML or .dia (format used by DIA-NN to store spectra).  
 Reading Thermo .raw files requires Thermo MS File Reader (https://thermo.flexnetoperations.com/control/thmo/login?nextURL=%2Fcontrol%2Fthmo%2Fdownload%3Felement%3D6306677) to be installed.   
 The .mzML files should be centroided and contain data as spectra (e.g. SWATH) and not chromatograms.  
 
-Spectral library: comma-separated (.csv) or tab-separated (.tsv or .txt) file.    
+Spectral library: comma-separated (.csv) or tab-separated (.tsv, .xlx or .txt) file.    
   
 ### Command-line tool usage
 ```
@@ -93,12 +93,12 @@ For a full list of supported commands see the arguments() function in /src/diann
 
 ### Building
 
-A Visual C++ solution file is provided with the source code for building on Windows. It should also be possible to buld DIA-NN on Linux, as all the libraries it utilises are compatible with Linux. However, so far it has only been tested on Windows (versions 7 and 10).  
+A Visual C++ solution file is provided with the source code for building on Windows. It should also be possible to buld DIA-NN on Linux, as all the libraries it utilises are compatible with Linux (to read .mzML and .raw files DIA-NN relies on the MSToolkit library, which is not header-only; this library can be disabled by commenting the "#define MSTOOLKIT" line in diann.cpp). However, so far it has only been tested on Windows (versions 7 and 10).  
 
 ### Tutorial
 
-This is a simple tutorial (for DIA-NN 1.5.7) which covers generation of a spectral library from DIA data and its use to analyse other DIA runs. 
-1. Download DIA-NN.exe (the GUI) and DiaNN.exe (the command line tool) to the same folder. 
+This is a simple tutorial which covers generation of a spectral library from DIA data (using DIA-NN 1.5.7) and its use to analyse other DIA runs. 
+1. Place DIA-NN.exe (the GUI) and DiaNN.exe (the command line tool) in the same folder. 
 2. Download "Fig2 HeLa-0-5h_MHRM_R01_T0.raw", "Fig2 HeLa-1h_MHRM_R01_T0.raw" and "uniprot_sprot_2014-12-11_HUMAN_ISOFORMS.fasta" from https://www.ebi.ac.uk/pride/archive/projects/PXD005573/files. 
 3. (Optional) Download "ecolihumanyeast_concat_mayu_IRR_cons_openswath_64var_curated.csv" from https://www.ebi.ac.uk/pride/archive/projects/PXD002952/files. Rename the file extension to .tsv (as this is a tab-separated file). 
 4. (Optional) Download http://www.peptideatlas.org/builds/human/201712/APD_Hs_all.fasta (browse http://www.peptideatlas.org/builds/ and download APD_Hs_all.fasta corresponding to the Jan 2018 Human build) to the same folder as DIA-NN.exe. 

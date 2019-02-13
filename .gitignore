@@ -11,6 +11,12 @@
 *.tlh
 *.tli
 *.docx
+*.dll
+*.lib
+*.exp
+*.metagen
+*.manifest
+
 
 
 
