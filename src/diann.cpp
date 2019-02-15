@@ -5514,8 +5514,8 @@ public:
 					for (j = 0; j < cnt; j++) {
 						bool decoy = index[j] & 1;
 						int pos = index[j] >> 1;
-						if (!decoy) (*nn_sc)[pos * (2 * Threads) + thread_id] = result->data[2 * j];
-						else (*nn_sc)[pos * (2 * Threads) + Threads + thread_id] = result->data[2 * j];
+						if (!decoy) (*nn_sc)[pos * (2 * nnBagging) + ind] = result->data[2 * j];
+						else (*nn_sc)[pos * (2 * nnBagging) + nnBagging + ind] = result->data[2 * j];
 					}
 					free(dataset);
 					cnt = 0;
@@ -5531,7 +5531,7 @@ public:
 			if (it->decoy.flags & fFound) it->decoy.info[0].cscore = 0.0, it->decoy.info[0].nn_inc = 0;
 		}
 
-		std::vector<float> nn_sc(entries.size() * Threads * 2, -1.0);
+		std::vector<float> nn_sc(entries.size() * nnBagging * 2, -1.0);
 		std::vector<std::thread> thr;
 		for (int i = 0; i < Threads; i++) thr.push_back(std::thread(&Run::nn_score, this, i, all, net, &nn_sc));
 		for (int i = 0; i < Threads; i++) thr[i].join();
@@ -5542,14 +5542,14 @@ public:
 			if (e.target.flags & fFound) {
 				e.target.info[0].cscore = 0.0;
 				int cnt = 0;
-				for (int j = 0; j < Threads; j++) if (nn_sc[i * (Threads * 2) + j] >= 0.0) e.target.info[0].cscore += nn_sc[i * (Threads * 2) + j], cnt++;
+				for (int j = 0; j < nnBagging; j++) if (nn_sc[i * (nnBagging * 2) + j] >= 0.0) e.target.info[0].cscore += nn_sc[i * (nnBagging * 2) + j], cnt++;
 				assert(cnt > 0);
 				e.target.info[0].cscore /= (double)cnt;
 			}
 			if (e.decoy.flags & fFound) {
 				e.decoy.info[0].cscore = 0.0;
 				int cnt = 0;
-				for (int j = 0; j < Threads; j++) if (nn_sc[i * (Threads * 2) + Threads + j] >= 0.0) e.decoy.info[0].cscore += nn_sc[i * (Threads * 2) + Threads + j], cnt++;
+				for (int j = 0; j < nnBagging; j++) if (nn_sc[i * (nnBagging * 2) + nnBagging + j] >= 0.0) e.decoy.info[0].cscore += nn_sc[i * (nnBagging * 2) + nnBagging + j], cnt++;
 				assert(cnt > 0);
 				e.decoy.info[0].cscore /= (double)cnt;
 			}
