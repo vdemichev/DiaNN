@@ -10,8 +10,8 @@
 *.zip
 *.tlh
 *.tli
-*.docx
 *.dll
+*.docx
 *.lib
 *.exp
 *.metagen

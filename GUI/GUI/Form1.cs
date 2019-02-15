@@ -174,8 +174,14 @@ namespace GUI
             Invoke(new Action(() => StatusIndicator.BackColor = System.Drawing.SystemColors.Control));
             if (in_pipeline)
             {
-                if (!finished) Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.Color.LightSalmon));
-                else Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.SystemColors.Control));
+                bool failed = false;
+                if (!finished)
+                {
+                    if (!process.HasExited) failed = true;
+                    else if (process.ExitCode != 0) failed = true;
+                    if (failed) Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.Color.LightSalmon));
+                }
+                if (!failed) Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.SystemColors.Control));
                 processed++;
                 if (processed < Pipeline.Count)
                 {
@@ -643,24 +649,6 @@ namespace GUI
 
         private void OpenPipelineButton_Click(object sender, EventArgs e)
         {
-            if (in_pipeline) return;
-            if (Pipeline.Count >= 1)
-            {
-                DialogResult dr = MessageBox.Show("This will overwrite the existing pipeline. Proceed?", "Overwrite", MessageBoxButtons.YesNo);
-                switch (dr)
-                {
-                    case DialogResult.Yes:
-                        try
-                        {
-                            
-                        }
-                        catch (Exception ex) { }
-                        break;
-                    case DialogResult.No:
-                        return;
-                }
-            }
-
             OpenFileDialog openDialog = new OpenFileDialog();
             openDialog.Multiselect = false;
             openDialog.Filter = "Pipeline files (*.pipeline)|*.pipeline|All files (*.*)|*.*";
@@ -668,8 +656,6 @@ namespace GUI
             openDialog.RestoreDirectory = true;
             if (openDialog.ShowDialog() == DialogResult.OK)
             {
-                Pipeline.Clear();
-                PipNames.Clear();
                 FileStream stream = File.Open(openDialog.FileName, FileMode.Open);
                 var formatter = new BinaryFormatter();
                 while (stream.Position != stream.Length)

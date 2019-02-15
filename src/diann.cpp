@@ -87,7 +87,6 @@ int Threads = 1;
 int iN = 12;
 int nnIter = 11;
 
-int LDA = 0;
 bool LCAllScores = false;
 
 bool Standardise = true;
@@ -1534,10 +1533,7 @@ void arguments(int argc, char *argv[]) {
 			if (!Convert) ms_files.push_back(files[i]);
 			continue;
 		}
-		auto converted = files[i] + std::string(".dia");
-		int j;
-		for (j = 0; j < files.size(); j++) if (j != i) if (files[j] == converted) break;
-		if (j == files.size()) ms_files.push_back(files[i]);
+		ms_files.push_back(files[i]);
 	}
 	if (ms_files.size() < 2) RTProfiling = false;
 	if (UseQuant || QuantOnly) UseRTInfo = true;
@@ -3727,10 +3723,10 @@ const int fInit = 1 << 2;
 class Run {
 public:
 	Lock lock;
-	volatile int ms1_cnt, ms2_cnt;
+	volatile int ms1_cnt = 0, ms2_cnt = 0;
 	std::atomic<int> sp_alloc;
 
-	int run_index;
+	int run_index = 0, LDA = 0;
 	RunStats RS;
     std::string name; // run name
 	float weights[pN], guide_weights[pN], best_weights[pN], best_guide_weights[pN], selection_weights[pN], selection_guide_weights[pN];
@@ -3743,7 +3739,7 @@ public:
 
 	Library * lib;
     
-    int n_scans;
+    int n_scans = 0;
 	std::vector<double> RT_coeff, RT_points, iRT_coeff, iRT_points;
     std::vector<float> scan_RT; // list of RTs of scans
 	double RT_window, RT_min = 0.0, RT_max = 0.0;
