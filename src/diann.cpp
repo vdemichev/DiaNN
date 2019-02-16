@@ -476,6 +476,30 @@ std::vector<std::string> oh = { // output headers
 double NormalisationQvalue = 0.01;
 double NormalisationPeptidesFraction = 0.4;
 
+#define HASH 0
+#if (HASH > 0)
+unsigned int hash_map[0x10000];
+void init_hash() {
+	std::mt19937_64 gen(1);
+	for (int i = 0; i < 0x10000; i++) hash_map[i] = gen();
+}
+template<class T> inline unsigned int hashS(T x) { // T mist be 32-bit
+	assert(sizeof(T) == 4);
+	int y = *((int*)(&x));
+	return hash_map[(unsigned int)(y & 0xFFFF)] ^ hash_map[(unsigned int)((y >> 16) & 0xFFFF)];
+}
+inline unsigned int hashA(int * data, int n) {
+	unsigned int res = 0;
+	for (int i = 0; i < n; i++) res ^= hash_map[(unsigned int)(data[i] & 0xFFFF)] ^ hash_map[(unsigned int)((data[i] >> 16) & 0xFFFF)];
+	return res;
+}
+unsigned int hashD(float **dataset, int n, int m) {
+	unsigned int res = 0;
+	for (int i = 0; i < n; i++) res ^= hashA((int*)(dataset[i]), m);
+	return res;
+}
+#endif
+
 class Lock {
 public:
 	std::atomic_bool lock = ATOMIC_VAR_INIT(false);
@@ -908,13 +932,6 @@ std::vector<Group> bipartite_set_cover(std::vector<std::vector<int> > &sets, int
 	return groups;
 }
 
-class Score {
-public:
-    float x[pN];
-    
-    Score() { for (int i = 0; i < pN; i++) x[i] = 0.0; }
-};
-
 class Peak {
 public:
     float mz;
@@ -930,6 +947,10 @@ public:
         height = _height;
     }
 	friend inline bool operator < (const Peak &left, const Peak &right) { return left.mz < right.mz; }
+
+#if (HASH > 0)
+	unsigned int hash() { return hashS(mz) ^ hashS(height); }
+#endif
 };
 
 class Product {
@@ -950,6 +971,10 @@ public:
 		charge = _charge;
 	}
 	friend inline bool operator < (const Product &left, const Product &right) { return left.mz < right.mz; }
+
+#if (HASH > 0)
+	unsigned int hash() { return hashS(mz) ^ hashS(height); }
+#endif
 };
 
 double AA[256];
@@ -1876,6 +1901,14 @@ public:
 		for (int i = 0; i < peaks.size(); i++) peaks[i].mz = (*fptr++), peaks[i].height = (*fptr++);
 		return (int*)fptr;
 	}
+
+#if (HASH > 0)
+	unsigned int hash() {
+		unsigned int res = hashS((float)RT) ^ hashS((float)window_low) ^ hashS((float)window_high);
+		for (int i = 0; i < size(); i++) res ^= peaks[i].hash();
+		return res;
+	}
+#endif
 };
 
 class Isoform {
@@ -2185,6 +2218,14 @@ public:
 	void free() {
 		std::vector<Product>().swap(fragments);
 	}
+
+#if (HASH > 0)
+	unsigned int hash() { 
+		unsigned int res = hashS(mz) ^ hashS(iRT) ^ hashS(sRT) ^ hashS(lib_qvalue); 
+		for (int i = 0; i < fragments.size(); i++) res ^= fragments[i].hash();
+		return res;
+	}
+#endif
 };
 
 class FastaEntry {
@@ -2513,7 +2554,7 @@ public:
 	}
 };
 
-class Library  {
+class Library {
 public:
 	std::string name;
 	std::vector<Isoform> proteins;
@@ -2655,6 +2696,10 @@ public:
 			target.free();
 			decoy.free();
 		}
+
+#if (HASH > 0)
+		unsigned int hash() { return target.hash() ^ decoy.hash(); }
+#endif
 	};
 
 	std::vector<Entry> entries;
@@ -3561,6 +3606,14 @@ public:
 
 		if (Verbose >= 1) Time(), std::cout << "Stats report saved to " << file_name << "\n";
 	}
+
+#if (HASH > 0)
+	unsigned int hash() {
+		unsigned int res = 0;
+		for (int i = 0; i < entries.size(); i++) res ^= entries[i].hash();
+		return res;
+	}
+#endif
 };
 
 void train(int thread_id, std::vector<NN> * net) {
@@ -3671,6 +3724,9 @@ void learn_from_library(std::string &file_name) {
 	double r_y = 0.0, s2_y = 0.0;
 	int cnt = 0, s2_cnt = 0;
 	std::vector<double> actual_y, predicted_y, rt_d, rm_y;
+#if (HASH > 0)
+	unsigned int learn_hash = 0;
+#endif
 	for (auto &e : lib.entries) {
 		auto aas = get_aas(e.name);
 		auto seq = get_sequence(e.name);
@@ -3695,17 +3751,26 @@ void learn_from_library(std::string &file_name) {
 		y_scores(predicted_y, e.target.charge, aas);
 		for (i = 2; i < aas.size(); i++) if (actual_y[i] > E && actual_y[i - 1] > E) s2_y += Sqr(log(actual_y[i] / actual_y[i - 1]) - (predicted_y[i] - predicted_y[i - 1])), s2_cnt++;
 		to_exp(predicted_y);
+#if (HASH > 0)
+		learn_hash ^= hashA((int*)&(predicted_y[0]), 2 * (seq.size() - 1));
+#endif
 		double c = corr(&(predicted_y[1]), &(actual_y[1]), seq.size() - 1);
 		r_y += c;
 		rm_y.push_back(c);
 		cnt++;
 	}
+#if (HASH > 0)
+	std::cout << "Fragmentation prediction hash: " << learn_hash << "\n";
+#endif
 	std::sort(rm_y.begin(), rm_y.end());
 	Time(), std::cout << "y-series fragmentation prediction: ratio SD = " << sqrt(s2_y / (double)Max(1, s2_cnt - 1)) 
 		<< ", Pearson correlation = " << r_y / (double)cnt << " average, " << rm_y[cnt / 2] << " median\n";
 	if (InSilicoRTPrediction) {
 		std::sort(rt_d.begin(), rt_d.end());
 		Time(), std::cout << "iRT prediction: median error = " << rt_d[rt_d.size() / 2] << "\n";
+#if (HASH > 0)
+		std::cout << "LRT prediction hash: " << hashA((int*)&(rt_d[0]), 2 * (rt_d.size())) << "\n";
+#endif
 		RTLearnLib = true;
 	}
 }
@@ -3898,6 +3963,14 @@ public:
 		int apex, peak_width, best_peak, nn_index, nn_inc;
 		int peak_pos, best_fragment;
 		float mass_delta = 0.0, mass_delta_mz = 0.0, mass_delta_ms1 = 0.0;
+
+#if (HASH > 0)
+		unsigned int hash() {
+			unsigned int res = 0;
+			res ^= hashA((int*)scores, pN);
+			return res;
+		}
+#endif
 	};
 
     class Precursor {
@@ -4778,6 +4851,14 @@ public:
 				if (_free) free();
 			}
         }
+
+#if (HASH > 0)
+		unsigned int hash() {
+			unsigned int res = 0;
+			if (info.size()) res ^= info[0].hash();
+			return res;
+		}
+#endif
     };
 
 	class Target {
@@ -4789,6 +4870,10 @@ public:
 		int batch = 0;
 
 		Target() { }
+
+#if (HASH > 0)
+		unsigned int hash() { return target.hash() ^ decoy.hash(); }
+#endif
 	};
 
 	std::vector<Target> entries;
@@ -4978,10 +5063,14 @@ public:
 		finalise:
 		init();
 
+#if (HASH > 0)
+		std::cout << "Raw hash: " << raw_hash() << "\n";
+#endif
+
 		if (Verbose >= 2) Time(), std::cout << "Run loaded\n";
 		return true;
 	}
-    
+
     void load_library(Library * _lib) { 
 		lib = _lib;
 		int i, fr, frn, pos = 0, cnt = 0, gcnt = 0, guide = 0, guide_batches = 0, fasta_batches = 0;
@@ -5272,6 +5361,10 @@ public:
 		Eigen::VectorXd b((int)pN);
 		bool non_guide_present = false, limit_ids10 = false;
 			
+#if (HASH > 1)
+		std::cout << "Search hash: " << search_hash() << "\n";
+#endif
+
 		if (!GuideLibrary || !GuideClassifier || curr_iter >= nnIter) all = true;
 
 		int maxTraining = 0, tr_t = 0, tr_d = 0; 
@@ -6460,6 +6553,21 @@ public:
 		}
 		if (Verbose >= 1) Time(), std::cout << cnt << " precursors added to the library\n";
 	}
+
+#if (HASH > 0)
+	unsigned int raw_hash() {
+		unsigned int res = 0;
+		for (int i = 0; i < scans.size(); i++) res ^= scans[i].hash();
+		for (int i = 0; i < ms1.size(); i++) res ^= scans[i].hash();
+		return res;
+	}
+
+	unsigned int search_hash() {
+		unsigned int res = 0;
+		for (int i = 0; i < entries.size(); i++) res ^= entries[i].hash();
+		return res;
+	}
+#endif
 };
 
 int main(int argc, char *argv[]) {
@@ -6468,13 +6576,16 @@ int main(int argc, char *argv[]) {
 	HANDLE console = GetStdHandle(STD_INPUT_HANDLE);
 	GetConsoleMode(console, &mode);
 	SetConsoleMode(console, (mode & ~(ENABLE_QUICK_EDIT_MODE | ENABLE_MOUSE_INPUT | ENABLE_WINDOW_INPUT)) | ENABLE_PROCESSED_INPUT);
+	_set_FMA3_enable(0); // essential to make calculations reproducible between CPUs with (new ones) and without (old ones) FMA support
 #endif
 	std::cout.setf(std::ios::unitbuf);
 	std::cout << "DIA-NN (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\n";
 #if WIN_DECONV
 	std::cout << "EXPERIMENTAL VERSION FOR Q1 WINDOW DECONVOLUTION. DO NOT USE FOR ANALYSING REGULAR SWATH DATA.\n";
 #endif
-
+#if (HASH > 0)
+	init_hash();
+#endif
 	init_aas();
 	arguments(argc, argv);
 	Eigen::setNbThreads(Threads);
@@ -6538,6 +6649,10 @@ int main(int argc, char *argv[]) {
 	if (ReportOnly) goto cross_run;
 	if (FastaSearch && QuantOnly) goto gen_spec_lib;
 	if (QuantOnly) goto quant_only;
+
+#if (HASH > 0)
+	std::cout << "Library hash: " << lib.hash() << "\n";
+#endif
 
 	// first loop
 	std::cout << "\n";
