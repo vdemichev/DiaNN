@@ -93,7 +93,8 @@ For a full list of supported commands see the arguments() function in /src/diann
 
 ### Building
 
-A Visual C++ solution file is provided with the source code for building on Windows. It should also be possible to buld DIA-NN on Linux, as all the libraries it utilises are compatible with Linux (to read .mzML and .raw files DIA-NN relies on the MSToolkit library, which is not header-only; this library can be disabled by commenting the "#define MSTOOLKIT" line in diann.cpp). However, so far it has only been tested on Windows (versions 7 and 10).  
+**Windows**: A Visual C++ solution file is provided with the source code. Changing the SDK to a Windows 10 one in the project settings might be required. Tested on Windows 7 and 10.      
+**Linux**: type "bash linux-build" and wait a couple of minutes. GCC version should not be too old (C++14 support required). For GCC 7 or later edit the linux-build file, replacing --std=C++14 with --std=C++17 - this will enable support of some commands, e.g. --dir. It's unknown, whether binaries built on Linux would produce exactly the same analysis results when run on different machines. Tested on Ubuntu 16.04 and Linux Mint 19.1.      
 
 ### Tutorial
 

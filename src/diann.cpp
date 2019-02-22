@@ -1,12 +1,12 @@
 ﻿/*
-Copyright 2018, Vadim Demichev
+Copyright 2019, Vadim Demichev
 
 This work is licensed under the Creative Commons Attribution 4.0 International License. To view a copy of this license,
 visit http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.
 */
 
-#define _HAS_ITERATOR_DEBUGGING 0
-#define _ITERATOR_DEBUG_LEVEL 0  
+#define _HAS_ITERATOR_DEBUGGING 0 
+#define _ITERATOR_DEBUG_LEVEL 0
 #define _CRT_SECURE_NO_WARNINGS
 
 #pragma warning(disable:4244)
@@ -27,10 +27,31 @@ visit http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative C
 
 // uncomment "#define _NO_THERMORAW" in RAWReader.cpp and MSReader.cpp to enable building without Thermo MSFileReader installed
 
+#ifdef __linux__
+#define LINUX
+#elif __unix__
+#define LINUX
+#endif
+
+#define MSTOOLKIT
+#define WIFFREADER
+#define CPP17
+
+#ifdef LINUX
+#undef MSTOOLKIT
+#undef WIFFREADER
+#undef CPP17
+#if (__GNUC__ >= 7) 
+#define CPP17
+#endif
+#endif
+
 #include "../cranium/src/cranium.h"
 #include "../eigen/Eigen/Dense"
 #include "../eigen/Eigen/Sparse"
-#include <filesystem> // requires C++17
+#ifdef CPP17
+#include <experimental/filesystem> // requires C++17
+#endif
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -46,9 +67,6 @@ visit http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative C
 #include <list>
 #include <set>
 #include <map>
-
-#define MSTOOLKIT
-#define WIFFREADER
 
 #ifdef MSTOOLKIT
 #include "MSReader.h"
@@ -125,7 +143,7 @@ double iRTMaxQvalue = 0.1; // only precursors with lower q-value are used for iR
 double MassCalQvalue = 0.1;
 double MassCalMs1Corr = 0.90;
 int MassCalBinsMax = 1;
-int MassCalBins = 1; 
+int MassCalBins = 1;
 int MassCalBinsMs1 = 1;
 int MinMassCalBin = 500;
 bool MassCalFilter = true;
@@ -169,7 +187,7 @@ const int CalibrationIter = 4;
 bool ForceMassAcc = false;
 bool IndividualMassAcc = false;
 double CalibrationMassAccuracy = 100.0 / 1000000.0;
-double GlobalMassAccuracy = 20.0 / 1000000.0; 
+double GlobalMassAccuracy = 20.0 / 1000000.0;
 double GlobalMassAccuracyMs1 = 20.0 / 1000000.0;
 double GeneratorAccuracy = 5.0 / 1000000.0;
 double MaxProfilingQvalue = 0.001;
@@ -244,14 +262,14 @@ int MaxVarMods = 1;
 int MinFrAAs = 3;
 double MinFrMz = 200.0, MaxFrMz = 1800.0;
 double MinPrMz = 300.0, MaxPrMz = 1800.0;
-double MinGenFrInt = 0.00001; 
+double MinGenFrInt = 0.00001;
 double MinRelFrHeight = 0.00001;
 double MinGenFrCorr = 0.5;
 double MinRareFrCorr = 0.95;
 double FrCorrBSeriesPenalty = 0.1;
 int MinGenFrNum = 4;
 int MinOutFrNum = 4;
-int MinSearchFrNum = 3; 
+int MinSearchFrNum = 3;
 const int MaxGenCharge = 4;
 
 double QFilter = 1.0;
@@ -270,18 +288,22 @@ bool ForceSwissProt = false;
 bool FastaProtDuplicates = false;
 bool SpeciesGenes = false;
 
-bool ExtendedReport = true; 
+bool ExtendedReport = true;
 bool RemoveQuant = false;
 bool QuantInMem = false;
 
 std::vector<std::string> TrackedPrecursors;
 
-#define WIN_DECONV FALSE
+#define Q1 FALSE
 #define REPORT_SCORES FALSE
+
+#if Q1
+bool UseQ1 = true;
+#endif
 
 enum {
 	libPr, libCharge, libPrMz,
-	libiRT, libFrMz, libFrI, 
+	libiRT, libFrMz, libFrI,
 	libPID, libPN, libGenes, libPT,
 	libIsDecoy, libFrCharge, libQ, libCols
 };
@@ -380,12 +402,12 @@ std::vector<std::pair<std::string, std::string> > UniMod;
 std::vector<std::pair<std::string, int> > UniModIndex;
 std::vector<int> UniModIndices;
 
-typedef struct PTM {
+struct PTM {
 	std::string name;
 	std::string aas;
 	float mass;
 
-	void init(std::string &_name, std::string &_aas, float _mass) { name = _name, aas = _aas, mass = _mass; }
+	void init(const std::string &_name, const std::string &_aas, float _mass) { name = _name, aas = _aas, mass = _mass; }
 };
 std::vector<PTM> FixedMods, VarMods;
 
@@ -416,13 +438,13 @@ void init_unimod() {
 	UniModIndices.insert(UniModIndices.begin(), indices.begin(), indices.end());
 }
 
-std::string to_unimod(std::string &mod) {
+std::string to_unimod(const std::string &mod) {
 	for (int i = 0; i < UniMod.size(); i++) if (mod == UniMod[i].first) return UniMod[i].second;
 	Warning("cannot convert to UniMod: unknown modification");
 	return "";
 }
 
-int unimod_index(std::string &mod) {
+int unimod_index(const std::string &mod) {
 	for (int i = 0; i < UniModIndex.size(); i++) if (mod == UniModIndex[i].first) return UniModIndex[i].second;
 	Warning("cannot convert to UniMod: unknown modification");
 	return 0;
@@ -525,32 +547,29 @@ public:
 int MaxF = INF, MinF = 0;
 const int TopF = 6, auxF = 12;
 const int nnS = 2, nnW = (2 * nnS) + 1;
+const int qL = 3;
+const int QSL[qL] = { 1, 3, 8 };
 enum {
-	pTimeCorr, 
-#if WIN_DECONV
-	pWinCorr, pWinMaxDiff,
-#endif
+	pTimeCorr,
 	pMinCorr, pTotal, pCos, pCosCube, pMs1TimeCorr, pNFCorr, pdRT, pResCorr, pResCorrNorm, pBSeriesCorr, pTightCorrOne, pTightCorrTwo, pShadow, pHeavy,
 	pMs1TightOne, pMs1TightTwo,
 	pMs1Iso, pMs1IsoOne, pMs1IsoTwo,
 	pBestCorrDelta, pTotCorrSum,
 	pMz, pCharge, pLength, pFrNum,
-#if WIN_DECONV
-	pWinPos, 
-#endif
 	pRT,
 	pAcc,
 	pRef = pAcc + TopF,
 	pSig = pRef + auxF - 1,
-#if WIN_DECONV
-	pWCorr = pSig + TopF,
-	pCorr = pWCorr + TopF,
-#else
 	pCorr = pSig + TopF,
-#endif
 	pShadowCorr = pCorr + auxF,
 	pShape = pShadowCorr + TopF,
+#if Q1
+	pQPos = pShape + nnW,
+	pQCorr = pQPos + qL,
+	pN = pQCorr + qL
+#else
 	pN = pShape + nnW
+#endif
 };
 
 class RunStats {
@@ -581,13 +600,13 @@ inline bool test_on_index(int scan, int net) {
 	return !train_on_index(scan, net);
 }
 
-inline std::string fast_trim(std::string& input) { return std::regex_replace(input, std::regex("^ +| +$"), ""); }
-inline std::string trim(std::string& input) { 
+inline std::string fast_trim(const std::string& input) { return std::regex_replace(input, std::regex("^ +| +$"), ""); }
+inline std::string trim(const std::string& input) {
 	auto res = fast_trim(input);
 	std::replace(res.begin(), res.end(), '\"', ' ');
 	return fast_trim(res);
 }
-std::string location_to_file_name(std::string& loc) { 
+std::string location_to_file_name(const std::string& loc) {
 	auto result = loc;
 	for (int i = 0; i < result.size(); i++) {
 		char c = result[i];
@@ -596,7 +615,7 @@ std::string location_to_file_name(std::string& loc) {
 	return temp_folder + result;
 }
 
-std::string get_extension(std::string &file) {
+std::string get_extension(const std::string &file) {
 	std::string res;
 	int pos = file.find_last_of('.');
 	if (pos == std::string::npos) return res;
@@ -611,7 +630,7 @@ std::string get_extension(std::string &file) {
 	return res;
 }
 
-std::string remove_extension(std::string &file) {
+std::string remove_extension(const std::string &file) {
 	std::string res;
 	int pos = file.find_last_of('.');
 	if (pos == std::string::npos) return file;
@@ -631,6 +650,7 @@ template <class T> inline double mean(T * x, int n) {
 	return sum(x, n) / (double)n;
 }
 template <class T> inline double mean(std::vector<T> &x) {
+	int n = x.size();
 	assert(n >= 1);
 	return sum(x) / (double)n;
 }
@@ -693,13 +713,20 @@ template<class T> inline void smooth(T * dst, T * src, int n) {
 		dst[i] = 0.5 * src[i] + 0.25 * (src[i - 1] + src[i + 1]);
 }
 
+template <class Tw, class Tx> inline double centroid_coo(Tw * weights, Tx * x, int n) {
+	int i;
+	double u, t;
+	for (i = 0, u = t = 0.0; i < n; i++) u += weights[i] * x[i], t += weights[i];
+	return u / Max(E, t);
+}
+
 template <class T> void solve(T * x, Eigen::MatrixXd &A, Eigen::VectorXd &b, int n) {
 	Eigen::VectorXd X = A.fullPivHouseholderQr().solve(b);
 
 	for (int i = 0; i < n; i++) x[i] = X(i);
 }
 
-// implementation of the algorithm from 
+// implementation of the algorithm from
 // stat.wikia.com/wiki/Isotonic_regression
 std::vector<int> pava_index;
 std::vector<double> pava_w, pava_a;
@@ -745,7 +772,7 @@ template <class Tx, class Tfunc> void spline(std::vector<double> &coeff, std::ve
 	int i, k, m, n = data.size();
 	auto pava = PAVA(data);
 	double w;
-	
+
 	rt_p.resize(n);
 	rt_e.resize(n);
 	m = segments;
@@ -936,7 +963,7 @@ class Peak {
 public:
     float mz;
     float height;
-    
+
 	Peak() {}
 	Peak(float _mz, float _height) {
 		mz = _mz;
@@ -1034,7 +1061,7 @@ inline int y_cterm_index(char aa, int shift) {
 inline int y_nterm_index(int shift) { return Min(shift, yNTermD - 1) + y_cterm_index(AAs[19], yCTermD - 1) + 1; }
 inline int y_delta_size() { return y_nterm_index(yNTermD - 1) + 1; }
 
-inline double y_ratio(int i, int charge, std::string &aas) {
+inline double y_ratio(int i, int charge, const std::string &aas) {
 	int n = aas.length(), j;
 	double v = yDelta[y_delta_charge_index()] * (double)charge;
 	for (j = 0; j < n; j++) v += yDelta[y_delta_composition_index(aas[j])];
@@ -1046,7 +1073,7 @@ inline double y_ratio(int i, int charge, std::string &aas) {
 	return v;
 }
 
-void y_scores(std::vector<double> &s, int charge, std::string &aas) {
+void y_scores(std::vector<double> &s, int charge, const std::string &aas) {
 	int n = aas.length(), i;
 	s.resize(n);
 	s[0] = s[1] = 0.0;
@@ -1061,7 +1088,7 @@ inline int y_loss_aa(char aa, bool NH3) { return AA_index[aa] + 20 * (int)NH3; }
 inline int y_loss(bool NH3) { return y_loss_aa(AAs[19], true) + 1 + (int)NH3; }
 inline int y_loss_size() { return y_loss(true) + 1; }
 
-void y_loss_scores(std::vector<double> &s, std::string &aas, bool NH3) {
+void y_loss_scores(std::vector<double> &s, const std::string &aas, bool NH3) {
 	int n = aas.length(), i;
 	double sum = yLoss[y_loss(NH3)];
 	s.resize(n); s[0] = 0.0;
@@ -1078,7 +1105,7 @@ inline int aa_pointsterm(char aa, int shift) { return aa_rt_nterm(AAs[19], RTTer
 inline int aa_rt_nterm_scaled(char aa, int shift) { return aa_pointsterm(AAs[19], RTTermD - 1) + 1 + Min(shift, RTTermDScaled - 1) * 20 + AA_index[aa]; }
 inline int aa_pointsterm_scaled(char aa, int shift) { return aa_rt_nterm_scaled(AAs[19], RTTermDScaled - 1) + 1 + Min(shift, RTTermDScaled - 1) * 20 + AA_index[aa]; }
 inline int mod_rt_index(int mod) { return aa_pointsterm_scaled(AAs[19], RTTermDScaled - 1) + 1 + unimod_index_number(mod); }
-inline int mod_rt_index(std::string &mod) { return mod_rt_index(unimod_index(mod)); }
+inline int mod_rt_index(const std::string &mod) { return mod_rt_index(unimod_index(mod)); }
 inline int in_silico_rt_size() { return mod_rt_index(UniModIndices[UniModIndices.size() - 1]) + 1; }
 
 void init_prediction() {
@@ -1087,7 +1114,7 @@ void init_prediction() {
 	InSilicoRT.resize(in_silico_rt_size(), 0.0);
 }
 
-inline int peptide_length(std::string &name) {
+inline int peptide_length(const std::string &name) {
 	int i, n = 0;
 	for (i = 0; i < name.size(); i++) {
 		char symbol = name[i];
@@ -1102,7 +1129,7 @@ inline int peptide_length(std::string &name) {
 	return n;
 }
 
-std::string get_aas(std::string &name) {
+std::string get_aas(const std::string &name) {
 	int i;
 	std::string result;
 
@@ -1119,7 +1146,7 @@ std::string get_aas(std::string &name) {
 	return result;
 }
 
-std::vector<double> get_sequence(std::string &name, int * no_cal = NULL) {
+std::vector<double> get_sequence(const std::string &name, int * no_cal = NULL) {
 	int i, j;
 	double add = 0.0;
 	std::vector<double> result;
@@ -1153,7 +1180,7 @@ std::vector<double> get_sequence(std::string &name, int * no_cal = NULL) {
 	return result;
 }
 
-std::string to_canonical(std::string &name) {
+std::string to_canonical(const std::string &name) {
 	int i, j;
 	std::string result;
 
@@ -1178,9 +1205,9 @@ std::string to_canonical(std::string &name) {
 	}
 	return result;
 }
-inline std::string to_canonical(std::string &name, int charge) { return to_canonical(name) + std::to_string(charge); }
+inline std::string to_canonical(const std::string &name, int charge) { return to_canonical(name) + std::to_string(charge); }
 
-std::string pep_name(std::string &pr_name) {
+std::string pep_name(const std::string &pr_name) {
 	int i;
 	std::string result = pr_name;
 	for (i = result.size() - 1; i >= 0; i--) if (result[i] < '0' || result[i] > '9') break;
@@ -1188,7 +1215,7 @@ std::string pep_name(std::string &pr_name) {
 	return result;
 }
 
-void count_rt_aas(std::vector<double> &count, std::string &name) {
+void count_rt_aas(std::vector<double> &count, const std::string &name) {
 	int i, pos, l = peptide_length(name);
 	double scale = 1.0 / (double)l;
 
@@ -1212,7 +1239,7 @@ void count_rt_aas(std::vector<double> &count, std::string &name) {
 	}
 }
 
-double predict_irt(std::string &name) {
+double predict_irt(const std::string &name) {
 	int i, pos, l = peptide_length(name);
 	double iRT = InSilicoRT[0], scale = 1.0 / (double)l;
 
@@ -1269,11 +1296,11 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "threads ", 8)) Threads = std::stoi(args.substr(start + 8, std::string::npos)), std::cout << "Thread number set to " << Threads << "\n";
 		else if (!memcmp(&(args[start]), "fasta-search ", 13)) FastaSearch = true, std::cout << "Library-free search enabled\n";
 		else if (!memcmp(&(args[start]), "pg-level ", 9)) PGLevel = std::stoi(args.substr(start + 9, std::string::npos)),
-			std::cout << "Implicit protein grouping: " << ImplicitProteinGrouping[PGLevel] 
+			std::cout << "Implicit protein grouping: " << ImplicitProteinGrouping[PGLevel]
 					  << "; this determines which peptides are considered 'proteotypic' and thus affects protein FDR calculation\n";
 		else if (!memcmp(&(args[start]), "no-batch-mode ", 14)) BatchMode = false, std::cout << "Batch mode disabled\n";
 		else if (!memcmp(&(args[start]), "verbose ", 8)) Verbose = std::stoi(args.substr(start + 8, std::string::npos));
-		else if (!memcmp(&(args[start]), "export-windows ", 15)) ExportWindows = true;
+		//else if (!memcmp(&(args[start]), "export-windows ", 15)) ExportWindows = true;
 		else if (!memcmp(&(args[start]), "export-library ", 15)) ExportLibrary = true;
 		else if (!memcmp(&(args[start]), "export-decoys ", 14)) ExportDecoys = true;
 		else if (!memcmp(&(args[start]), "cal-info ", 9)) SaveCalInfo = true;
@@ -1287,7 +1314,7 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Peptides with modifications that can cause interferences with isotopologues will be used for neural network training\n";
 		else if (!memcmp(&(args[start]), "nn-cross-val ", 13)) nnCrossVal = true,
 			std::cout << "Neural network cross-validation will be used to tackle potential overfitting\n";
-		else if (!memcmp(&(args[start]), "guide-classifier ", 17)) GuideClassifier = true, std::cout << "A separate classifier for the guide library will be used\n";
+		//else if (!memcmp(&(args[start]), "guide-classifier ", 17)) GuideClassifier = true, std::cout << "A separate classifier for the guide library will be used\n";
 		else if (!memcmp(&(args[start]), "int-removal ", 12)) IDsInterference = std::stoi(args.substr(start + 12, std::string::npos)),
 			std::cout << "Number of interference removal iterations set to " << IDsInterference << "\n";
 		else if (!memcmp(&(args[start]), "int-margin ", 11)) InterferenceCorrMargin = std::stod(args.substr(start + 11, std::string::npos)),
@@ -1301,18 +1328,22 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "gen-spec-lib ", 13)) GenSpecLib = true, std::cout << "A spectral library will be generated\n";
 		else if (!memcmp(&(args[start]), "lib-gen-direct-q ", 17)) ProfileQValue = false, std::cout << "When generating a spectral library, run-specific q-values will be used instead of profile q-values\n";
 		else if (!memcmp(&(args[start]), "save-original-lib ", 18)) SaveOriginalLib = true, std::cout << "All entries from the library provided will be saved to the newly generated library\n";
+#ifdef WIFFREADER
 		else if (!memcmp(&(args[start]), "fast-wiff ", 10)) fast_wiff = true, std::cout << "Custom fast centroiding will be used when processing .wiff files (WARNING: experimental).\n";
+#endif
 		else if (!memcmp(&(args[start]), "f ", 2)) files.push_back(trim(args.substr(start + 2, end - start - 2)));
+#ifdef CPP17
 		else if (!memcmp(&(args[start]), "dir ", 4)) {
-			string dir = trim(args.substr(start + 4, end - start - 4));
+			auto dir = trim(args.substr(start + 4, end - start - 4));
 			std::replace(dir.begin(), dir.end(), '\\', '/');
 			for (auto &file : std::experimental::filesystem::directory_iterator(dir)) {
-				string fname = file.path().string();
+				auto fname = file.path().string();
 				auto extension = get_extension(fname);
 				auto ext = std::lower_bound(MSFormatsExt.begin(), MSFormatsExt.end(), extension);
 				if (*ext == extension) files.push_back(file.path().string());
 			}
 		}
+#endif
 		else if (!memcmp(&(args[start]), "lib ", 4)) lib_file = trim(args.substr(start + 4, end - start - 4));
 		else if (!memcmp(&(args[start]), "temp ", 5)) temp_folder = trim(args.substr(start + 5, end - start - 5));
 		else if (!memcmp(&(args[start]), "fasta ", 6)) fasta_files.push_back(trim(args.substr(start + 6, end - start - 6)));
@@ -1442,7 +1473,9 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "individual-reports ", 19)) IndividualReports = true, std::cout << "Reports will be generated separately for different runs (in the respective folders)\n";
 		else if (!memcmp(&(args[start]), "no-stats ", 9)) SaveRunStats = false;
 		else if (!memcmp(&(args[start]), "convert ", 8)) Convert = true, std::cout << "MS data files will be converted to .dia format\n";
+#ifdef CPP17
 		else if (!memcmp(&(args[start]), "remove-quant ", 13)) RemoveQuant = true, std::cout << ".quant files will be removed when the analysis is finished\n";
+#endif
 		else if (!memcmp(&(args[start]), "no-quant-files ", 15)) QuantInMem = true, std::cout << ".quant files will not be saved to the disk\n";
 		else if (!memcmp(&(args[start]), "track ", 6)) TrackedPrecursors.push_back(trim(args.substr(start + 6, end - start - 6)));
 		else if (!memcmp(&(args[start]), "use-rt ", 7)) UseRTInfo = true, std::cout << "Existing .quant files will be used for RT profiling\n";
@@ -1496,7 +1529,7 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Peaks with correlation sum below " << MaxCorrDiff << " from maximum will not be considered\n";
 		else if (!memcmp(&(args[start]), "peak-apex ", 10)) PeakApexEvidence = Min(std::stod(args.substr(start + 10, std::string::npos)), 0.99),
 			std::cout << "Peaks must have apex height which is at least " << MinCorrScore << " of the maximum within the m/z scan window\n";
-		else if (!memcmp(&(args[start]), "all-peaks ", 10)) LibFreeAllPeaks = true, 
+		else if (!memcmp(&(args[start]), "all-peaks ", 10)) LibFreeAllPeaks = true,
 			std::cout << "The number of putative elution peaks considered in library-free mode will not be reduced to decrease RAM usage\n";
 		else if (!memcmp(&(args[start]), "norm-qvalue ", 12)) NormalisationQvalue = std::stod(args.substr(start + 11, std::string::npos)),
 			std::cout << "Q-value threshold for cross-run normalisation set to " << NormalisationQvalue << "\n";
@@ -1509,6 +1542,9 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Minimum number of precursors identified at 10% FDR used for calibration set to " << MinCal << "\n";
 		else if (!memcmp(&(args[start]), "min-class ", 10)) MinClassifier = std::stoi(args.substr(start + 10, std::string::npos)),
 			std::cout << "Minimum number of precursors identified at 10% FDR used for linear classifier training set to " << MinClassifier << "\n";
+#if Q1
+		else if (!memcmp(&(args[start]), "no-q1 ", 6)) UseQ1 = false, std::cout << "Q1 scores disabled\n";
+#endif
 		else std::cout << "WARNING: unrecognised option [--" << trim(args.substr(start, end - start)) << "]\n";
 
 		start = next;
@@ -1516,10 +1552,12 @@ void arguments(int argc, char *argv[]) {
 	if (temp_folder.size()) {
 		char c = temp_folder[temp_folder.size() - 1];
 		if (c != '/' && c != '\\') temp_folder += '/';
+#ifdef CPP17
 		if (!std::experimental::filesystem::exists(std::experimental::filesystem::path(temp_folder))) {
 			std::cout << "Cannot find the temp folder " << temp_folder << ". Specify an existing folder\n";
 			exit(-1);
 		}
+#endif
 	}
 	if (!ExportLibrary && !GenSpecLib && !FastaSearch) out_lib_file.clear();
 	if (out_file.find_first_not_of(' ') == std::string::npos || out_file.find_first_of('\r') != std::string::npos || out_file.find_first_of('\n') != std::string::npos) out_file.clear();
@@ -1585,7 +1623,7 @@ void arguments(int argc, char *argv[]) {
 	if (!fasta_files.size()) PGLevel = 0;
 	if (fasta_files.size() && FastaSearch) {
 		if (!LibFreeAllPeaks) { // reduce memory usage
-			MinCorrScore = Max(MinCorrScore, 1.0); 
+			MinCorrScore = Max(MinCorrScore, 1.0);
 			MaxCorrDiff = Min(MaxCorrDiff, 1.0);
 			PeakApexEvidence = 0.99;
 		}
@@ -1632,7 +1670,7 @@ public:
 	bool operator == (const Ion &other) { return index == other.index && type == other.type && charge == other.charge && loss == other.loss; }
 };
 
-std::vector<Ion> generate_fragments(std::vector<double> &sequence, int charge, int loss, int *cnt, int min_aas = 0) {
+std::vector<Ion> generate_fragments(const std::vector<double> &sequence, int charge, int loss, int *cnt, int min_aas = 0) {
 	int i;
 	double c = (double)charge, curr, s = sum(&(sequence[0]), sequence.size());
 	std::vector<Ion> result;
@@ -1648,7 +1686,7 @@ std::vector<Ion> generate_fragments(std::vector<double> &sequence, int charge, i
 	return result;
 }
 
-std::vector<Ion> generate_all_fragments(std::vector<double> &sequence, int charge, int max_loss, int *cnt) {
+std::vector<Ion> generate_all_fragments(const std::vector<double> &sequence, int charge, int max_loss, int *cnt) {
 	int i;
 	double c = (double)charge, curr, s = sum(&(sequence[0]), sequence.size());
 	std::vector<Ion> result;
@@ -1668,7 +1706,7 @@ std::vector<Ion> generate_all_fragments(std::vector<double> &sequence, int charg
 
 double max_gen_acc = 0.0;
 Lock gen_acc_lock;
-std::vector<Ion> recognise_fragments(std::vector<double> &sequence, std::vector<Product> &fragments, float &gen_acc, bool full_spectrum = false, int max_charge = 19, int loss_cap = loss_N) {
+std::vector<Ion> recognise_fragments(const std::vector<double> &sequence, const std::vector<Product> &fragments, float &gen_acc, bool full_spectrum = false, int max_charge = 19, int loss_cap = loss_N) {
 	int i, j, cnt, tot, charge, loss, index;
 	std::vector<Ion> result(fragments.size());
 	std::vector<Ion> v;
@@ -1704,7 +1742,7 @@ stop:
 	if (tot < fragments.size()) {
 		if (full_spectrum) return result;
 		gen_acc *= 2.0;
-		if (Verbose >= 1 && gen_acc > max_gen_acc) 
+		if (Verbose >= 1 && gen_acc > max_gen_acc)
 			std::cout << "WARNING: not all fragments recognised; generator accuracy threshold increased to " << gen_acc << "\n";
 		if (gen_acc > max_gen_acc) {
 			while (!gen_acc_lock.set()) {}
@@ -1718,7 +1756,7 @@ stop:
 	return result;
 }
 
-std::vector<Ion> generate_fragments(std::vector<double> &sequence, std::vector<Ion> pattern) {
+std::vector<Ion> generate_fragments(const std::vector<double> &sequence, const std::vector<Ion> &pattern) {
 	int i, j, charge = 1, loss = loss_none, cnt = 0, tot = 0;
 	std::vector<Ion> result(pattern.size());
 	std::vector<Ion> v;
@@ -1746,7 +1784,7 @@ public:
     std::vector<Peak> peaks;
     inline int size() { return peaks.size(); }
     inline void resize(int size) { peaks.resize(size); }
-    
+
 	Tandem() {
 
 	}
@@ -1759,7 +1797,7 @@ public:
 		window_low = s.getSelWindowLower();
 		window_high = s.getSelWindowUpper();
 		MS_level = s.getMsLevel();
-        
+
 		if (!centroid) {
 			int i, j;
 			for (i = j = 0; i < s.size(); i++) if (s.at(i).intensity >= MinPeakHeight) j++;
@@ -1823,11 +1861,11 @@ public:
 
 	void init(Tandem &T) { RT = T.RT, window_low = T.window_low, window_high = T.window_high, peaks = std::move(T.peaks); }
 #endif
-    
+
     inline bool has(float mz) { return (window_low <= mz && window_high > mz); }
 
 	inline bool has(float mz, float margin) { return (window_low <= mz + margin && window_high > mz - margin); }
-    
+
 	template <bool get_mz> inline double level(int &low, int &high, float mz, float accuracy, float * peak_mz = NULL) {
 		int i;
 		float v, s, margin, min, max;
@@ -1864,8 +1902,8 @@ public:
 		return 0.0;
 	}
 
-	template <bool get_mz> inline double level(float mz, float accuracy, float * peak_mz = NULL) { 
-		int low = 0, high = size(); 
+	template <bool get_mz> inline double level(float mz, float accuracy, float * peak_mz = NULL) {
+		int low = 0, high = size();
 		return level<get_mz>(low, high, mz, accuracy, peak_mz);
 	}
 
@@ -1919,9 +1957,9 @@ public:
 	int name_index = 0, gene_index = 0;
 	bool swissprot = true;
 
-	Isoform(std::string &_id) { id = _id; }
-	Isoform(std::string &_id, std::string &_name, std::string &_gene, std::string &_description, bool _swissprot) { 
-		id = _id; 
+	Isoform(const std::string &_id) { id = _id; }
+	Isoform(const std::string &_id, const std::string &_name, const std::string &_gene, const std::string &_description, bool _swissprot) {
+		id = _id;
 		name = _name;
 		gene = _gene;
 		description = _description;
@@ -2025,7 +2063,7 @@ public:
     mutable std::vector<Fragment> fr;
 
 	QuantEntry() {  }
-    
+
     void write(std::ofstream &out) {
         int size = fr.size();
 		out.write((char*)&index, sizeof(int));
@@ -2034,7 +2072,7 @@ public:
         out.write((char*)&size, sizeof(int));
         for (int i = 0; i < size; i++) out.write((char*)&(fr[i]), sizeof(Fragment));
     }
-    
+
     void read(std::ifstream &in) {
 		in.read((char*)&index, sizeof(int));
 		in.read((char*)&window, sizeof(int));
@@ -2058,7 +2096,7 @@ public:
 	int run_index, lib_size;
 	double MassAccuracy = GlobalMassAccuracy, MassAccuracyMs1 = GlobalMassAccuracyMs1;
 	std::vector<double> MassCorrection, MassCorrectionMs1, MassCalSplit, MassCalSplitMs1, MassCalCenter, MassCalCenterMs1;
-    
+
     void write(std::ofstream &out) {
 		out.write((char*)&run_index, sizeof(int));
 		out.write((char*)&lib_size, sizeof(int));
@@ -2106,7 +2144,7 @@ public:
 		read_vector(in, MassCalCenterMs1);
 	}
 
-	void read_meta(std::string &file, int _lib_size = 0) {
+	void read_meta(const std::string &file, int _lib_size = 0) {
 		std::ifstream in(file, std::ifstream::binary);
 		if (in.fail() || temp_folder.size()) {
 			auto pos = file.find_last_of('.');
@@ -2115,7 +2153,7 @@ public:
 		read_meta(in, _lib_size);
 		in.close();
 	}
-    
+
 	void read(std::ifstream &in, int _lib_size = 0) {
 		read_meta(in, _lib_size);
 		read_vector(in, proteins);
@@ -2220,8 +2258,8 @@ public:
 	}
 
 #if (HASH > 0)
-	unsigned int hash() { 
-		unsigned int res = hashS(mz) ^ hashS(iRT) ^ hashS(sRT) ^ hashS(lib_qvalue); 
+	unsigned int hash() {
+		unsigned int res = hashS(mz) ^ hashS(iRT) ^ hashS(sRT) ^ hashS(lib_qvalue);
 		for (int i = 0; i < fragments.size(); i++) res ^= fragments[i].hash();
 		return res;
 	}
@@ -2231,15 +2269,15 @@ public:
 class FastaEntry {
 public:
 	std::string stripped;
-	mutable string ids, names, genes;
-	FastaEntry(std::string &_stripped, std::string &_ids, std::string &_names, std::string &_genes) { stripped = _stripped, ids = _ids, names = _names, genes = _genes; }
+	mutable std::string ids, names, genes;
+	FastaEntry(const std::string &_stripped, const std::string &_ids, const std::string &_names, const std::string &_genes) { stripped = _stripped, ids = _ids, names = _names, genes = _genes; }
 	friend inline bool operator < (const FastaEntry &left, const FastaEntry &right) { return left.stripped < right.stripped; }
 };
 
-bool name_included(std::string &names, std::string &name) {
+bool name_included(const std::string &names, const std::string &name) {
 	int start = 0, m = names.size(), n = name.size();
 	if (!m || !n) return false;
-	char *p = &(name[0]);
+	const char *p = &(name[0]);
 	while (start + n <= m) {
 		if (!memcmp(&(names[start]), p, n)) {
 			if (start + n >= m) return true;
@@ -2563,8 +2601,8 @@ public:
 	std::vector<std::string> gene_groups;
 	std::vector<int> gg_index;
 	std::vector<std::string> precursors; // precursor IDs in canonical format; library-based entries only
-	std::vector<std::string> names; 
-	std::vector<std::string> genes; 
+	std::vector<std::string> names;
+	std::vector<std::string> genes;
 	int skipped = 0;
 	double iRT_min = 0.0, iRT_max = 0.0;
 	bool gen_decoys = true, gen_charges = true, infer_proteotypicity = true;
@@ -2603,7 +2641,7 @@ public:
 			auto seq = get_sequence(name, &target.no_cal);
 			decoy = target;
 			if (seq.size() < 2) return; // will trigger assertion for unannotated charge in Search(), so should not actually happen
- 
+
 			float gen_acc = 0.0;
 			auto pattern = recognise_fragments(seq, target.fragments, gen_acc, false, MaxRecCharge, MaxRecLoss);
 			if (lib->gen_charges) for (i = 0; i < pattern.size(); i++) target.fragments[i].charge = pattern[i].charge;
@@ -2741,7 +2779,7 @@ public:
 					n_entries++;
 					int index = it->pr.index;
 					auto pos = map.find(index);
-					if (pos != map.end()) 
+					if (pos != map.end())
 						pos->second.push_back(std::pair<int, QuantEntry>(i, *it));
 					else {
 						std::vector<std::pair<int, QuantEntry> > v;
@@ -2760,7 +2798,7 @@ public:
 			n_entries = 0;
 			proteins.clear();
 			proteins.resize(n_s = 1);
-			
+
 			Quant &Q = quant;
 			proteins[0] = Q.proteins;
 			for (auto it = Q.entries.begin(); it != Q.entries.end(); it++) {
@@ -2945,7 +2983,7 @@ public:
 		}
 	}
 
-	bool load(char * file_name) {
+	bool load(const char * file_name) {
 		int colInd[libCols];
 
 		name = std::string(file_name);
@@ -3062,7 +3100,7 @@ public:
 		for (i = 0; i < protein_ids.size(); i++)
 			for (auto it = protein_ids[i].precursors.begin(); it != protein_ids[i].precursors.end(); it++)
 				entries[*it].pid_index = i;
-	
+
 		extract_proteins();
 		int ps = proteins.size(), pis = protein_ids.size();
 		if (ps) if (!proteins[0].id.size()) ps--;
@@ -3130,7 +3168,7 @@ public:
 				ins.first->precursors.push_back(i);
 			}
 		}
-		
+
 		protein_ids.clear();
 		protein_ids.insert(protein_ids.begin(), pid.begin(), pid.end());
 		pid.clear();
@@ -3169,7 +3207,7 @@ public:
 		for (auto &pid : pgs) pid.annotate(proteins, names, genes);
 	}
 
-	void save(std::string &file_name, std::vector<int> * ref, bool searched, bool decoys = false) {
+	void save(const std::string &file_name, std::vector<int> * ref, bool searched, bool decoys = false) {
 		if (Verbose >= 1) Time(), std::cout << "Saving spectral library to " << file_name << "\n";
 		std::ofstream out(file_name, std::ofstream::out);
 		out << "FileName\tPrecursorMz\tProductMz\tTr_recalibrated\ttransition_name\tLibraryIntensity\ttransition_group_id\tdecoy\tPeptideSequence\tProteotypic\tQValue\t";
@@ -3192,7 +3230,7 @@ public:
 			auto seq = get_aas(it.name);
 			auto masses = get_sequence(it.name);
 			float gen_acc = 0;
-			auto &ions = recognise_fragments(masses, it.target.fragments, gen_acc, ExportRecFragOnly, MaxRecCharge, MaxRecLoss);
+			auto ions = recognise_fragments(masses, it.target.fragments, gen_acc, ExportRecFragOnly, MaxRecCharge, MaxRecLoss);
 			if (ExportRecFragOnly && !searched) {
 				int rec = 0;
 				for (int fr = 0; fr < ions.size(); fr++) if (ions[fr].charge) rec++;
@@ -3222,7 +3260,7 @@ public:
 						if (ExportRecFragOnly) fr_mz = ions[fr].mz;
 					} else { // unrecognised
 						fr_type = fr_loss = fr_num = 0;
-						if (ExportRecFragOnly) continue; 
+						if (ExportRecFragOnly) continue;
 					}
 					if (!it.from_fasta) {
 						bool skip = false;
@@ -3350,7 +3388,7 @@ public:
 		std::vector<std::set<int> > pgs(entries.size());
 		for (auto &g : groups) for (auto &e : g.e) {
 			auto &pr = pgs[IDs[e].first];
-			for (auto &s : g.s) 
+			for (auto &s : g.s)
 				pr.insert(s);
 		}
 
@@ -3455,7 +3493,7 @@ public:
 		if (stage < 2) quantify_proteins(N, q_cutoff, stage + 1);
 	}
 
-	void report(std::string &file_name) {
+	void report(const std::string &file_name) {
 		if (Verbose >= 1) Time(), std::cout << "Writing report\n";
 		auto &prot = InferPGs ? protein_groups : protein_ids;
 
@@ -3534,7 +3572,7 @@ public:
 		if (Verbose >= 1) Time(), std::cout << "Report saved to " << file_name << ".\n";
 	}
 
-	void gene_report(std::string &file_name) {
+	void gene_report(const std::string &file_name) {
 		if (Verbose >= 1) Time(), std::cout << "Writing gene report\n";
 
 		int s = ms_files.size(), size = gene_groups.size() * s;
@@ -3577,7 +3615,7 @@ public:
 		if (Verbose >= 1) Time(), std::cout << "Gene report saved to " << file_name << ".\n";
 	}
 
-	void stats_report(std::string &file_name) {
+	void stats_report(const std::string &file_name) {
 		if (!SaveRunStats) return;
 		for (auto &rs : info.RS) {
 			double mul = 1.0 / Max(1.0, (double)rs.cnt_valid);
@@ -3621,7 +3659,7 @@ void train(int thread_id, std::vector<NN> * net) {
 		(*net)[i * Threads + thread_id].optimise();
 }
 
-void learn_from_library(std::string &file_name) {
+void learn_from_library(const std::string &file_name) {
 	int i, j, n, P_y = y_delta_size(), P_l = y_loss_size(), M = in_silico_rt_size(), pos_y = 0, pos_l = 0, pos_RT = 0;
 	Library lib;
 	if (!lib.load(&(file_name[0]))) Throw("Cannot load the library");
@@ -3763,7 +3801,7 @@ void learn_from_library(std::string &file_name) {
 	std::cout << "Fragmentation prediction hash: " << learn_hash << "\n";
 #endif
 	std::sort(rm_y.begin(), rm_y.end());
-	Time(), std::cout << "y-series fragmentation prediction: ratio SD = " << sqrt(s2_y / (double)Max(1, s2_cnt - 1)) 
+	Time(), std::cout << "y-series fragmentation prediction: ratio SD = " << sqrt(s2_y / (double)Max(1, s2_cnt - 1))
 		<< ", Pearson correlation = " << r_y / (double)cnt << " average, " << rm_y[cnt / 2] << " median\n";
 	if (InSilicoRTPrediction) {
 		std::sort(rt_d.begin(), rt_d.end());
@@ -3790,6 +3828,7 @@ public:
 	Lock lock;
 	volatile int ms1_cnt = 0, ms2_cnt = 0;
 	std::atomic<int> sp_alloc;
+	bool scanning = false;
 
 	int run_index = 0, LDA = 0;
 	RunStats RS;
@@ -3803,7 +3842,7 @@ public:
 	std::vector<std::vector<int> > IDs;
 
 	Library * lib;
-    
+
     int n_scans = 0;
 	std::vector<double> RT_coeff, RT_points, iRT_coeff, iRT_points;
     std::vector<float> scan_RT; // list of RTs of scans
@@ -3824,7 +3863,7 @@ public:
 	double MassAccOutlier = INF, MassAccMs1Outlier = INF;
 	bool RemoveMassAccOutliers = false, recalibrate = false;
 	std::vector<double> MassCorrection, MassCorrectionMs1, MassCalSplit, MassCalSplitMs1, MassCalCenter, MassCalCenterMs1;
-    
+
     std::vector<Parameter> pars;
     bool par_seek[pN], par_learn[pN], par_limit = false;
 
@@ -3848,7 +3887,7 @@ public:
 		}
 	}
 
-    Run(int _run_index) {
+	Run(int _run_index) {
 		run_index = _run_index;
 
 		auto p_base = Parameter(0, 0);
@@ -3858,15 +3897,11 @@ public:
 		auto p_none = Parameter(iN, iN);
 
 		pars.push_back(p_base); // pTimeCorr
-#if WIN_DECONV
-		pars.push_back(p_all); // pWinCorr
-		pars.push_back(p_all); // pWinMaxDiff
-#endif
 		pars.push_back(p_end); // pMinCorr
 		pars.push_back(p_end); // pTotal
-        pars.push_back(p_end); // pCos
+		pars.push_back(p_end); // pCos
 		pars.push_back(p_all); // pCosCube
-        pars.push_back(p_all); // pMs1TimeCorr
+		pars.push_back(p_all); // pMs1TimeCorr
 		pars.push_back(p_end); // pNFCorr
 		pars.push_back(p_end); // pdRT
 		pars.push_back(p_none); // pResCorr
@@ -3887,21 +3922,19 @@ public:
 		pars.push_back(p_none); // pCharge
 		pars.push_back(p_none); // pLength
 		pars.push_back(p_none); // pFrNum
-#if WIN_DECONV
-		pars.push_back(p_none); // pWinPos
-#endif
 		pars.push_back(p_none); // pRT
 		for (int i = 0; i < TopF; i++) pars.push_back(p_end); // pAcc
 		for (int i = 1; i < auxF; i++) pars.push_back(p_none); // pRef
 		for (int i = 0; i < TopF; i++) pars.push_back(i < TopF - 1 ? p_end : p_none); // pSig
-#if WIN_DECONV
-		for (int i = 0; i < TopF; i++) pars.push_back(p_none); // pWCorr
-#endif
 		for (int i = 0; i < auxF; i++) pars.push_back(p_none); // pCorr
 		for (int i = 0; i < TopF; i++) pars.push_back(p_none); // pShadowCorr
 		for (int i = 0; i < nnW; i++) pars.push_back(p_none); // pShape
+#if Q1
+		for (int i = 0; i < qL; i++) pars.push_back(p_none); // pQPos
+		for (int i = 0; i < qL; i++) pars.push_back(p_end); // pQCorr
+#endif
 		assert(pars.size() == pN);
-        
+
 		reset_weights();
 		copy_weights(selection_weights, weights), copy_weights(selection_guide_weights, weights), copy_weights(best_weights, weights), copy_weights(best_guide_weights, weights);
 		training.resize(nnBagging);
@@ -3919,7 +3952,7 @@ public:
 		MassCalCenter.resize(MassCalBinsMax + 1, 0.0); MassCalCenterMs1.resize(MassCalBinsMax + 1, 0.0);
 
 		memset(&(RS), 0, sizeof(RunStats));
-    }
+	}
 
 	inline double predicted_mz(double * t, double mz, double rt) {
 		double s = t[0] * Sqr(mz);
@@ -3944,12 +3977,12 @@ public:
 		}
 		return s + mz;
 	}
-    
+
     template <bool seek> inline double cscore(float * scores, bool guide = false) {
 		if (seek) return scalar(scores, guide ? guide_weights : weights, par_seek, pN);
 		else return scalar(scores, guide ? guide_weights : weights, par_learn, pN);
     }
-    
+
 	class Search {
 	public:
 		std::vector<Elution> peaks;
@@ -3982,7 +4015,7 @@ public:
 		int flags = 0, S, thread_id = 0;
 
 		std::vector<Search> info; // used only for precursors detected in the sample
-        
+
 		void init(Run * _run, Peptide * p) {
 			run = _run;
 			pep = p;
@@ -4091,7 +4124,7 @@ public:
 
 				k = center, i = (*scan_index)[k];
 				rt = run->scan_RT[i];
-				
+
 				auto ms1_ptr = std::lower_bound(run->ms1_RT.begin(), run->ms1_RT.end(), rt);
 				for (pos = std::distance(run->ms1_RT.begin(), ms1_ptr); pos < run->ms1_RT.size()
 					&& (run->ms1[pos].window_low >= mz || run->ms1[pos].window_high <= mz); pos++);
@@ -4124,8 +4157,10 @@ public:
 							(*info)[0].mass_delta = ms2[l * fr + ind] >= MinPeakHeight ? (peak_mz - (*fragments)[fr].mz) : 0.0;
 							(*info)[0].mass_delta_mz = (*fragments)[fr].mz;
 							rt = run->scan_RT[i];
-							(*info)[0].mass_delta_ms1 = ((*info)[0].scores[pMs1TimeCorr] >= MassCalMs1Corr && ms1_left_mz > E && ms1_right_mz > E) ?
-								(((rt - ms1_left_RT) * ms1_right_mz + (ms1_right_RT - rt) * ms1_left_mz) / Max(E, ms1_right_RT - ms1_left_RT) - mz) : 0.0;
+							if ((*info)[0].scores[pMs1TimeCorr] >= MassCalMs1Corr && ms1_left_mz > E && ms1_right_mz > E) {
+								if (ms1_right_RT - ms1_left_RT > E) (*info)[0].mass_delta_ms1 = ((rt - ms1_left_RT) * ms1_right_mz + (ms1_right_RT - rt) * ms1_left_mz) / (ms1_right_RT - ms1_left_RT) - mz;
+								else (*info)[0].mass_delta_ms1 = 0.5 * (ms1_right_mz + ms1_left_mz) - mz;
+							} else (*info)[0].mass_delta_ms1 = 0.0;
 						}
 					}
 				}
@@ -4166,7 +4201,7 @@ public:
 				for (auto &p : (*info)[0].peaks) {
 					for (k = p.peak - S; k <= p.peak + S; k++) {
 						if ((*covered)[k]) continue;
-						
+
 						i = (*scan_index)[k];
 						ind = k - from;
 
@@ -4253,6 +4288,48 @@ public:
 					}
 				}
 			}
+
+#if Q1
+#define Sgn(x) ((x) >= 0.0 ? (1.0) : (-1.0))
+#define WinCenter(x) (0.5 * (run->scans[x].window_low + run->scans[x].window_high))
+
+			void q1_profiles(float * profiles, float * coo, int apex, float * fmz, int QS, int m) {
+				int i, j, k, pos, QW = 2 * QS + 1;
+				float rt = run->scan_RT[apex];
+				float u, wc = WinCenter(apex);
+				for (i = 0; i < QW * m; i++) profiles[i] = 0.0;
+				for (i = QS + 1; i < QW; i++) coo[i] = INF;
+				for (i = 0; i < QS; i++) coo[i] = -INF;
+				for (j = 0; j < m; j++) profiles[j * QW + QS] = run->scans[apex].level<false>(fmz[j], run->MassAccuracy);
+				coo[QS] = wc;
+
+				for (int inc = -1; inc <= 1; inc += 2) {
+					int lsgn = Sgn(WinCenter(apex + inc) - wc);
+					for (pos = apex + inc; pos >= 0 && pos < run->scans.size(); pos += inc) {
+						int dw = WinCenter(pos) - wc;
+						if (Sgn(dw) != lsgn) break;
+						if (dw >= 0.0) for (i = QS + 1; i < QW; i++) if (dw < coo[i]) {
+							for (int j = QW - 1; j > i; j--) {
+								coo[j] = coo[j - 1];
+								for (k = 0; k < m; k++) profiles[k * QW + j] = profiles[k * QW + j - 1];
+							}
+							coo[i] = dw;
+							for (k = 0; k < m; k++) profiles[k * QW + i] = run->scans[pos].level<false>(fmz[k], run->MassAccuracy);
+							break;
+						}
+						if (dw < 0.0) for (i = QS - 1; i >= 0; i--) if (dw > coo[i]) {
+							for (int j = 0; j < i; j++) {
+								coo[j] = coo[j + 1];
+								for (k = 0; k < m; k++) profiles[k * QW + j] = profiles[k * QW + j + 1];
+							}
+							coo[i] = dw;
+							for (k = 0; k < m; k++) profiles[k * QW + i] = run->scans[pos].level<false>(fmz[k], run->MassAccuracy);
+							break;
+						}
+					}
+				}
+			}
+#endif
 
 			noninline void peaks() {
 				if (!m) return;
@@ -4375,86 +4452,16 @@ public:
 				sc[pCos] /= w;
 				sc[pCosCube] /= w;
 
-#if WIN_DECONV
-				float v_cent[TopF], qmz[TopF], rt = run->scan_RT[apex], wc_min = 0, wc_max = INF, wc_min_loc = 0, wc_max_loc = INF, wc, s2 = 0.0, s2f[TopF], rf[TopF], qcorr[TopF];
-				for (fr = 0; fr < TopF; fr++) {
-					if (fr < m) {
-						qmz[fr] = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[fr].mz, rt);
-						v_cent[fr] = ms2[fr * l + k];
-					} else {
-						qmz[fr] = 0.0;
-						v_cent[fr] = 0.0;
-					}
-					s2f[fr] = rf[fr] = qcorr[fr] = 0.0;
-				}
-				float win_loc = (run->scans[apex].window_low + run->scans[apex].window_high) * 0.5, win_pos = win_loc * v_cent[best_fr], win_pos_w = v_cent[best_fr];
-				float max_win_level = v_cent[best_fr], max_win_level_loc = max_win_level, min_win_level_loc_left = v_cent[best_fr], min_win_level_loc_right = v_cent[best_fr];
-				if (v_cent[best_fr] >= MinPeakHeight) {
-					int loop_inc = 1, max_val = run->scans.size() - 1;
-					for (pos = apex + 1; pos * loop_inc <= max_val * loop_inc; pos += loop_inc) {
-						if (run->scan_RT[pos] < rt - E) break;
-						if (run->scan_RT[pos] <= rt + E) {
-							w = run->scans[pos].level<false>(qmz[best_fr], run->MassAccuracy);
-							wc = (run->scans[pos].window_low + run->scans[pos].window_high) * 0.5;
-							if (w <= v_cent[best_fr] * 0.7) {
-								if (wc < wc_max_loc && wc > mz + 1.0 && wc > win_loc + 0.1) wc_max_loc = wc;
-								if (wc > wc_min_loc && wc < mz - 1.0 && wc < win_loc - 0.1) wc_min_loc = wc;
-							}
-							if (w <= v_cent[best_fr] * 0.1) {
-								if (wc < wc_max && wc > mz + 1.0 && wc > win_loc + 0.1) wc_max = wc;
-								if (wc > wc_min && wc < mz - 1.0 && wc < win_loc - 0.1) wc_min = wc;
-							}
-						}
-						if (run->scan_RT[pos] > rt + E || pos == run->scans.size() - 1) {
-							max_val = 0;
-							loop_inc = -1;
-							pos = apex;
-						}
-					}
-					if (wc_max - win_loc > win_loc - wc_min) wc_max = Min(wc_max, win_loc + win_loc - wc_min + 1.01);
-					else if (wc_max - win_loc < win_loc - wc_min) wc_min = Max(wc_min, win_loc + win_loc - wc_max - 1.01);
-
-					if (wc_max_loc - win_loc > win_loc - wc_min_loc) wc_max_loc = Min(wc_max_loc, win_loc + win_loc - wc_min_loc + 1.01);
-					else if (wc_max_loc - win_loc < win_loc - wc_min_loc) wc_min_loc = Max(wc_min_loc, win_loc + win_loc - wc_max_loc - 1.01);
-
-					for (pos = apex + 1; pos * loop_inc <= max_val * loop_inc; pos += loop_inc) {
-						if (run->scan_RT[pos] < rt - E) break;
-						if (run->scan_RT[pos] <= rt + E) {
-							wc = (run->scans[pos].window_low + run->scans[pos].window_high) * 0.5;
-							if (wc <= wc_max && wc >= wc_min) {
-								w = run->scans[pos].level<false>(qmz[best_fr], run->MassAccuracy);
-								win_pos += wc * w, win_pos_w += w;
-								if (w > max_win_level) max_win_level = w;
-								if (wc <= wc_max_loc && wc >= wc_min_loc) {
-									if (w > max_win_level_loc) max_win_level_loc = w;
-									if (w < min_win_level_loc_left && pos < apex) min_win_level_loc_left = w;
-									else if (w > min_win_level_loc_right && pos > apex) min_win_level_loc_right = w;
-								}
-								if (true) {
-									s2 += Sqr(w);
-									for (fr = 0; fr < Min(m, TopF); fr++) {
-										if (fr == best_fr) continue;
-										auto value = run->scans[pos].level<false>(qmz[fr], run->MassAccuracy);
-										s2f[fr] += Sqr(value);
-										rf[fr] += (w) * (value);
-									}
-								}
-							}
-						}
-						if (run->scan_RT[pos] > rt + E || pos == run->scans.size() - 1) {
-							max_val = 0;
-							loop_inc = -1;
-							pos = apex;
-						}
-					}
-					qcorr[best_fr] = 1.0;
-					if (s2 > E) for (fr = 0; fr < Min(m, TopF); fr++) if (fr != best_fr && s2f[fr] > E) {
-						sc[pWinCorr] += (qcorr[fr] = rf[fr] / sqrt(s2 * s2f[fr]));
-						sc[pWCorr + fr] = qcorr[fr];
-					}
-					sc[pWCorr + best_fr] = 1.0;
-					if (win_pos_w > E) sc[pWinPos] = Min(10.0, Max(-10.0, (win_pos / win_pos_w) - mz));
-					sc[pWinMaxDiff] = (max_win_level - v_cent[best_fr]) / max_win_level;
+#if Q1
+				if (UseQ1 && run->full_spectrum && run->scanning) {
+					int QS = QSL[qL - 1], QW = 2 * QS + 1;
+					float *qprofile = (float*)alloca(QW * Min(m, TopF) * sizeof(float)), *ws = (float*)alloca(QW * sizeof(float)), *fmz = (float*)alloca(Min(m, TopF) * sizeof(float));
+					float rt = run->scan_RT[apex];
+					for (i = 0; i < Min(m, TopF); i++) fmz[i] = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[i].mz, rt);
+					q1_profiles(qprofile, ws, apex, fmz, QS, Min(m, TopF));
+					for (i = 0; i < qL; i++) sc[pQPos + i] = centroid_coo(qprofile + best_fr * QW + QS - QSL[i], ws + QS - QSL[i], 2 * QSL[i] + 1) - fmz[best_fr];
+					for (fr = 0; fr < Min(m, TopF); fr++) if (fr != best_fr)
+						for (i = 0; i < qL; i++) sc[pQCorr + i] += corr(qprofile + fr * QW + QS - QSL[i], qprofile + best_fr * QW + QS - QSL[i], 2 * QSL[i] + 1);
 				}
 #endif
 
@@ -4550,7 +4557,7 @@ public:
 				}
 			}
 		};
-        
+
 		void score_RT(int peak) {
 			assert(peak >= 0);
 			assert(info.size());
@@ -4601,7 +4608,7 @@ public:
 				std::vector<float>().swap(info[0].scoring);
 			}
 		}
-        
+
 		noninline void quantify(int peak, bool stats_only = false, bool filter = false) {
 			assert(peak >= 0);
 			if (!(flags & fFound)) return;
@@ -4836,7 +4843,7 @@ public:
 				flags |= fFound;
 			} else flags &= ~fFound;
         }
-        
+
         void find(int _thread_id, bool _free, bool skip) {
 			if (lock.set()) {
 				if (skip) {
@@ -4899,7 +4906,7 @@ public:
 		for (int i = 0; i < scans.size(); i++) scans[i].read(in);
 		in.read((char*)&size, sizeof(int));
 		ms1.resize(size);
-		for (int i = 0; i < ms1.size(); i++) 
+		for (int i = 0; i < ms1.size(); i++)
 			ms1[i].read(in);
 
 		in.close();
@@ -4920,7 +4927,9 @@ public:
 				scans[i - 1].window_high = scans[i].window_low = (scans[i - 1].window_high + scans[i].window_low) * 0.5;
 			if (scans[i - 1].window_low > scans[i].window_low + E && scans[i - 1].window_high > scans[i].window_high + E && scans[i - 1].window_low < scans[i].window_high - E)
 				scans[i - 1].window_low = scans[i].window_high = (scans[i - 1].window_low + scans[i].window_high) * 0.5;
+			if (!scanning && Abs(scans[i - 1].RT - scans[i].RT) < E) scanning = true;
 		}
+		if (Verbose >= 1 && scanning) Time(), std::cout << "Scanning SWATH run\n";
 		scan_RT.resize(n_scans);
 		double t_min = INF, t_max = -INF;
 		for (i = 0; i < n_scans; i++) {
@@ -5024,9 +5033,9 @@ public:
 				}
 				GlobalFree(data);
 				scans.resize(nms2), ms1.resize(nms1);
-			} catch (std::exception &e) { 
+			} catch (std::exception &e) {
 				std::cout << "Unhandled exception when reading the .wiff file\n";
-				return false; 
+				return false;
 			};
 			goto finalise;
 		}
@@ -5071,7 +5080,7 @@ public:
 		return true;
 	}
 
-    void load_library(Library * _lib) { 
+    void load_library(Library * _lib) {
 		lib = _lib;
 		int i, fr, frn, pos = 0, cnt = 0, gcnt = 0, guide = 0, guide_batches = 0, fasta_batches = 0;
 		Target entry;
@@ -5079,7 +5088,7 @@ public:
 		for (auto it = lib->entries.begin(); it != lib->entries.end(); it++, pos++) {
 			double mz = it->target.mz;
 			int max = Min(scans.size(), MaxCycleLength);
-			for (i = 0; i < max; i++) 
+			for (i = 0; i < max; i++)
 				if (scans[i].has(mz)) {
 					if (!it->from_fasta) break;
 					gcnt = 0;
@@ -5152,24 +5161,24 @@ public:
 		}
 		return NULL;
 	}
-    
+
     void process_precursors(int thread_id, bool free, bool free_fragments, int min_batch, int max_batch) { // skip before min_batch (only update RT scores), ignore after max_batch
-        for (int i = 0; i < entries.size(); i++) { 
+        for (int i = 0; i < entries.size(); i++) {
 			if (entries[i].batch > max_batch) continue;
 			if (entries[i].lock.set()) {
 				if ((!QuantOnly && curr_iter < iN) || (entries[i].target.flags & fFound)) entries[i].target.find(thread_id, free, entries[i].batch < min_batch);
 				if (!QuantOnly && curr_iter < iN) entries[i].decoy.find(thread_id, free, entries[i].batch < min_batch);
-				
+
 				auto &le = lib->entries[entries[i].target.pep->index];
 				if (free_fragments && le.from_fasta && le.target.fragments.size()) le.free();
 				entries[i].lock.free();
 			}
         }
     }
-    
+
     void seek_precursors(bool clean, bool free, bool free_fragments, int min_batch, int max_batch) {
 		if (Verbose >= 2) Time(), std::cout << "Precursor search\n";
-        
+
         int i;
         if (Threads > 1) {
             std::vector<std::thread> threads;
@@ -5237,7 +5246,7 @@ public:
 
 	void map_ids() {
 		int i;
-	
+
 		IDs.clear();
 		IDs.resize(scans.size());
 		for (i = 0; i < entries.size(); i++)
@@ -5360,14 +5369,14 @@ public:
 		Eigen::MatrixXd A((int)pN, (int)pN);
 		Eigen::VectorXd b((int)pN);
 		bool non_guide_present = false, limit_ids10 = false;
-			
+
 #if (HASH > 1)
 		std::cout << "Search hash: " << search_hash() << "\n";
 #endif
 
 		if (!GuideLibrary || !GuideClassifier || curr_iter >= nnIter) all = true;
 
-		int maxTraining = 0, tr_t = 0, tr_d = 0; 
+		int maxTraining = 0, tr_t = 0, tr_d = 0;
 		if (curr_iter >= nnIter) {
 			nn_cnt.clear();
 			nn_cnt.resize(nnBagging, 0);
@@ -5383,7 +5392,7 @@ public:
 			std::vector<int> index_t(tr_t), index_d(tr_d);
 			for (i = 0; i < index_t.size(); i++) index_t[i] = i;
 			for (i = 0; i < index_d.size(); i++) index_d[i] = i;
-			std::shuffle(index_t.begin(), index_t.end(), gen); 
+			std::shuffle(index_t.begin(), index_t.end(), gen);
 			std::shuffle(index_d.begin(), index_d.end(), gen);
 
 			i = 0, j = 0;
@@ -5426,7 +5435,7 @@ public:
 						t50++;
 						if (it->target.info[0].qvalue <= 0.1) t10++;
 					}
-					for (i = 0; i < nnBagging; i++) if (train_on_index(it->target.info[0].nn_index, i)) 
+					for (i = 0; i < nnBagging; i++) if (train_on_index(it->target.info[0].nn_index, i))
 						training[i][nn_cnt[i]] = it->target.info[0].scores, training_classes[i][nn_cnt[i]] = target_nn, nn_cnt[i]++;
 					nnCnt++;
 				}
@@ -5472,11 +5481,11 @@ public:
 			if (!(it->target.flags & fFound) || !(it->decoy.flags & fFound)) continue;
 
 			if (!LDA) for (i = 0; i < pN; i++) if (par_learn[i])
-				for (j = i; j < pN; j++) if (par_learn[j]) A(j, i) = (A(i, j) += 
+				for (j = i; j < pN; j++) if (par_learn[j]) A(j, i) = (A(i, j) +=
 					(it->target.info[0].scores[i] - it->decoy.info[0].scores[i] - av[i]) * (it->target.info[0].scores[j] - it->decoy.info[0].scores[j] - av[j]));
 			if (LDA) for (i = 0; i < pN; i++) if (par_learn[i])
-					for (j = i; j < pN; j++) if (par_learn[j]) A(j, i) = (A(i, j) += 0.5 * 
-						((it->decoy.info[0].scores[i] - md[i]) * (it->decoy.info[0].scores[j] - md[j]) + 
+					for (j = i; j < pN; j++) if (par_learn[j]) A(j, i) = (A(i, j) += 0.5 *
+						((it->decoy.info[0].scores[i] - md[i]) * (it->decoy.info[0].scores[j] - md[j]) +
 						(it->target.info[0].scores[i] - mt[i]) * (it->target.info[0].scores[j] - mt[j])));
 			pos++;
 		}
@@ -5514,7 +5523,7 @@ public:
 			}
 			std::cout << "\n";
 		}
-		
+
 		try_nn:
 		if (curr_iter != nnIter) goto finish;
 		if ((t50 < 200 && t10 < 100) || dall < 100) {
@@ -5596,7 +5605,7 @@ public:
 				if (it->target.flags & fFound)
 					if (test_on_index(it->target.info[0].nn_index, ind))
 						index[cnt] = 2 * i, data[cnt++] = it->target.info[0].scores;
-				if (it->decoy.flags & fFound) 
+				if (it->decoy.flags & fFound)
 					if (test_on_index(it->decoy.info[0].nn_index, ind))
 						index[cnt] = 2 * i + 1, data[cnt++] = it->decoy.info[0].scores;
 
@@ -5617,7 +5626,7 @@ public:
 		}
 	}
 
-	void nn_scores(bool all, std::vector<NN> * net) {  
+	void nn_scores(bool all, std::vector<NN> * net) {
 		for (auto it = entries.begin(); it != entries.end(); it++) {
 			if (it->batch > curr_batch) continue;
 			if (it->target.flags & fFound) it->target.info[0].cscore = 0.0, it->target.info[0].nn_inc = 0;
@@ -5648,19 +5657,19 @@ public:
 			}
 		}
 	}
-    
+
 	std::vector<float> target_scores, decoy_scores, guide_target_scores, guide_decoy_scores;
     int calculate_qvalues(bool use_evidence = true, bool recalc = true) {
 		start:
 		if (Verbose >= 2) Time(), std::cout << "Calculating q-values\n";
 		iRTTopPrecursors = Max(2, (!(TestDataset && curr_iter >= nnIter && nn_trained) || in_ref_run) ? iRTTargetTopPrecursors : (TestDatasetSize * (double)iRTTargetTopPrecursors));
-        
+
         int i = 0, ids = 00;
 		Ids01 = Ids1 = Ids10 = Ids50 = IdsCal = 0;
         iRT_cscore = iRT_ref_score = INF;
 		if (curr_iter >= nnIter && nn_trained) use_evidence = false;
 		if (curr_iter < nnIter - 2) use_evidence = false;
-        
+
 		target_scores.clear(), decoy_scores.clear(), guide_target_scores.clear(), guide_decoy_scores.clear();
         for (auto it = entries.begin(); it != entries.end(); it++, i++) {
 			if (it->batch > curr_batch) continue;
@@ -5675,13 +5684,13 @@ public:
 				if (it->target.flags & fFound) {
 					if (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta)
 						target_scores.push_back(it->target.info[0].cscore);
-					else 
+					else
 						guide_target_scores.push_back(it->target.info[0].cscore);
 				}
 				if (it->decoy.flags & fFound) {
 					if (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta)
 						decoy_scores.push_back(it->decoy.info[0].cscore);
-					else 
+					else
 						guide_decoy_scores.push_back(it->decoy.info[0].cscore);
 				}
             }
@@ -5694,7 +5703,7 @@ public:
 			std::sort(guide_target_scores.begin(), guide_target_scores.end());
 			std::sort(guide_decoy_scores.begin(), guide_decoy_scores.end());
 		}
-        
+
 		std::map<float, float> cs_qv, guide_cs_qv;
 
         for (auto it = entries.begin(); it != entries.end(); it++) {
@@ -5702,7 +5711,7 @@ public:
             if (it->target.flags & fFound) {
 				auto &vd = (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta) ? decoy_scores : guide_decoy_scores;
 				auto &vt = (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta) ? target_scores : guide_target_scores;
-                
+
 				int n_targets = 0, n_better = 0, n_decoys = 0;
 				double sc = it->target.info[0].cscore;
 				auto pT = std::lower_bound(vt.begin(), vt.end(), sc);
@@ -5762,15 +5771,15 @@ public:
 		if (Verbose >= 2 || (Verbose >= 1 && curr_iter >= iN - 1)) {
 			if (TestDataset && curr_iter >= nnIter && nn_trained) Time(), std::cout << "Number of test set IDs at 0.01 FDR: " << ids << "\n";
 			else if (Verbose < 3) Time(), std::cout << "Number of IDs at 0.01 FDR: " << ids << "\n";
-			if (Verbose >= 3) Time(), std::cout << "Number of IDs at 50%, 10%, 1%, 0.1% FDR: " 
+			if (Verbose >= 3) Time(), std::cout << "Number of IDs at 50%, 10%, 1%, 0.1% FDR: "
 				<< Ids50 << ", " << Ids10 << ", " << Ids1 << ", " << Ids01 << "\n";
 		}
 		if (TestDataset && curr_iter >= nnIter && nn_trained) {
 			ids = (int)(((double)ids) / TestDatasetSize);
 			if (Verbose >= 1 && curr_iter == iN - 1) Time(), std::cout << "Estimated number of precursors at 0.01 FDR: " << ids << "\n";
 		}
-		if (curr_iter >= nnIter && nn_trained && (Ids10 < linear_classifier_ids10 || 
-			(ids < linear_classifier_ids1 && linear_classifier_ids1 >= 50 && ((double)ids/(double)linear_classifier_ids1) < ((double)linear_classifier_ids10 / (double)Max(1, Ids10))) 
+		if (curr_iter >= nnIter && nn_trained && (Ids10 < linear_classifier_ids10 ||
+			(ids < linear_classifier_ids1 && linear_classifier_ids1 >= 50 && ((double)ids/(double)linear_classifier_ids1) < ((double)linear_classifier_ids10 / (double)Max(1, Ids10)))
 			|| Ids10 < 100)) {
 			if (Verbose >= 1) Time(), std::cout << "Too low number of IDs with NNs: reverting to the linear classifier\n";
 			nn_trained = false;
@@ -5815,7 +5824,7 @@ public:
 		if (fit) fit_weights(max_batch);
 		return calculate_qvalues();
 	}
-    
+
     void update(bool set_RT_window, bool set_scan_window, bool calibrate, bool gen_ref) {
 		if (Verbose >= 2) Time(), std::cout << "Calibrating retention times\n";
 		int peak_width = 0, peak_cnt = 0, mass_cnt = 0, mass_cnt_ms1 = 0;
@@ -5917,8 +5926,8 @@ public:
 				for (auto it = entries.begin(); it != entries.end(); it++) {
 					if (!(it->target.flags & fFound)) continue;
 					if ((it->target.info[0].qvalue <= MassCalQvalue || it->target.info[0].cscore >= iRT_cscore) && Abs(it->target.info[0].mass_delta) > E
-						&& (!RemoveMassAccOutliers 
-							|| Abs(it->target.info[0].mass_delta_mz + it->target.info[0].mass_delta - 
+						&& (!RemoveMassAccOutliers
+							|| Abs(it->target.info[0].mass_delta_mz + it->target.info[0].mass_delta -
 								predicted_mz(&(MassCorrection[0]), it->target.info[0].mass_delta_mz, it->target.info[0].RT))
 							< MassAccOutlier * it->target.info[0].mass_delta_mz)) {
 						double mz = it->target.info[0].mass_delta_mz, mzw = 1.0 / mz;
@@ -6027,10 +6036,10 @@ public:
 				mass_cnt_ms1 = 0;
 				for (auto it = entries.begin(); it != entries.end(); it++) {
 					if (!(it->target.flags & fFound)) continue;
-					if ((it->target.info[0].qvalue <= MassCalQvalue || it->target.info[0].cscore >= iRT_cscore) 
+					if ((it->target.info[0].qvalue <= MassCalQvalue || it->target.info[0].cscore >= iRT_cscore)
 						&& Abs(it->target.info[0].mass_delta) > E && Abs(it->target.info[0].mass_delta_ms1) > E
-						&& (!RemoveMassAccOutliers 
-							|| Abs(it->target.pep->mz + it->target.info[0].mass_delta_ms1 - 
+						&& (!RemoveMassAccOutliers
+							|| Abs(it->target.pep->mz + it->target.info[0].mass_delta_ms1 -
 								predicted_mz_ms1(&(MassCorrectionMs1[0]), it->target.pep->mz, it->target.info[0].RT))
 							< MassAccMs1Outlier * it->target.pep->mz)) {
 						double mz = it->target.pep->mz, mzw = 1.0 / mz;
@@ -6131,14 +6140,14 @@ public:
 		int i, pi, np = (PGLevel == 2 ? lib->genes.size() : (PGLevel == 1 ? lib->names.size() : lib->proteins.size()));
 		std::vector<float> tsc(np, -INF), dsc(np, -INF), q(np);
 		std::vector<bool> identified(np);
-		std::vector<int> ids; 
+		std::vector<int> ids;
 		if (!np) {
 			if (Verbose >= 1) Time(), std::cout << "No protein annotation, skipping protein q-value calculation\n";
 			return ids;
 		}
 
 		if (Verbose >= 1) Time(), std::cout << "Calculating protein q-values\n";
-		
+
 		for (auto &e : entries) {
 			auto &le = lib->entries[e.target.pep->index];
 			if (!le.proteotypic) continue;
@@ -6192,7 +6201,7 @@ public:
 			auto pD = std::lower_bound(decoys.begin(), decoys.end(), sc);
 			if (pD > decoys.begin()) sc = *(--pD);
 			auto pT = std::lower_bound(targets.begin(), targets.end(), sc);
-			
+
 			q[i] = Min(1.0, ((double)std::distance(pD, decoys.end())) / Max(1.0, (double)std::distance(pT, targets.end())));
 
 			auto pair = std::pair<float, float>(tsc[i], q[i]);
@@ -6212,7 +6221,7 @@ public:
 			}
 			if (identified[i]) ids01++;
 		}
-		if (Verbose >= 1) Time(), std::cout << "Number of " << (PGLevel == 0 ? "protein isoforms" : (PGLevel == 1 ? "proteins" : "genes")) << " identified at 1% FDR: " 
+		if (Verbose >= 1) Time(), std::cout << "Number of " << (PGLevel == 0 ? "protein isoforms" : (PGLevel == 1 ? "proteins" : "genes")) << " identified at 1% FDR: "
 			<< ids01 << " (precursor-level), " << ids01p << " (protein-level) (inference performed using proteotypic peptides only)\n";
 		RS.proteins = ids01p;
 
@@ -6260,7 +6269,7 @@ public:
 
 		return true;
 	}
-    
+
     void process() {
 		int i, ids = 0, best_ids = 0, best1, best50, cal_batch = 0;
 
@@ -6299,7 +6308,7 @@ public:
 				if (recalibrate && ids >= MinCalRec && do_calibrate) break;
 			}
 			if (recalibrate) {
-				curr_iter = CalibrationIter; 
+				curr_iter = CalibrationIter;
 				update_classifier(true, false, false, false, 0, curr_batch);
 				RemoveMassAccOutliers = false, recalibrate = true;
 				update(false, false, true, false), recalibrate = false;
@@ -6311,7 +6320,7 @@ public:
 				reset_weights();
 				goto calibrate;
 			}
-			for (curr_iter = curr_iter + 1; curr_iter <= CalibrationIter; curr_iter++) 
+			for (curr_iter = curr_iter + 1; curr_iter <= CalibrationIter; curr_iter++)
 				update_classifier(true, false, false, false, 0, curr_batch);
 			RemoveMassAccOutliers = false;
 			update(RTWindowedSearch, InferWindow && !window_calculated, Calibrate && !mz_calibrated, false);
@@ -6322,12 +6331,12 @@ public:
 				MassAccMs1Outlier = MassAccuracyMs1;
 				update(false, false, true, false);
 				RemoveMassAccOutliers = false;
-			} 
+			}
 			if (ForceMassAcc) {
 				MassAccuracy = GlobalMassAccuracy, MassAccuracyMs1 = GlobalMassAccuracyMs1;
 				if (Verbose >= 2) Time(), std::cout << "Using mass accuracy " << MassAccuracy << ", " << MassAccuracyMs1 << " (MS2, MS1)\n";
 			}
-			
+
 			if (do_reset) reset_precursors();
 			else start_batch = curr_batch;
 		}
@@ -6448,7 +6457,7 @@ public:
 			free_precursors();
 			if (curr_iter >= iN) goto report;
 		}
-		
+
 		if (Standardise) standardise();
 		fit_weights(Batches); // train the neural network
 		calculate_qvalues();
@@ -6544,7 +6553,7 @@ public:
 	noninline void update_library() { // update fragment intensities in the spectral library
 		int cnt = 0;
 		for (auto &e : entries) {
-			auto &le = lib->entries[e.target.pep->index]; 
+			auto &le = lib->entries[e.target.pep->index];
 			if (le.best_run != run_index || le.qvalue > ReportQValue || le.protein_qvalue > ReportProteinQValue) continue;
 			e.target.thread_id = 0;
 			auto gen = le.fragment();
@@ -6580,9 +6589,6 @@ int main(int argc, char *argv[]) {
 #endif
 	std::cout.setf(std::ios::unitbuf);
 	std::cout << "DIA-NN (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\n";
-#if WIN_DECONV
-	std::cout << "EXPERIMENTAL VERSION FOR Q1 WINDOW DECONVOLUTION. DO NOT USE FOR ANALYSING REGULAR SWATH DATA.\n";
-#endif
 #if (HASH > 0)
 	init_hash();
 #endif
@@ -6636,7 +6642,7 @@ int main(int argc, char *argv[]) {
 	}
 	if (FastaSearch && fasta_files.size()) fasta.free();
 	if (GuideLibrary && FastaSearch && nnIter >= iN)
-		ReportProteinQValue = 1.0, Time(), 
+		ReportProteinQValue = 1.0, Time(),
 		std::cout << "WARNING: protein q-values cannot be calculated without NNs when a guide library is used for FASTA search, protein q-value filter reset to 1.0\n";
 	if (!ReportOnly) lib.initialise(!QuantOnly);
 
@@ -6842,13 +6848,13 @@ gen_spec_lib:
 	if (out_gene_file.size()) lib.gene_report(out_gene_file);
 
 	remove:
+#ifdef CPP17
 	if (RemoveQuant) {
 		if (Verbose >= 1) Time(), std::cout << "Removing .quant files\n";
 		for (auto &file : ms_files) try { std::experimental::filesystem::remove(file + std::string(".quant")); } catch (std::exception &e) { }
 	}
+#endif
 
 	std::cout << "Finished\n\n";
 	return 0;
 }
-
-
