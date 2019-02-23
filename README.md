@@ -94,7 +94,7 @@ For a full list of supported commands see the arguments() function in /src/diann
 ### Building
 
 **Windows**: A Visual C++ solution file is provided with the source code. Changing the SDK to a Windows 10 one in the project settings might be required. Tested on Windows 7 and 10.      
-**Linux**: type "bash linux-build" and wait a couple of minutes. GCC version should not be too old (C++14 support required). For GCC 7 or later edit the linux-build file, replacing "--std=c++14" with "--std=c++17 -lstdc++fs" - this will enable support of some commands, e.g. --dir. It's unknown, whether binaries built on Linux would produce exactly the same analysis results when run on different machines. On Linux, only .dia format is supported, Windows version of DIA-NN can be used to convert vendor and .mzML files to .dia. Tested on Ubuntu 16.04 and Linux Mint 19.1.      
+**Linux**: type "bash linux-build-old-gcc" or "bash linux-build-gcc-7" and wait a couple of minutes. GCC version should not be too old (C++14 support required). Using GCC 7 or later enables some extra commands, e.g. "--dir". It's unknown, whether binaries built on Linux would produce exactly the same analysis results when run on different machines. On Linux, only .dia format is supported, Windows version of DIA-NN can be used to convert vendor and .mzML files to .dia. Tested on Ubuntu 16.04 and Linux Mint 19.1.      
 
 ### Tutorial
 
