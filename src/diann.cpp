@@ -152,6 +152,7 @@ int RTSegments = 20;
 int MinRTPredBin = 20;
 
 bool RefCal = false;
+bool Q1Cal = false;
 int RTWindowIter = 4;
 const int RTRefWindowFactor = 10;
 const int RTWindowFactor = 40;
@@ -294,7 +295,7 @@ bool QuantInMem = false;
 
 std::vector<std::string> TrackedPrecursors;
 
-#define Q1 FALSE
+#define Q1 TRUE
 #define REPORT_SCORES FALSE
 
 #if Q1
@@ -1535,6 +1536,9 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Q-value threshold for cross-run normalisation set to " << NormalisationQvalue << "\n";
 		else if (!memcmp(&(args[start]), "norm-fraction ", 14)) NormalisationPeptidesFraction = std::stod(args.substr(start + 14, std::string::npos)),
 			std::cout << "Normalisation peptides fraction set to " << NormalisationPeptidesFraction << "\n";
+#if Q1
+		else if (!memcmp(&(args[start]), "q1-cal ", 7)) Q1Cal = true, std::cout << "Q1 calibration enabled\n";
+#endif
 		else if (!memcmp(&(args[start]), "no-calibration ", 15)) Calibrate = false, std::cout << "Mass calibration disabled\n";
 		/*else if (!memcmp(&(args[start]), "mass-cal-bins ", 14)) MassCalBinsMax = std::stoi(args.substr(start + 14, std::string::npos)),
 			std::cout << "Maximum number of mass calibration bins set to " << MassCalBinsMax << "\n";*/
@@ -2096,6 +2100,7 @@ public:
 	int run_index, lib_size;
 	double MassAccuracy = GlobalMassAccuracy, MassAccuracyMs1 = GlobalMassAccuracyMs1;
 	std::vector<double> MassCorrection, MassCorrectionMs1, MassCalSplit, MassCalSplitMs1, MassCalCenter, MassCalCenterMs1;
+	double Q1Correction;
 
     void write(std::ofstream &out) {
 		out.write((char*)&run_index, sizeof(int));
@@ -3814,7 +3819,7 @@ void learn_from_library(const std::string &file_name) {
 }
 
 std::vector<int> rt_stats, rt_ref;
-std::vector<float> rt_coo;
+std::vector<float> rt_coo, q1_diff;
 std::vector<std::pair<float, float> > rt_data;
 std::vector<float> rt_delta, mass_acc;
 std::vector<double> b, b_r;
@@ -3863,6 +3868,7 @@ public:
 	double MassAccOutlier = INF, MassAccMs1Outlier = INF;
 	bool RemoveMassAccOutliers = false, recalibrate = false;
 	std::vector<double> MassCorrection, MassCorrectionMs1, MassCalSplit, MassCalSplitMs1, MassCalCenter, MassCalCenterMs1;
+	double Q1Correction = 0.0;
 
     std::vector<Parameter> pars;
     bool par_seek[pN], par_learn[pN], par_limit = false;
@@ -3983,6 +3989,56 @@ public:
 		else return scalar(scores, guide ? guide_weights : weights, par_learn, pN);
     }
 
+#if Q1
+#define Sgn(x) ((x) >= 0.0 ? (1.0) : (-1.0))
+#define WinCenter(x) (0.5 * (scans[x].window_low + scans[x].window_high))
+
+	void q1_profiles(float * profiles, float * coo, int apex, float * fmz, int QS, int m) {
+		int i, j, k, pos, QW = 2 * QS + 1;
+		float rt = scan_RT[apex];
+		float u, wc = WinCenter(apex);
+		for (i = 0; i < QW * m; i++) profiles[i] = 0.0;
+		for (i = QS + 1; i < QW; i++) coo[i] = INF;
+		for (i = 0; i < QS; i++) coo[i] = -INF;
+		for (j = 0; j < m; j++) profiles[j * QW + QS] = scans[apex].level<false>(fmz[j], MassAccuracy);
+		coo[QS] = wc;
+
+		for (int inc = -1; inc <= 1; inc += 2) {
+			int lsgn = Sgn(WinCenter(apex + inc) - wc);
+			for (pos = apex + inc; pos >= 0 && pos < scans.size(); pos += inc) {
+				float w = WinCenter(pos);
+				if (Sgn(w - wc) != lsgn) break;
+				if (w - wc >= 0.0) for (i = QS + 1; i < QW; i++) if (w < coo[i]) {
+					for (int j = QW - 1; j > i; j--) {
+						coo[j] = coo[j - 1];
+						for (k = 0; k < m; k++) profiles[k * QW + j] = profiles[k * QW + j - 1];
+					}
+					coo[i] = w;
+					for (k = 0; k < m; k++) profiles[k * QW + i] = scans[pos].level<false>(fmz[k], MassAccuracy);
+					break;
+				}
+				if (w - wc < 0.0) for (i = QS - 1; i >= 0; i--) if (w > coo[i]) {
+					for (int j = 0; j < i; j++) {
+						coo[j] = coo[j + 1];
+						for (k = 0; k < m; k++) profiles[k * QW + j] = profiles[k * QW + j + 1];
+					}
+					coo[i] = w;
+					for (k = 0; k < m; k++) profiles[k * QW + i] = scans[pos].level<false>(fmz[k], MassAccuracy);
+					break;
+				}
+			}
+		}
+	}
+
+	double q1_delta(int apex, float pr_mz, float mz, int QS) {
+		float _mz = mz;
+		int QW = 2 * QS + 1;
+		float *profiles = (float*)alloca(QW * sizeof(float)), *coo = (float*)alloca(QW * sizeof(float));
+		q1_profiles(profiles, coo, apex, &_mz, QS, 1);
+		return centroid_coo(profiles, coo, QW) - pr_mz;
+	}
+#endif
+
 	class Search {
 	public:
 		std::vector<Elution> peaks;
@@ -3992,7 +4048,7 @@ public:
 		float best_corr_sum = 0.0, total_corr_sum = 0.0;
 
 		std::vector<Fragment> quant;
-		float RT, cscore, quantity, qvalue = 1.0, protein_qvalue = 0.0, best_fr_mz;
+		float RT, cscore, quantity, qvalue = 1.0, protein_qvalue = 0.0, best_fr_mz, q1_shift = 0.0;
 		int apex, peak_width, best_peak, nn_index, nn_inc;
 		int peak_pos, best_fragment;
 		float mass_delta = 0.0, mass_delta_mz = 0.0, mass_delta_ms1 = 0.0;
@@ -4024,11 +4080,13 @@ public:
 		void build_index() {
 			int i, k, n = run->scans.size();
 
-			float mz = pep->mz;
+			float mz = pep->mz, qmz = pep->mz;
+			if (Abs(run->Q1Correction) < Min(Abs(run->tandem_max - mz), Abs(mz - run->tandem_min)) * 0.5) qmz += run->Q1Correction;
+
 			auto scan_index = &(run->ScanIndex[thread_id]);
-			for (i = k = 0; i < n; i++) if (run->scans[i].has(mz)) k++;
+			for (i = k = 0; i < n; i++) if (run->scans[i].has(qmz)) k++;
 			scan_index->resize(k);
-			for (i = k = 0; i < n; i++) if (run->scans[i].has(mz)) (*scan_index)[k++] = i;
+			for (i = k = 0; i < n; i++) if (run->scans[i].has(qmz)) (*scan_index)[k++] = i;
 
 			if (!QuantOnly) {
 				if (WindowRadius) S = WindowRadius;
@@ -4045,7 +4103,7 @@ public:
 
 			int n, m, S, W;
 
-			float *nf, *ms1, *ms2, *ms2_H, *ms2_e, *ms2_min, *ms2_tight_one, *ms2_tight_two, *shadow, mz;
+			float *nf, *ms1, *ms2, *ms2_H, *ms2_e, *ms2_min, *ms2_tight_one, *ms2_tight_two, *shadow, mz, qmz;
 			std::vector<bool> * covered;
 			std::vector<Product> * fragments;
 			std::vector<int> *scan_index, *fri;
@@ -4261,7 +4319,7 @@ public:
 								query_mz = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[fr].mz - C13delta, run->scan_RT[i]); // assume charge 1 for the interfering fragment
 								shadow[l * fr + ind] = run->scans[i].level<false>(query_mz, run->MassAccuracy);
 
-								float hmz = mz + C13delta / (double)pr->pep->charge;
+								float hmz = mz + (C13delta / (double)pr->pep->charge) + run->Q1Correction;
 								query_mz = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[fr].mz + C13delta / (double)(*fragments)[fr].charge, run->scan_RT[i]);
 								int hi = -1;
 								if (run->scans[i].has(hmz)) hi = i;
@@ -4288,48 +4346,6 @@ public:
 					}
 				}
 			}
-
-#if Q1
-#define Sgn(x) ((x) >= 0.0 ? (1.0) : (-1.0))
-#define WinCenter(x) (0.5 * (run->scans[x].window_low + run->scans[x].window_high))
-
-			void q1_profiles(float * profiles, float * coo, int apex, float * fmz, int QS, int m) {
-				int i, j, k, pos, QW = 2 * QS + 1;
-				float rt = run->scan_RT[apex];
-				float u, wc = WinCenter(apex);
-				for (i = 0; i < QW * m; i++) profiles[i] = 0.0;
-				for (i = QS + 1; i < QW; i++) coo[i] = INF;
-				for (i = 0; i < QS; i++) coo[i] = -INF;
-				for (j = 0; j < m; j++) profiles[j * QW + QS] = run->scans[apex].level<false>(fmz[j], run->MassAccuracy);
-				coo[QS] = wc;
-
-				for (int inc = -1; inc <= 1; inc += 2) {
-					int lsgn = Sgn(WinCenter(apex + inc) - wc);
-					for (pos = apex + inc; pos >= 0 && pos < run->scans.size(); pos += inc) {
-						int dw = WinCenter(pos) - wc;
-						if (Sgn(dw) != lsgn) break;
-						if (dw >= 0.0) for (i = QS + 1; i < QW; i++) if (dw < coo[i]) {
-							for (int j = QW - 1; j > i; j--) {
-								coo[j] = coo[j - 1];
-								for (k = 0; k < m; k++) profiles[k * QW + j] = profiles[k * QW + j - 1];
-							}
-							coo[i] = dw;
-							for (k = 0; k < m; k++) profiles[k * QW + i] = run->scans[pos].level<false>(fmz[k], run->MassAccuracy);
-							break;
-						}
-						if (dw < 0.0) for (i = QS - 1; i >= 0; i--) if (dw > coo[i]) {
-							for (int j = 0; j < i; j++) {
-								coo[j] = coo[j + 1];
-								for (k = 0; k < m; k++) profiles[k * QW + j] = profiles[k * QW + j + 1];
-							}
-							coo[i] = dw;
-							for (k = 0; k < m; k++) profiles[k * QW + i] = run->scans[pos].level<false>(fmz[k], run->MassAccuracy);
-							break;
-						}
-					}
-				}
-			}
-#endif
 
 			noninline void peaks() {
 				if (!m) return;
@@ -4458,7 +4474,7 @@ public:
 					float *qprofile = (float*)alloca(QW * Min(m, TopF) * sizeof(float)), *ws = (float*)alloca(QW * sizeof(float)), *fmz = (float*)alloca(Min(m, TopF) * sizeof(float));
 					float rt = run->scan_RT[apex];
 					for (i = 0; i < Min(m, TopF); i++) fmz[i] = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[i].mz, rt);
-					q1_profiles(qprofile, ws, apex, fmz, QS, Min(m, TopF));
+					run->q1_profiles(qprofile, ws, apex, fmz, QS, Min(m, TopF));
 					for (i = 0; i < qL; i++) sc[pQPos + i] = centroid_coo(qprofile + best_fr * QW + QS - QSL[i], ws + QS - QSL[i], 2 * QSL[i] + 1) - fmz[best_fr];
 					for (fr = 0; fr < Min(m, TopF); fr++) if (fr != best_fr)
 						for (i = 0; i < qL; i++) sc[pQCorr + i] += corr(qprofile + fr * QW + QS - QSL[i], qprofile + best_fr * QW + QS - QSL[i], 2 * QSL[i] + 1);
@@ -4650,6 +4666,10 @@ public:
 			e = elution[k - low] * 0.5;
 			for (pos = info[0].peak_width = 0; pos < len; pos++) if (elution[pos] >= e)
 				info[0].peak_width++;
+#if Q1
+			float bmz = run->predicted_mz(&(run->MassCorrection[0]), info[0].best_fr_mz, info[0].RT);
+			info[0].q1_shift = run->q1_delta(info[0].apex, pep->mz, bmz, QSL[qL - 1]);
+#endif
 			if (stats_only) return;
 
 			for (fr = 0; fr < info[0].quant.size(); fr++) {
@@ -4767,12 +4787,15 @@ public:
 			int S = Max(1, le.window / 2);
 			scan_index->resize(2 * S + 1);
 			(*scan_index)[S] = apex;
+
+			float qmz = mz;
+			if (Abs(run->Q1Correction) < Min(Abs(run->tandem_max - mz), Abs(mz - run->tandem_min)) * 0.5) qmz += run->Q1Correction;
 			for (high = S, i = apex + 1; i < run->scans.size(); i++) {
-				if (run->scans[i].has(mz)) (*scan_index)[++high] = i;
+				if (run->scans[i].has(qmz)) (*scan_index)[++high] = i;
 				if (high >= 2 * S) break;
 			}
 			for (low = S, i = apex - 1; i >= 0; i--) {
-				if (run->scans[i].has(mz)) (*scan_index)[--low] = i;
+				if (run->scans[i].has(qmz)) (*scan_index)[--low] = i;
 				if (low <= 0) break;
 			}
 
@@ -4787,17 +4810,17 @@ public:
 
 			Peak * new_fr = (Peak*)alloca(gen.size() * sizeof(Peak));
 			for (fr = cnt = 0, max = 0.0; fr < gen.size(); fr++) {
-				float mz = gen[fr].mz;
-				if (mz < MinFrMz || mz > MaxFrMz) continue;
-				if (mz <= run->tandem_min || mz >= run->tandem_max) continue;
-				float query_mz = run->predicted_mz(&(run->MassCorrection[0]), mz, run->scan_RT[apex]);
+				float fmz = gen[fr].mz;
+				if (fmz < MinFrMz || fmz > MaxFrMz) continue;
+				if (fmz <= run->tandem_min || fmz >= run->tandem_max) continue;
+				float query_mz = run->predicted_mz(&(run->MassCorrection[0]), fmz, run->scan_RT[apex]);
 				for (i = 0; i < l; i++) x[i] = run->scans[(*scan_index)[low + i]].level<false>(query_mz, run->MassAccuracy * 1.0);
 				u = x[S - low];
 				if (u >= best_height * MinRelFrHeight && u >= MinGenFrInt) {
 					float c = corr(x, elution, l);
 					if (gen[fr].type == type_b) c -= FrCorrBSeriesPenalty;
 					if (c >= MinGenFrCorr && (c >= MinRareFrCorr || ((gen[fr].charge == 1 || pep->charge >= 3) && gen[fr].loss == loss_none))) {
-						new_fr[cnt].mz = mz, new_fr[cnt].height = u;
+						new_fr[cnt].mz = fmz, new_fr[cnt].height = u;
 						if (u > max) max = u;
 						cnt++;
 					}
@@ -5254,11 +5277,12 @@ public:
 				int ap = entries[i].target.info[0].apex;
 				IDs[ap].push_back(i);
 				if (StrictIfsPeptideRemoval) {
-					for (int k = ap + 1; k < Min(scans.size(), ap + MaxCycleLength); k++) if (scans[k].has(entries[i].target.pep->mz)) {
+					float qmz = entries[i].target.pep->mz + Q1Correction;
+					for (int k = ap + 1; k < Min(scans.size(), ap + MaxCycleLength); k++) if (scans[k].has(qmz)) {
 						IDs[k].push_back(i);
 						break;
 					}
-					for (int k = ap - 1; k >= Max(0, ap - MaxCycleLength); k--) if (scans[k].has(entries[i].target.pep->mz)) {
+					for (int k = ap - 1; k >= Max(0, ap - MaxCycleLength); k--) if (scans[k].has(qmz)) {
 						IDs[k].push_back(i);
 						break;
 					}
@@ -5324,9 +5348,10 @@ public:
 				mz = es.pep->mz, delta = C13delta / (double)es.pep->charge;
 
 				remove_ifs(i, start, es);
-				for (j = i - 2; j <= i + 2; j++) if (j != i && j >= 0 && j < scans.size()) if (scans[j].has(mz, QuadrupoleError) || (UseIsotopes &&
-					(scans[j].has(mz + delta, QuadrupoleError) || scans[j].has(mz + 2.0 * delta, QuadrupoleError)
-					|| scans[j].has(mz + 3.0 * delta, QuadrupoleError) || scans[j].has(mz + 4.0 * delta, QuadrupoleError)))) remove_ifs(j, -1, es);
+				float qmz = mz + Q1Correction;
+				for (j = i - 2; j <= i + 2; j++) if (j != i && j >= 0 && j < scans.size()) if (scans[j].has(qmz, QuadrupoleError) || (UseIsotopes &&
+					(scans[j].has(qmz + delta, QuadrupoleError) || scans[j].has(qmz + 2.0 * delta, QuadrupoleError)
+					|| scans[j].has(qmz + 3.0 * delta, QuadrupoleError) || scans[j].has(qmz + 4.0 * delta, QuadrupoleError)))) remove_ifs(j, -1, es);
 			}
 		}
 	}
@@ -5825,7 +5850,7 @@ public:
 		return calculate_qvalues();
 	}
 
-    void update(bool set_RT_window, bool set_scan_window, bool calibrate, bool gen_ref) {
+    void update(bool set_RT_window, bool set_scan_window, bool calibrate, bool calibrate_q1, bool gen_ref) {
 		if (Verbose >= 2) Time(), std::cout << "Calibrating retention times\n";
 		int peak_width = 0, peak_cnt = 0, mass_cnt = 0, mass_cnt_ms1 = 0;
 
@@ -5833,6 +5858,9 @@ public:
 			rt_stats.clear();
 			rt_ref.clear();
 			rt_coo.clear();
+#if Q1
+			if (calibrate_q1) q1_diff.clear();
+#endif
 
 			for (auto it = entries.begin(); it != entries.end(); it++) {
 				if (!(it->target.flags & fFound)) continue;
@@ -5845,8 +5873,12 @@ public:
 				if (it->target.info[0].qvalue <= iRTMaxQvalue || it->target.info[0].cscore >= iRT_cscore) {
 					int index = std::distance(entries.begin(), it);
 					rt_stats.push_back(index);
-					if (it->target.info[0].qvalue <= iRTMaxQvalue && it->target.info[0].cscore >= iRT_ref_score)
+					if (it->target.info[0].qvalue <= iRTMaxQvalue && it->target.info[0].cscore >= iRT_ref_score) {
 						peak_width += it->target.info[0].peak_width, peak_cnt++;
+#if Q1
+						if (calibrate_q1) q1_diff.push_back(it->target.info[0].q1_shift);
+#endif
+					}
 					if (gen_ref && it->target.info[0].cscore >= iRT_ref_score) rt_ref.push_back(it->target.pep->index);
 				}
 			}
@@ -5897,6 +5929,17 @@ public:
 
 				window_calculated = true;
 			}
+
+#if Q1
+			if (calibrate_q1) {
+				int k = 0;
+				float diff = 0.0;
+				std::sort(q1_diff.begin(), q1_diff.end());
+				for (int i = (q1_diff.size() / 5); i < q1_diff.size() - (q1_diff.size() / 5); i++) diff += q1_diff[i], k++;
+				Q1Correction = diff / (float)k;
+				if (Verbose >= 1) Time(), std::cout << "Q1 correction: " << Q1Correction << " Th\n";
+			}
+#endif
 		}
 
 		if (calibrate) {
@@ -6263,7 +6306,7 @@ public:
 			fit_weights(Batches);
 			calculate_qvalues();
 		}
-		update(RTWindowedSearch, RefCal && InferWindow, RefCal && Calibrate, false);
+		update(RTWindowedSearch, RefCal && InferWindow, RefCal && Calibrate, Q1Cal && scanning, false);
 		free_precursors();
 		in_ref_run = false;
 
@@ -6296,7 +6339,7 @@ public:
 
 				curr_iter = curr_batch ? 1 : 0;
 				update_classifier(true, false, false, false, 0, curr_batch); ids = Ids10;
-				update(false, false, false, false);
+				update(false, false, false, false, false);
 				cal_batch = curr_batch;
 				if (ids >= MinCal && do_calibrate) {
 					recalibrate = false;
@@ -6311,7 +6354,7 @@ public:
 				curr_iter = CalibrationIter;
 				update_classifier(true, false, false, false, 0, curr_batch);
 				RemoveMassAccOutliers = false, recalibrate = true;
-				update(false, false, true, false), recalibrate = false;
+				update(false, false, true, false, false), recalibrate = false;
 				MassAccuracy = Min(CalibrationMassAccuracy, MassAccuracy * 5.0);
 				MassAccuracyMs1 = Min(CalibrationMassAccuracy, MassAccuracyMs1 * 5.0);
 				if (Verbose >= 2) Time(), std::cout << "Recalibrating with mass accuracy " << MassAccuracy << ", " << MassAccuracyMs1 << " (MS2, MS1)\n";
@@ -6323,13 +6366,13 @@ public:
 			for (curr_iter = curr_iter + 1; curr_iter <= CalibrationIter; curr_iter++)
 				update_classifier(true, false, false, false, 0, curr_batch);
 			RemoveMassAccOutliers = false;
-			update(RTWindowedSearch, InferWindow && !window_calculated, Calibrate && !mz_calibrated, false);
+			update(RTWindowedSearch, InferWindow && !window_calculated, Calibrate && !mz_calibrated, Q1Cal && scanning, false);
 			if (acc_calibrated) {
 				if (Verbose >= 3) Time(), std::cout << "Refining mass correction\n";
 				RemoveMassAccOutliers = true;
 				MassAccOutlier = MassAccuracy;
 				MassAccMs1Outlier = MassAccuracyMs1;
-				update(false, false, true, false);
+				update(false, false, true, false, false);
 				RemoveMassAccOutliers = false;
 			}
 			if (ForceMassAcc) {
@@ -6356,7 +6399,7 @@ public:
 			curr_iter = CalibrationIter + 1;
 			update_classifier(true, false, false, false, 0, curr_batch); ids = Ids10;
 			copy_weights(best_weights, selection_weights), copy_weights(best_guide_weights, selection_guide_weights), best_ids = ids;
-			update(false, false, false, false);
+			update(false, false, false, false, false);
 			if (ids >= MinClassifier) break;
 			if (acc_calibrated && curr_batch >= cal_batch) break;
 		}
@@ -6388,7 +6431,7 @@ public:
 				reset_weights(), par_limit = true;
 				if (Verbose >= 3) Time(), std::cout << "Resetting weights and preventing the linear classifier from using the full set of weights in the future\n";
 			}
-			else update(false, false, false, false);
+			else update(false, false, false, false, false);
 
 			GlobalMassAccuracy = MassAccuracy;
 			GlobalMassAccuracyMs1 = MassAccuracyMs1;
@@ -6412,7 +6455,7 @@ public:
  			}
 			if (Ids10 >= best_ids) {
 				copy_weights(best_weights, selection_weights), copy_weights(best_guide_weights, selection_guide_weights), best_ids = Ids10;
-				update(false, false, false, false);
+				update(false, false, false, false, false);
 			} else {
 				copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
 				if (Verbose >= 3) Time(), std::cout << "Reverting weights\n";
@@ -6424,7 +6467,7 @@ public:
 				if (Ids10 < best_ids) {
 					if (Verbose >= 3) Time(), std::cout << "Reverting weights\n";
 					copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
-				} else best_ids = Ids10, update(false, false, false, false);
+				} else best_ids = Ids10, update(false, false, false, false, false);
 				if (fail >= 1) {
 					curr_iter = nnIter - 1;
 					break;
@@ -6439,7 +6482,7 @@ public:
 		all_iters = true;
 		copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
 		update_classifier(true, false, true, true, processed_batches + 1, Batches);
-		update(false, false, false, false);
+		update(false, false, false, false, false);
 
 		if (IDsInterference) {
 			if (Verbose >= 1) Time(), std::cout << "Removing interferences\n";
@@ -6461,7 +6504,7 @@ public:
 		if (Standardise) standardise();
 		fit_weights(Batches); // train the neural network
 		calculate_qvalues();
-		update(false, false, false, GenRef && curr_iter == iN - 1);
+		update(false, false, false, false, GenRef && curr_iter == iN - 1);
 
 	report:
 		curr_iter = iN;
@@ -6475,6 +6518,7 @@ public:
 		quant.lib_size = lib->entries.size();
 		quant.RS = RS;
 		quant.tandem_min = tandem_min, quant.tandem_max = tandem_max;
+		quant.Q1Correction = Q1Correction;
 		quant.MassAccuracy = MassAccuracy, quant.MassAccuracyMs1 = MassAccuracyMs1;
 		quant.MassCorrection = MassCorrection, quant.MassCorrectionMs1 = MassCorrectionMs1;
 		quant.MassCalSplit = MassCalSplit, quant.MassCalSplitMs1 = MassCalSplitMs1, quant.MassCalCenter = MassCalCenter, quant.MassCalCenterMs1 = MassCalCenterMs1;
@@ -6723,6 +6767,7 @@ quant_only:
 				e->target.info[0].qvalue = pos->pr.qvalue;
 				e->target.info[0].protein_qvalue = pos->pr.protein_qvalue;
 			}
+			run.Q1Correction = Q.Q1Correction;
 			run.MassAccuracy = Q.MassAccuracy, run.MassAccuracyMs1 = Q.MassAccuracyMs1;
 			run.MassCorrection = Q.MassCorrection, run.MassCorrectionMs1 = Q.MassCorrectionMs1;
 			run.MassCalSplit = Q.MassCalSplit, run.MassCalSplitMs1 = Q.MassCalSplitMs1;
@@ -6827,6 +6872,7 @@ gen_spec_lib:
 			run.load_library(&lib);
 			run.full_spectrum = true;
 
+			run.Q1Correction = Q->Q1Correction;
 			run.MassAccuracy = Q->MassAccuracy, run.MassAccuracyMs1 = Q->MassAccuracyMs1;
 			run.MassCorrection = Q->MassCorrection, run.MassCorrectionMs1 = Q->MassCorrectionMs1;
 			run.MassCalSplit = Q->MassCalSplit, run.MassCalSplitMs1 = Q->MassCalSplitMs1;
