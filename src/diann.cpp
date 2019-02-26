@@ -82,6 +82,7 @@ char * wiff_load_func = "?diann_wiff_load@@YAPEAXPEAD_NH@Z";
 #define Min(x, y) ((x) < (y) ? (x) : (y))
 #define Max(x, y) ((x) > (y) ? (x) : (y))
 #define Abs(x) ((x) >= 0 ? (x) : (-(x)))
+#define Sgn(x) ((x) >= 0.0 ? (1) : (-1))
 #define Sqr(x) ((x) * (x))
 #define Cube(x) ((x) * Sqr(x))
 
@@ -151,8 +152,12 @@ bool MassCalFilter = true;
 int RTSegments = 20;
 int MinRTPredBin = 20;
 
-bool RefCal = false;
+bool UseQ1 = true;
 bool Q1Cal = false;
+int MaxQ1Bins = 3;
+int MaxIfsSpan = 4;
+
+bool RefCal = false;
 int RTWindowIter = 4;
 const int RTRefWindowFactor = 10;
 const int RTWindowFactor = 40;
@@ -177,7 +182,6 @@ double TightMassAccRatioTwo = 0.2;
 
 bool UseIsotopes = true;
 int IDsInterference = 1;
-bool StrictIfsPeptideRemoval = false;
 double InterferenceCorrMargin = 3.0;
 bool MS2Range = true;
 bool GuideClassifier = false;
@@ -249,7 +253,7 @@ int MaxRecCharge = 19;
 int MaxRecLoss = loss_N;
 
 double MinMs1RangeOverlap = 0.25;
-double QuadrupoleError = 2.0;
+double QuadrupoleError = 1.0;
 
 std::string CutAfter = "RK";
 std::string NoCutBefore = "";
@@ -297,10 +301,6 @@ std::vector<std::string> TrackedPrecursors;
 
 #define Q1 TRUE
 #define REPORT_SCORES FALSE
-
-#if Q1
-bool UseQ1 = true;
-#endif
 
 enum {
 	libPr, libCharge, libPrMz,
@@ -2371,7 +2371,7 @@ public:
 		for (auto file : files) {
 			if (Verbose >= 1) Time(), std::cout << "Loading protein annotations from FASTA " << file << "\n";
 			std::ifstream in(file);
-			if (in.fail() || temp_folder.size()) {
+			if (in.fail()) {
 				std::cout << "cannot read the file\n";
 				return false;
 			}
@@ -3252,8 +3252,6 @@ public:
 				if (!decoys && dc) continue;
 				std::string prefix = dc ? std::string("DECOY") : "";
 				auto &pep = dc ? it.decoy : it.target;
-				if (!pep.fragments.size())
-					std::cout << targets_written + 1 << ": no fragments: " << name.c_str() << "\n"; // HACK
 				int fr_cnt = 0;
 				for (int fr = 0; fr < pep.fragments.size(); fr++) {
 					int fr_type, fr_loss, fr_num, fr_charge = ions[fr].charge;
@@ -3851,6 +3849,7 @@ public:
     int n_scans = 0;
 	std::vector<double> RT_coeff, RT_points, iRT_coeff, iRT_points;
     std::vector<float> scan_RT; // list of RTs of scans
+	std::vector<int> scan_cycle; // list of SWATH cycle numbers
 	double RT_window, RT_min = 0.0, RT_max = 0.0;
 	double tandem_min = 0.0, tandem_max = INF;
 	bool full_spectrum = false;
@@ -3990,7 +3989,6 @@ public:
     }
 
 #if Q1
-#define Sgn(x) ((x) >= 0.0 ? (1.0) : (-1.0))
 #define WinCenter(x) (0.5 * (scans[x].window_low + scans[x].window_high))
 
 	void q1_profiles(float * profiles, float * coo, int apex, float * fmz, int QS, int m) {
@@ -4475,7 +4473,7 @@ public:
 					float rt = run->scan_RT[apex];
 					for (i = 0; i < Min(m, TopF); i++) fmz[i] = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[i].mz, rt);
 					run->q1_profiles(qprofile, ws, apex, fmz, QS, Min(m, TopF));
-					for (i = 0; i < qL; i++) sc[pQPos + i] = centroid_coo(qprofile + best_fr * QW + QS - QSL[i], ws + QS - QSL[i], 2 * QSL[i] + 1) - mz;
+					for (i = 0; i < qL; i++) sc[pQPos + i] = centroid_coo(qprofile + best_fr * QW + QS - QSL[i], ws + QS - QSL[i], 2 * QSL[i] + 1) - mz - run->Q1Correction;
 					for (fr = 0; fr < Min(m, TopF); fr++) if (fr != best_fr)
 						for (i = 0; i < qL; i++) sc[pQCorr + i] += corr(qprofile + fr * QW + QS - QSL[i], qprofile + best_fr * QW + QS - QSL[i], 2 * QSL[i] + 1);
 				}
@@ -4936,7 +4934,7 @@ public:
 	}
 
 	void init() { // called after read()
-		int i;
+		int i, cycle = 0;
 		n_scans = scans.size();
 		if (ExportWindows) {
 			if (Verbose >= 1) Time(), std::cout << "Exporting window acquisition scheme\n";
@@ -4945,12 +4943,16 @@ public:
 			for (i = 0; i < Min(n_scans, MaxCycleLength); i++) out << scans[i].window_low << "\t" << scans[i].window_high << "\n";
 			out.close();
 		}
+		scan_cycle.resize(n_scans); if (n_scans) scan_cycle[0] = 0;
 		for (i = 1; i < n_scans; i++) { // handle overlapping windows
+			if (!scanning && scans[i].window_high > scans[i - 1].window_high + E && Abs(scans[i].window_low - scans[i - 1].window_high) < E && scans[i].RT - scans[i - 1].RT < (1.0 / (60.0 * 50.0)))
+				scanning = true;
 			if (scans[i - 1].window_low < scans[i].window_low - E && scans[i - 1].window_high < scans[i].window_high - E && scans[i - 1].window_high > scans[i].window_low + E)
 				scans[i - 1].window_high = scans[i].window_low = (scans[i - 1].window_high + scans[i].window_low) * 0.5;
 			if (scans[i - 1].window_low > scans[i].window_low + E && scans[i - 1].window_high > scans[i].window_high + E && scans[i - 1].window_low < scans[i].window_high - E)
 				scans[i - 1].window_low = scans[i].window_high = (scans[i - 1].window_low + scans[i].window_high) * 0.5;
-			if (!scanning && Abs(scans[i - 1].RT - scans[i].RT) < E) scanning = true;
+			if (scans[i - 1].window_high < scans[i].window_high && scans[i - 1].window_low < scans[i].window_low) scan_cycle[i] = cycle;
+			else scan_cycle[i] = ++cycle;
 		}
 		if (Verbose >= 1 && scanning) Time(), std::cout << "Scanning SWATH run\n";
 		scan_RT.resize(n_scans);
@@ -5273,21 +5275,8 @@ public:
 		IDs.clear();
 		IDs.resize(scans.size());
 		for (i = 0; i < entries.size(); i++)
-			if (entries[i].target.flags & fFound) {
-				int ap = entries[i].target.info[0].apex;
-				IDs[ap].push_back(i);
-				if (StrictIfsPeptideRemoval) {
-					float qmz = entries[i].target.pep->mz + Q1Correction;
-					for (int k = ap + 1; k < Min(scans.size(), ap + MaxCycleLength); k++) if (scans[k].has(qmz)) {
-						IDs[k].push_back(i);
-						break;
-					}
-					for (int k = ap - 1; k >= Max(0, ap - MaxCycleLength); k--) if (scans[k].has(qmz)) {
-						IDs[k].push_back(i);
-						break;
-					}
-				}
-			}
+			if (entries[i].target.flags & fFound)  
+				IDs[entries[i].target.info[0].apex].push_back(i);
 
 		for (i = 0; i < scans.size(); i++) {
 			if (IDs[i].size() < 2) continue;
@@ -5297,28 +5286,35 @@ public:
 
 	inline void remove_ifs(int i, int start, Precursor &es) {
 		int fr;
-		float smz, nmz, tot_corr, ifs_corr, smax = es.info[0].cscore;
+		float smz, nmz, error, tot_corr, ifs_corr, smax = es.info[0].cscore;
 
 		for (int next = start + 1; next < IDs[i].size(); next++) {
 			if (IDs[i][next] < 0) continue;
 			auto &en = entries[IDs[i][next]].target;
 			if (en.info[0].cscore > smax) continue;
 
+			float masses[TopF];
+			for (fr = 0; fr < TopF; fr++) masses[fr] = 0.0;
 			for (fr = 0, tot_corr = ifs_corr = 0.0; fr < Min(TopF, en.info[0].quant.size()); fr++) tot_corr += en.info[0].quant[fr].corr;
 			for (int l = 0; l < Min(TopF, en.pep->fragments.size()); l++) {
-				nmz = 0.0;
-				scans[i].level<true>(predicted_mz(&(MassCorrection[0]), en.pep->fragments[l].mz, en.info[0].RT), MassAccuracy, &nmz);
-				if (nmz < E) continue;
+				if (masses[l] > E) nmz = masses[l];
+				else nmz = en.pep->fragments[l].mz;
 				for (int k = 0; k < Min(TopF, es.pep->fragments.size()); k++) {
-					if (nmz < es.pep->fragments[k].mz - 0.1) continue;
-					if (nmz > es.pep->fragments[k].mz + 1.1) continue;
+					smz = es.pep->fragments[k].mz;
+					error = smz * 2.0 * MassAccuracy;
+					if (nmz < smz - error) continue;
+					if (nmz > C13delta + smz + error) continue;
 					smz = 0.0;
-					if (Abs(nmz - es.pep->fragments[k].mz) < 0.1)
+					if (Abs(nmz - es.pep->fragments[k].mz) < error)
 						scans[i].level<true>(predicted_mz(&(MassCorrection[0]), es.pep->fragments[k].mz, es.info[0].RT), MassAccuracy, &smz);
 					else {
 						if (!UseIsotopes) continue;
-						if (Abs(nmz - es.pep->fragments[k].mz - C13delta / (double)es.pep->fragments[k].charge) >= 0.1) continue;
+						if (Abs(nmz - es.pep->fragments[k].mz - C13delta / (double)es.pep->fragments[k].charge) >= error) continue;
 						scans[i].level<true>(predicted_mz(&(MassCorrection[0]), es.pep->fragments[k].mz + C13delta / (double)es.pep->fragments[k].charge, es.info[0].RT), MassAccuracy, &smz);
+					}
+					if (masses[l] <= E) {
+						scans[i].level<true>(predicted_mz(&(MassCorrection[0]), en.pep->fragments[l].mz, en.info[0].RT), MassAccuracy, &nmz);
+						masses[l] = nmz;
 					}
 					if (Abs(smz - nmz) < E && smz > E && nmz > E) {
 						ifs_corr += en.info[0].quant[l].corr;
@@ -5345,13 +5341,15 @@ public:
 			for (int start = 0; start < IDs[i].size() - 1; start++) {
 				if (IDs[i][start] < 0) continue; // already removed
 				auto &es = entries[IDs[i][start]].target;
-				mz = es.pep->mz, delta = C13delta / (double)es.pep->charge;
-
 				remove_ifs(i, start, es);
-				float qmz = mz + Q1Correction;
-				for (j = i - 2; j <= i + 2; j++) if (j != i && j >= 0 && j < scans.size()) if (scans[j].has(qmz, QuadrupoleError) || (UseIsotopes &&
-					(scans[j].has(qmz + delta, QuadrupoleError) || scans[j].has(qmz + 2.0 * delta, QuadrupoleError)
-					|| scans[j].has(qmz + 3.0 * delta, QuadrupoleError) || scans[j].has(qmz + 4.0 * delta, QuadrupoleError)))) remove_ifs(j, -1, es);
+				
+				float qmz = es.pep->mz + Q1Correction, delta = C13delta / (double)es.pep->charge;
+				for (j = Max(0, i - MaxQ1Bins); j < scans.size() && j <= i + MaxIfsSpan; j++) {
+					if (j == i || Sgn(scans[j].window_low - scans[i].window_low) != Sgn(j - i)) continue;
+					if ((scanning && Abs(j - i) <= MaxQ1Bins + 1) || scans[j].has(qmz, QuadrupoleError) || (UseIsotopes &&
+						(scans[j].has(qmz + delta, QuadrupoleError) || scans[j].has(qmz + 2.0 * delta, QuadrupoleError)
+							|| scans[j].has(qmz + 3.0 * delta, QuadrupoleError) || scans[j].has(qmz + 4.0 * delta, QuadrupoleError)))) remove_ifs(j, -1, es);
+				}
 			}
 		}
 	}
