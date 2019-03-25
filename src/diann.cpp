@@ -56,6 +56,7 @@ visit http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative C
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <ctime>
 #include <iomanip>
 #include <string>
 #include <regex>
@@ -153,9 +154,12 @@ int RTSegments = 20;
 int MinRTPredBin = 20;
 
 bool UseQ1 = true;
+bool ForceQ1 = false;
 bool Q1Cal = false;
+bool Q1CalLinear = false;
 int MaxQ1Bins = 3;
 int MaxIfsSpan = 4;
+bool ForceQ1Apex = false;
 
 bool RefCal = false;
 int RTWindowIter = 4;
@@ -183,10 +187,12 @@ double TightMassAccRatioTwo = 0.2;
 bool UseIsotopes = true;
 int IDsInterference = 1;
 double InterferenceCorrMargin = 3.0;
+bool StrictIntRemoval = false;
 bool MS2Range = true;
 bool GuideClassifier = false;
 
 bool RTWindowedSearch = true;
+bool DisableRT = false;
 
 const int CalibrationIter = 4;
 bool ForceMassAcc = false;
@@ -204,7 +210,7 @@ double MinCorrScore = 0.5;
 double MaxCorrDiff = 2.0;
 bool LibFreeAllPeaks = false;
 
-int MinMassDeltaCal = 50;
+int MinMassDeltaCal = 20;
 
 int Ids01, Ids1, Ids10, Ids50, IdsCal;
 int MinCalRec = 100;
@@ -310,13 +316,13 @@ enum {
 };
 
 std::vector<std::string> library_headers = {
-	" ModifiedPeptide FullUniModPeptideName \"FullUniModPeptideName\" ",
-	" PrecursorCharge Charge \"PrecursorCharge\" ",
-	" PrecursorMz \"PrecursorMz\" ",
-	" iRT iRT RetentionTime NormalizedRetentionTime Tr_recalibrated \"Tr_recalibrated\" ",
-	" FragmentMz ProductMz \"ProductMz\" ",
-	" RelativeIntensity RelativeFragmentIntesity LibraryIntensity \"LibraryIntensity\" ",
-	" UniProtIds UniprotID \"UniprotID\" ",
+	" ModifiedPeptide FullUniModPeptideName \"FullUniModPeptideName\" modification_sequence ",
+	" PrecursorCharge Charge \"PrecursorCharge\" prec_z ",
+	" PrecursorMz \"PrecursorMz\" Q1 ",
+	" iRT iRT RetentionTime NormalizedRetentionTime Tr_recalibrated \"Tr_recalibrated\" RT_detected ",
+	" FragmentMz ProductMz \"ProductMz\" Q3 ",
+	" RelativeIntensity RelativeFragmentIntesity LibraryIntensity \"LibraryIntensity\" relative_intensity ",
+	" UniProtIds UniprotID \"UniprotID\" uniprot_id ",
 	" Protein Name Protein.Name ProteinName \"ProteinName\" ",
 	" Genes Gene Genes \"Genes\" ",
 	" IsProteotypic Is.Proteotypic Proteotypic ",
@@ -328,6 +334,19 @@ std::vector<std::string> library_headers = {
 const double proton = 1.007825035;
 const double OH = 17.003288;
 const double C13delta = 1.003355;
+
+std::vector<std::pair<std::string, std::string> > UniMod;
+std::vector<std::pair<std::string, int> > UniModIndex;
+std::vector<int> UniModIndices;
+
+struct PTM {
+	std::string name;
+	std::string aas;
+	float mass;
+
+	void init(const std::string &_name, const std::string &_aas, float _mass) { name = _name, aas = _aas, mass = _mass; }
+};
+std::vector<PTM> FixedMods, VarMods;
 
 std::vector<std::pair<std::string, float> > Modifications = {
 	std::pair<std::string, float>("UniMod:4", (float)57.021464),
@@ -399,18 +418,9 @@ std::vector<std::pair<std::string, float> > Modifications = {
 	std::pair<std::string, float>("UniMod:268", (float)6.013809),
 	std::pair<std::string, float>("UniMod:269", (float)10.027228)
 };
-std::vector<std::pair<std::string, std::string> > UniMod;
-std::vector<std::pair<std::string, int> > UniModIndex;
-std::vector<int> UniModIndices;
 
-struct PTM {
-	std::string name;
-	std::string aas;
-	float mass;
-
-	void init(const std::string &_name, const std::string &_aas, float _mass) { name = _name, aas = _aas, mass = _mass; }
-};
-std::vector<PTM> FixedMods, VarMods;
+std::vector<string> UnknownMods;
+int MaxCycleShift = 200;
 
 inline char to_lower(char c) { return c + 32; }
 
@@ -498,6 +508,9 @@ std::vector<std::string> oh = { // output headers
 
 double NormalisationQvalue = 0.01;
 double NormalisationPeptidesFraction = 0.4;
+bool LocalNormalisation = true;
+int LocNormRadius = 250;
+double LocNormMax = 2.0;
 
 #define HASH 0
 #if (HASH > 0)
@@ -548,11 +561,11 @@ public:
 int MaxF = INF, MinF = 0;
 const int TopF = 6, auxF = 12;
 const int nnS = 2, nnW = (2 * nnS) + 1;
-const int qL = 3;
-const int QSL[qL] = { 1, 3, 8 };
+const int qL = 2;
+const int QSL[qL] = { 1, 3 };
 enum {
 	pTimeCorr,
-	pMinCorr, pTotal, pCos, pCosCube, pMs1TimeCorr, pNFCorr, pdRT, pResCorr, pResCorrNorm, pBSeriesCorr, pTightCorrOne, pTightCorrTwo, pShadow, pHeavy,
+	pLocCorr, pMinCorr, pTotal, pCos, pCosCube, pMs1TimeCorr, pNFCorr, pdRT, pResCorr, pResCorrNorm, pBSeriesCorr, pTightCorrOne, pTightCorrTwo, pShadow, pHeavy,
 	pMs1TightOne, pMs1TightTwo,
 	pMs1Iso, pMs1IsoOne, pMs1IsoTwo,
 	pBestCorrDelta, pTotCorrSum,
@@ -1304,7 +1317,7 @@ void arguments(int argc, char *argv[]) {
 		//else if (!memcmp(&(args[start]), "export-windows ", 15)) ExportWindows = true;
 		else if (!memcmp(&(args[start]), "export-library ", 15)) ExportLibrary = true;
 		else if (!memcmp(&(args[start]), "export-decoys ", 14)) ExportDecoys = true;
-		else if (!memcmp(&(args[start]), "cal-info ", 9)) SaveCalInfo = true;
+		//else if (!memcmp(&(args[start]), "cal-info ", 9)) SaveCalInfo = true;
 		else if (!memcmp(&(args[start]), "compact-report ", 15)) ExtendedReport = false;
 		else if (!memcmp(&(args[start]), "no-isotopes ", 12)) UseIsotopes = false, std::cout << "Isotopologue chromatograms will not be used\n";
 		else if (!memcmp(&(args[start]), "no-ms2-range ", 13)) MS2Range = false, std::cout << "MS2 range inference will not be performed\n";
@@ -1320,6 +1333,7 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Number of interference removal iterations set to " << IDsInterference << "\n";
 		else if (!memcmp(&(args[start]), "int-margin ", 11)) InterferenceCorrMargin = std::stod(args.substr(start + 11, std::string::npos)),
 			std::cout << "Interference correlation margin set to " << InterferenceCorrMargin << "\n";
+		else if (!memcmp(&(args[start]), "strict-int-removal ", 19)) StrictIntRemoval = true, std::cout << "Potentially interfering peptides with close (but not the same) elution times will also be discarded\n";
 		else if (!memcmp(&(args[start]), "reverse-decoys ", 15)) ReverseDecoys = true, std::cout << "Decoys will be generated using the pseudo-reverse method\n";
 		else if (!memcmp(&(args[start]), "force-frag-rec ", 15)) ForceFragRec = true, std::cout << "Decoys will be generated only for precursors with all library fragments recognised\n";
 		else if (!memcmp(&(args[start]), "max-rec-charge ", 15)) MaxRecCharge = Max(2, std::stoi(args.substr(start + 15, std::string::npos))),
@@ -1401,6 +1415,7 @@ void arguments(int argc, char *argv[]) {
 			else if (!std::getline(list, mass, ',')) std::cout << "WARNING: no modification mass, modification ignored\n";
 			else if (!std::getline(list, aas, ',')) std::cout << "WARNING: no amino acids to be modified, modification ignored\n";
 			else {
+				Modifications.push_back(std::pair<std::string, float>(name, (float)std::stod(mass)));
 				FixedMods.resize(FixedMods.size() + 1);
 				FixedMods[FixedMods.size() - 1].init(name, aas, (float)std::stod(mass));
 				std::cout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " at " << aas << " will be considered as fixed\n";
@@ -1413,11 +1428,13 @@ void arguments(int argc, char *argv[]) {
 			else if (!std::getline(list, mass, ',')) std::cout << "WARNING: no modification mass, modification ignored\n";
 			else if (!std::getline(list, aas, ',')) std::cout << "WARNING: no amino acids to be modified, modification ignored\n";
 			else {
+				Modifications.push_back(std::pair<std::string, float>(name, (float)std::stod(mass)));
 				VarMods.resize(VarMods.size() + 1);
 				VarMods[VarMods.size() - 1].init(name, aas, (float)std::stod(mass));
 				std::cout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " at " << aas << " will be considered as variable\n";
 			}
 		}
+		else if (!memcmp(&(args[start]), "unknown-mod ", 12)) UnknownMods.push_back(trim(args.substr(start + 12, end - start - 12)));
 		else if (!memcmp(&(args[start]), "ref-cal ", 8)) RefCal = true, std::cout << "Reference peptides will be used for calibration\n";
 		else if (!memcmp(&(args[start]), "gen-ref ", 8)) GenRef = true, gen_ref_file = trim(args.substr(start + 8, end - start - 8)),
 			std::cout << "A library of reference peptides will be generated\n";
@@ -1466,6 +1483,7 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Maximum number of variable modifications set to " << MaxVarMods << "\n";
 		else if (!memcmp(&(args[start]), "met-excision ", 6)) NMetExcision = true, std::cout << "N-terminal methionine excision enabled\n";
 		else if (!memcmp(&(args[start]), "no-rt-window ", 13)) RTWindowedSearch = false, std::cout << "Full range of retention times will be considered\n";
+		else if (!memcmp(&(args[start]), "disable-rt ", 11)) DisableRT = true, std::cout << "All RT-related scores disabled\n";
 		else if (!memcmp(&(args[start]), "min-rt-win ", 11)) MinRTWinFactor = std::stod(args.substr(start + 11, std::string::npos)),
 			std::cout << "Minimum acceptable RT window scale set to " << MinRTWinFactor << "\n";
 		else if (!memcmp(&(args[start]), "no-window-inference ", 20)) InferWindow = false, std::cout << "Scan window inference disabled\n";
@@ -1511,12 +1529,12 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Neural network bagging set to " << nnBagging << "\n";
 		else if (!memcmp(&(args[start]), "nn-epochs ", 10)) nnEpochs = std::stoi(args.substr(start + 10, std::string::npos)),
 			std::cout << "Neural network epochs number set to " << nnEpochs << "\n";
-		else if (!memcmp(&(args[start]), "nn-learning-rate ", 17)) nnLearning = std::stod(args.substr(start + 17, std::string::npos)),
+		/*else if (!memcmp(&(args[start]), "nn-learning-rate ", 17)) nnLearning = std::stod(args.substr(start + 17, std::string::npos)),
 			std::cout << "Neural network learning rate set to " << nnLearning << "\n";
 		else if (!memcmp(&(args[start]), "nn-reg ", 7)) Regularisation = std::stod(args.substr(start + 7, std::string::npos)),
 			std::cout << "Neural network regularisation set to " << Regularisation << "\n";
 		else if (!memcmp(&(args[start]), "nn-hidden ", 10)) nnHidden = Max(1, std::stoi(args.substr(start + 10, std::string::npos))),
-			std::cout << "Number of hidden layers set to " << nnHidden << "\n";
+			std::cout << "Number of hidden layers set to " << nnHidden << "\n";*/
 		else if (!memcmp(&(args[start]), "mass-acc-cal ", 13)) CalibrationMassAccuracy = std::stod(args.substr(start + 13, std::string::npos)) / 1000000.0,
 			std::cout << "Calibration mass accuracy set to " << CalibrationMassAccuracy << "\n";
 		else if (!memcmp(&(args[start]), "fix-mass-acc ", 13)) ForceMassAcc = true;
@@ -1535,19 +1553,23 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "norm-qvalue ", 12)) NormalisationQvalue = std::stod(args.substr(start + 11, std::string::npos)),
 			std::cout << "Q-value threshold for cross-run normalisation set to " << NormalisationQvalue << "\n";
 		else if (!memcmp(&(args[start]), "norm-fraction ", 14)) NormalisationPeptidesFraction = std::stod(args.substr(start + 14, std::string::npos)),
-			std::cout << "Normalisation peptides fraction set to " << NormalisationPeptidesFraction << "\n";
+			std::cout << "Global normalisation peptides fraction set to " << NormalisationPeptidesFraction << "\n";
+		else if (!memcmp(&(args[start]), "norm-radius ", 12)) LocNormRadius = std::stoi(args.substr(start + 12, std::string::npos)),
+			std::cout << "Local normalisation radius set to " << LocNormRadius << "\n";
+		else if (!memcmp(&(args[start]), "global-norm ", 12)) LocalNormalisation = false, std::cout << "Median-based local normalisation disabled\n";
 #if Q1
 		else if (!memcmp(&(args[start]), "q1-cal ", 7)) Q1Cal = true, std::cout << "Q1 calibration enabled\n";
 #endif
 		else if (!memcmp(&(args[start]), "no-calibration ", 15)) Calibrate = false, std::cout << "Mass calibration disabled\n";
 		/*else if (!memcmp(&(args[start]), "mass-cal-bins ", 14)) MassCalBinsMax = std::stoi(args.substr(start + 14, std::string::npos)),
-			std::cout << "Maximum number of mass calibration bins set to " << MassCalBinsMax << "\n";*/
+			std::cout << "Maximum number of mass calibration bins set to " << MassCalBinsMax << "\n";
 		else if (!memcmp(&(args[start]), "min-cal ", 8)) MinCal = std::stoi(args.substr(start + 8, std::string::npos)),
 			std::cout << "Minimum number of precursors identified at 10% FDR used for calibration set to " << MinCal << "\n";
 		else if (!memcmp(&(args[start]), "min-class ", 10)) MinClassifier = std::stoi(args.substr(start + 10, std::string::npos)),
-			std::cout << "Minimum number of precursors identified at 10% FDR used for linear classifier training set to " << MinClassifier << "\n";
+			std::cout << "Minimum number of precursors identified at 10% FDR used for linear classifier training set to " << MinClassifier << "\n";*/
 #if Q1
 		else if (!memcmp(&(args[start]), "no-q1 ", 6)) UseQ1 = false, std::cout << "Q1 scores disabled\n";
+		else if (!memcmp(&(args[start]), "use-q1 ", 8)) ForceQ1 = true, std::cout << "Q1 scores will be used for regular SWATH runs\n";
 #endif
 		else std::cout << "WARNING: unrecognised option [--" << trim(args.substr(start, end - start)) << "]\n";
 
@@ -1563,6 +1585,7 @@ void arguments(int argc, char *argv[]) {
 		}
 #endif
 	}
+	if (DisableRT) RTWindowedSearch = false;
 	if (!ExportLibrary && !GenSpecLib && !FastaSearch) out_lib_file.clear();
 	if (out_file.find_first_not_of(' ') == std::string::npos || out_file.find_first_of('\r') != std::string::npos || out_file.find_first_of('\n') != std::string::npos) out_file.clear();
 	if (out_gene_file.find_first_not_of(' ') == std::string::npos || out_gene_file.find_first_of('\r') != std::string::npos || out_gene_file.find_first_of('\n') != std::string::npos) out_gene_file.clear();
@@ -1610,6 +1633,14 @@ void arguments(int argc, char *argv[]) {
 			VarMods.resize(31);
 			std::cout << "WARNING: only the first 31 variable modifications specified will be searched for\n";
 		}
+	}
+
+	if (UnknownMods.size()) {
+		std::sort(UnknownMods.begin(), UnknownMods.end());
+		std::cout << "DIA-NN will look for unknown modification on peptides: ";
+		for (auto &u : UnknownMods) std::cout << u << ' ';
+		for (int cs = 1; cs <= MaxCycleShift; cs++) Modifications.push_back(std::pair<std::string, float>("UniMod:10000" + std::to_string(cs), 0.0));
+		std::cout << '\n';
 	}
 
 	nnIter = Min(Max(Max(RTWindowIter, CalibrationIter), nnIter), iN);
@@ -2100,7 +2131,7 @@ public:
 	int run_index, lib_size;
 	double MassAccuracy = GlobalMassAccuracy, MassAccuracyMs1 = GlobalMassAccuracyMs1;
 	std::vector<double> MassCorrection, MassCorrectionMs1, MassCalSplit, MassCalSplitMs1, MassCalCenter, MassCalCenterMs1;
-	double Q1Correction;
+	double Q1Correction[2];
 
     void write(std::ofstream &out) {
 		out.write((char*)&run_index, sizeof(int));
@@ -2246,7 +2277,7 @@ struct Elution {
 
 class Peptide {
 public:
-	int index, charge, length, no_cal = 0;
+	int index, charge, length, no_cal = 0, cycle_shift = 0;
 	float mz, iRT, sRT, lib_qvalue = 0.0;
 	std::vector<Product> fragments;
 
@@ -2597,6 +2628,17 @@ public:
 	}
 };
 
+std::vector<float> norm_totals, norm_shares, norm_ratios, norm_saved_ratios;
+struct NormInfo {
+	int index = 0;
+	float signal = 0.0, RT = 0.0;
+
+	NormInfo() {}
+	NormInfo(float _RT, int _index, float _signal) { index = _index; signal = _signal; RT = _RT; }
+	friend bool operator < (const NormInfo &left, const NormInfo &right) { return left.RT < right.RT; }
+};
+std::vector<NormInfo> norm_ind;
+
 class Library {
 public:
 	std::string name;
@@ -2644,6 +2686,7 @@ public:
 			int i;
 
 			auto seq = get_sequence(name, &target.no_cal);
+			if (target.cycle_shift) target.no_cal = 1;
 			decoy = target;
 			if (seq.size() < 2) return; // will trigger assertion for unannotated charge in Search(), so should not actually happen
 
@@ -2684,6 +2727,7 @@ public:
 			int i;
 
 			auto seq = get_sequence(name, &target.no_cal);
+			if (target.cycle_shift) target.no_cal = 1;
 			if (!seq.size()) return;
 
 			float gen_acc = 0.0;
@@ -2821,7 +2865,7 @@ public:
 		}
 
 		void quantify() {
-			int i, m, k;
+			int i, j, m, k;
 
 			if (Verbose >= 1) Time(), std::cout << "Quantifying peptides\n";
 			for (auto it = map.begin(); it != map.end(); it++) {
@@ -2885,7 +2929,7 @@ public:
 				k = 0;
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
 					int index = jt->first;
-					if (jt->second.pr.qvalue < NormalisationQvalue) x[index] = jt->second.pr.level, k++, m++;
+					if (jt->second.pr.qvalue <= NormalisationQvalue) x[index] = jt->second.pr.level, k++, m++;
 					else x[index] = 0.0;
 				}
 				if (k >= 2) {
@@ -2931,6 +2975,64 @@ public:
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
 					int index = jt->first;
 					jt->second.pr.norm = (jt->second.pr.level * av) / sums[index];
+				}
+			}
+
+			if (LocalNormalisation) {
+				norm_totals.clear(), norm_shares.clear();
+				norm_totals.resize(map.size(), 0.0), norm_shares.resize(map.size(), 0.0);
+				i = 0;
+				for (auto it = map.begin(); it != map.end(); it++, i++) {
+					auto v = &(it->second);
+					int cnt = 0;
+					for (auto jt = (*v).begin(); jt != (*v).end(); jt++)
+						if (jt->second.pr.qvalue <= NormalisationQvalue) norm_totals[i] += jt->second.pr.norm, cnt++;
+					if (cnt) norm_shares[i] = 1.0 / (double)cnt;
+				}
+
+				NormInfo nie;
+				norm_ind.resize(map.size()), norm_saved_ratios.resize(map.size());
+				norm_ratios.resize(2 * LocNormRadius + 1);
+				for (k = 0; k < ms_files.size(); k++) {
+					i = 0;
+					norm_ind.clear(), norm_saved_ratios.clear();
+					for (auto it = map.begin(); it != map.end(); it++, i++) {
+						auto v = &(it->second);
+						for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
+							int index = jt->first;
+							if (index == k && jt->second.pr.qvalue <= NormalisationQvalue && norm_shares[i] > E) if (norm_shares[i] * (double)ms_files.size() <= 2.0)
+								norm_ind.push_back(NormInfo(jt->second.pr.RT, i, jt->second.pr.norm));
+						}
+					}
+					std::sort(norm_ind.begin(), norm_ind.end());
+					norm_saved_ratios.resize(norm_ind.size(), 0.0);
+
+					for (auto it = map.begin(); it != map.end(); it++, i++) {
+						auto v = &(it->second);
+						for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
+							int index = jt->first;
+							if (index == k) {
+								auto pos = std::lower_bound(norm_ind.begin(), norm_ind.end(), NormInfo(jt->second.pr.RT, 0, 0.0));
+								float run = 0.0, all = 0.0, ratio = 0.0, w = 0.0;
+								int ind = std::distance(norm_ind.begin(), pos), low = Max(0, ind - LocNormRadius), high = low + 2 * LocNormRadius;
+								if (high > norm_ind.size()) high = norm_ind.size(), low = Max(0, high - 2 * LocNormRadius);
+								if (norm_saved_ratios[Min(ind, norm_ind.size() - 1)] > E) ratio = norm_saved_ratios[Min(ind, norm_ind.size() - 1)];
+								else {
+									norm_ratios.clear();
+									for (j = low; j < high; j++) {
+										float tot = norm_totals[norm_ind[j].index] * norm_shares[norm_ind[j].index];
+										float r = tot / Max(E, norm_ind[j].signal);
+										run += norm_ind[j].signal, all += tot, ratio += r, w += 1.0;
+										norm_ratios.push_back(r);
+									}
+									std::sort(norm_ratios.begin(), norm_ratios.end());
+									ratio = 0.5 * (norm_ratios[norm_ratios.size() / 2] + norm_ratios[(norm_ratios.size() / 2) + 1]);
+									norm_saved_ratios[Min(ind, norm_ind.size() - 1)] = ratio = Min(LocNormMax, Max(1.0 / LocNormMax, ratio));
+								}
+								jt->second.pr.norm *= ratio;
+							}
+						}
+					}
 				}
 			}
 		}
@@ -3016,14 +3118,17 @@ public:
 			int in_quote = 0, nw = 0, start = 0, end = 0;
 			for (; end < line.size(); end++) {
 				if (line[end] == delim && !in_quote) {
-					if (end > start) {
+					int en = end, st = start;
+					if (line[st] == '\"') st++, en--;
+					if (en > st) {
 						if (nw > words.size()) words.resize(words.size() * 2 + 1);
-						words[nw].resize(end - start);
-						for (i = start; i < end; i++) words[nw][i - start] = line[i];
+						words[nw].resize(en - st);
+						for (i = st; i < en; i++) words[nw][i - st] = line[i];
 					} else words[nw].clear();
 					start = end + 1, nw++;
 				} else if (line[end] == '\"') in_quote ^= 1;
 			}
+			if (line[start] == '\"') start++, end--;
 			if (end > start) {
 				if (nw > words.size()) words.resize(words.size() * 2 + 1);
 				words[nw].resize(end - start);
@@ -3065,6 +3170,20 @@ public:
 			int charge = std::stoi(words[colInd[libCharge]]);
 			id = to_canonical(words[colInd[libPr]], charge);
 			if (id != prev_id || !prev_id.length()) {
+				if (prev_id.length() && UnknownMods.size()) {
+					auto peps = to_canonical(prev_id);
+					auto aas = get_aas(prev_id);
+					if (std::find(UnknownMods.begin(), UnknownMods.end(), aas) != UnknownMods.end()) {
+						auto uins = ins;
+						for (int cs = 1; cs <= MaxCycleShift; cs++) {
+							auto uid = peps + "(UniMod:10000" + std::to_string(cs) + ")" + std::to_string(uins->second.target.charge);
+							uins = map.insert(std::pair<std::string, Entry>(uid, ins->second)).first;
+							uins->second.name = uins->first;
+							uins->second.target.cycle_shift = ins->second.decoy.cycle_shift = cs;
+						}
+					}
+				}
+
 				ins = map.insert(std::pair<std::string, Entry>(id, e)).first;
 				prev_id = id;
 				ins->second.name = ins->first;
@@ -3215,6 +3334,7 @@ public:
 	void save(const std::string &file_name, std::vector<int> * ref, bool searched, bool decoys = false) {
 		if (Verbose >= 1) Time(), std::cout << "Saving spectral library to " << file_name << "\n";
 		std::ofstream out(file_name, std::ofstream::out);
+		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << "\n"; return; }
 		out << "FileName\tPrecursorMz\tProductMz\tTr_recalibrated\ttransition_name\tLibraryIntensity\ttransition_group_id\tdecoy\tPeptideSequence\tProteotypic\tQValue\t";
 		out << "ProteinGroup\tProteinName\tGenes\tFullUniModPeptideName\tModifiedPeptide\t";
 		out << "PrecursorCharge\tPeptideGroupLabel\tUniprotID\tFragmentType\tFragmentCharge\tFragmentSeriesNumber\tFragmentLossType\n";
@@ -3501,6 +3621,7 @@ public:
 		auto &prot = InferPGs ? protein_groups : protein_ids;
 
 		std::ofstream out(file_name, std::ofstream::out);
+		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << "\n"; return; }
 		out << oh[outFile] << '\t' << oh[outPG] << '\t' << oh[outPID] << '\t' << oh[outPNames] << '\t' << oh[outGenes] << '\t'
 			<< oh[outPGQ] << '\t' << oh[outPGN] << '\t' << oh[outGQ] << '\t' << oh[outGN] << '\t' << oh[outGQP] << '\t' << oh[outGNP] << '\t' << oh[outModSeq] << '\t'
 			<< oh[outPrId] << '\t' << oh[outCharge] << '\t' << oh[outQv] << '\t' << oh[outPQv] << '\t' << oh[outPPt] << '\t'
@@ -3598,6 +3719,7 @@ public:
 		}
 
 		std::ofstream out(file_name, std::ofstream::out);
+		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << "\n"; return; }
 		out << "File.Name\tGenes\tGene.Group.Quantity\tGene.Group.Normalised\tGene.Quantity.Unique\tGene.Normalised.Unique\n";
 
 		for (int i = 0; i < gene_groups.size(); i++) for (int j = 0; j < s; j++) {
@@ -3633,6 +3755,7 @@ public:
 		}
 
 		std::ofstream out(file_name, std::ofstream::out);
+		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << "\n"; return; }
 		out << "File.Name\tPrecursors.Identified\tProteins.Identified\tTotal.Quantity\tFWHM.Scans\tFWHM.RT"
 			<< "\tMedian.Mass.Acc.MS1\tMedian.Mass.Acc.MS1.Corrected\tMedian.Mass.Acc.MS2\tMedian.Mass.Acc.MS2.Corrected\tMedian.RT.Prediction.Acc"
 			<< "\tAverage.Peptide.Length\tAverage.Peptide.Charge\n";
@@ -3817,7 +3940,7 @@ void learn_from_library(const std::string &file_name) {
 }
 
 std::vector<int> rt_stats, rt_ref;
-std::vector<float> rt_coo, q1_diff;
+std::vector<float> rt_coo, q1_diff, q1_diff_mz;
 std::vector<std::pair<float, float> > rt_data;
 std::vector<float> rt_delta, mass_acc;
 std::vector<double> b, b_r;
@@ -3846,7 +3969,7 @@ public:
 
 	Library * lib;
 
-    int n_scans = 0;
+    int n_scans = 0, cycle_length = 0;
 	std::vector<double> RT_coeff, RT_points, iRT_coeff, iRT_points;
     std::vector<float> scan_RT; // list of RTs of scans
 	std::vector<int> scan_cycle; // list of SWATH cycle numbers
@@ -3867,7 +3990,7 @@ public:
 	double MassAccOutlier = INF, MassAccMs1Outlier = INF;
 	bool RemoveMassAccOutliers = false, recalibrate = false;
 	std::vector<double> MassCorrection, MassCorrectionMs1, MassCalSplit, MassCalSplitMs1, MassCalCenter, MassCalCenterMs1;
-	double Q1Correction = 0.0;
+	double Q1Correction[2] = { 0.0, 0.0 };
 
     std::vector<Parameter> pars;
     bool par_seek[pN], par_learn[pN], par_limit = false;
@@ -3902,6 +4025,7 @@ public:
 		auto p_none = Parameter(iN, iN);
 
 		pars.push_back(p_base); // pTimeCorr
+		pars.push_back(p_all); // pLocCorr
 		pars.push_back(p_end); // pMinCorr
 		pars.push_back(p_end); // pTotal
 		pars.push_back(p_end); // pCos
@@ -4078,13 +4202,13 @@ public:
 		void build_index() {
 			int i, k, n = run->scans.size();
 
-			float mz = pep->mz, qmz = pep->mz;
-			if (Abs(run->Q1Correction) < Min(Abs(run->tandem_max - mz), Abs(mz - run->tandem_min)) * 0.5) qmz += run->Q1Correction;
+			float mz = pep->mz, qmz = pep->mz, dmz = run->Q1Correction[0] + run->Q1Correction[1] * qmz;
+			if (Abs(dmz) < Min(Abs(run->tandem_max - mz), Abs(mz - run->tandem_min)) * 0.5) qmz += dmz;
 
 			auto scan_index = &(run->ScanIndex[thread_id]);
-			for (i = k = 0; i < n; i++) if (run->scans[i].has(qmz)) k++;
+			for (i = 0, k = 0; i < n - pep->cycle_shift; i++) if (run->scans[i].has(qmz)) k++;
 			scan_index->resize(k);
-			for (i = k = 0; i < n; i++) if (run->scans[i].has(qmz)) (*scan_index)[k++] = i;
+			for (i = 0, k = 0; i < n - pep->cycle_shift; i++) if (run->scans[i].has(qmz)) (*scan_index)[k++] = i + pep->cycle_shift;
 
 			if (!QuantOnly) {
 				if (WindowRadius) S = WindowRadius;
@@ -4317,10 +4441,10 @@ public:
 								query_mz = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[fr].mz - C13delta, run->scan_RT[i]); // assume charge 1 for the interfering fragment
 								shadow[l * fr + ind] = run->scans[i].level<false>(query_mz, run->MassAccuracy);
 
-								float hmz = mz + (C13delta / (double)pr->pep->charge) + run->Q1Correction;
+								float hmz = mz + (C13delta / (double)pr->pep->charge) + run->Q1Correction[0] + run->Q1Correction[1] * mz;
 								query_mz = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[fr].mz + C13delta / (double)(*fragments)[fr].charge, run->scan_RT[i]);
 								int hi = -1;
-								if (run->scans[i].has(hmz)) hi = i;
+								if (run->scans[i].has(hmz) || pr->pep->cycle_shift) hi = i;
 								if (i < run->scans.size() - 1 && hi < 0) if (run->scans[i + 1].has(hmz)) hi = i + 1;
 								if (i > 0 && hi < 0) if (run->scans[i - 1].has(hmz)) hi = i - 1;
 								if (hi >= 0) ms2_H[l * fr + ind] = run->scans[hi].level<false>(query_mz, run->MassAccuracy);
@@ -4359,7 +4483,7 @@ public:
 				int * best_fr_list = &(run->BestFrList[pr->thread_id][0]);
 				float * corr_sum_list = &(run->CorrSumList[pr->thread_id][0]);
 
-				for (k = S, total_corr_sum = 0.0; k < l - pr->S; k++) {
+				for (k = S, total_corr_sum = 0.0; k < l - S; k++) {
 					for (fr = 0; fr < p; fr++) if (ms2[fr * l + k]) break;
 					if (fr >= p) continue; // no signal
 
@@ -4396,6 +4520,13 @@ public:
 						if (evidence > max_evidence) max_evidence = evidence;
 					}
 					if (curr_evidence < max_evidence * PeakApexEvidence) continue;
+
+					if (run->full_spectrum && ForceQ1Apex) {
+						float query_mz = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[best_fr].mz, run->scan_RT[(*scan_index)[k]]);
+						if (run->scans[(*scan_index)[k] - 1].level<false>(query_mz, run->MassAccuracy) <= ms2[best_fr * l + k]
+							&& run->scans[(*scan_index)[k] + 1].level<false>(query_mz, run->MassAccuracy) <= ms2[best_fr * l + k]) {}
+						else continue;
+					}
 
 					total_corr_sum += max;
 					peak_list[n_peaks] = k, best_fr_list[n_peaks] = best_fr, corr_sum_list[n_peaks] = max;
@@ -4467,24 +4598,26 @@ public:
 				sc[pCosCube] /= w;
 
 #if Q1
-				if (UseQ1 && run->full_spectrum && run->scanning) {
+				if (UseQ1 && run->full_spectrum && (run->scanning || ForceQ1)) {
 					int QS = QSL[qL - 1], QW = 2 * QS + 1;
 					float *qprofile = (float*)alloca(QW * Min(m, TopF) * sizeof(float)), *ws = (float*)alloca(QW * sizeof(float)), *fmz = (float*)alloca(Min(m, TopF) * sizeof(float));
 					float rt = run->scan_RT[apex];
 					for (i = 0; i < Min(m, TopF); i++) fmz[i] = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[i].mz, rt);
 					run->q1_profiles(qprofile, ws, apex, fmz, QS, Min(m, TopF));
-					for (i = 0; i < qL; i++) sc[pQPos + i] = centroid_coo(qprofile + best_fr * QW + QS - QSL[i], ws + QS - QSL[i], 2 * QSL[i] + 1) - mz - run->Q1Correction;
+					for (i = 0; i < qL; i++) sc[pQPos + i] = centroid_coo(qprofile + best_fr * QW + QS - QSL[i], ws + QS - QSL[i], 2 * QSL[i] + 1) - mz - run->Q1Correction[0] - run->Q1Correction[1] * mz;
 					for (fr = 0; fr < Min(m, TopF); fr++) if (fr != best_fr)
 						for (i = 0; i < qL; i++) sc[pQCorr + i] += corr(qprofile + fr * QW + QS - QSL[i], qprofile + best_fr * QW + QS - QSL[i], 2 * QSL[i] + 1);
 				}
 #endif
 
 				// time corr
+				int T = Max(S / 2, 1);
 				for (fr = 0; fr < Min(m, auxF); fr++) {
 					double u = corr(elution, &(ms2[fr * l + k - S]), W);
 					if (fr < TopF) {
 						sc[pTotal] += Max(u, 0.0) * sum(&(ms2[fr * l + k - S]), W);
 						sc[pTimeCorr] += u;
+						sc[pLocCorr] += corr(&(elution[S - T]), &(ms2[fr * l + k - T]), 2 * T + 1);
 						sc[pMinCorr] += corr(elution, &(ms2_min[fr * l + k - S]), W);
 						if (run->full_spectrum && UseIsotopes) {
 							double v = corr(elution, &(shadow[fr * l + k - S]), W);
@@ -4514,15 +4647,17 @@ public:
 					sc[pResCorrNorm] = sc[pResCorr] / (double)(m - TopF);
 				}
 
-				sc[pNFCorr] = corr(elution, &(nf[k - S]), W);
-				sc[pMs1TimeCorr] += corr(elution, &(ms1[k - S]), W);
-				sc[pMs1TightOne] += corr(elution, &(ms1[k - S + l]), W);
-				sc[pMs1TightTwo] += corr(elution, &(ms1[k - S + 2 * l]), W);
-				if (UseIsotopes) for (int isotope = 1; isotope < 3; isotope++) {
-					int ii = isotope * 3;
-					sc[pMs1Iso] += corr(elution, &(ms1[k - S + ii * l]), W);
-					sc[pMs1IsoOne] += corr(elution, &(ms1[k - S + (ii + 1) * l]), W);
-					sc[pMs1IsoTwo] += corr(elution, &(ms1[k - S + (ii + 2) * l]), W);
+				if (!pr->pep->cycle_shift) {
+					sc[pNFCorr] = corr(elution, &(nf[k - S]), W);
+					sc[pMs1TimeCorr] += corr(elution, &(ms1[k - S]), W);
+					sc[pMs1TightOne] += corr(elution, &(ms1[k - S + l]), W);
+					sc[pMs1TightTwo] += corr(elution, &(ms1[k - S + 2 * l]), W);
+					if (UseIsotopes) for (int isotope = 1; isotope < 3; isotope++) {
+						int ii = isotope * 3;
+						sc[pMs1Iso] += corr(elution, &(ms1[k - S + ii * l]), W);
+						sc[pMs1IsoOne] += corr(elution, &(ms1[k - S + (ii + 1) * l]), W);
+						sc[pMs1IsoTwo] += corr(elution, &(ms1[k - S + (ii + 2) * l]), W);
+					}
 				}
 
 				// signals
@@ -4579,6 +4714,7 @@ public:
 			assert(info[0].peaks[peak].apex >= 0);
 			assert(info[0].peaks[peak].apex < run->scan_RT.size());
 
+			if (DisableRT) return;
 			double span = Max(E, run->RT_max - run->RT_min);
 			double mes_RT = run->scan_RT[info[0].peaks[peak].apex];
 			double pred_RT = calc_spline(run->RT_coeff, run->RT_points, pep->iRT);
@@ -4592,6 +4728,7 @@ public:
 		void score_RT() {
 			assert(info.size());
 			if (!(flags & fFound)) return;
+			if (DisableRT) return;
 			double mes_RT = run->scan_RT[info[0].apex];
 			double pred_RT = calc_spline(run->RT_coeff, run->RT_points, pep->iRT);
 			double span = Max(E, run->RT_max - run->RT_min);
@@ -4736,7 +4873,7 @@ public:
 				if (fr < TopF) info[0].quantity += info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered];
 			}
 			if (NoIfsRemoval) for (fr = 0, info[0].quantity = 0.0; fr < searcher.m; fr++)
-				info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered] = info[0].quant[(*searcher.fri)[fr]].quantity[qTotal];
+				info[0].quantity += (info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered] = info[0].quant[(*searcher.fri)[fr]].quantity[qTotal]);
 
 			if (info[0].qvalue <= 0.01 && (e = signal[k - low] * 0.5) >= MinPeakHeight) { // for run stats
 				double fwhm_sc = 0.0, fwhm_rt = 0.0;
@@ -4786,14 +4923,14 @@ public:
 			scan_index->resize(2 * S + 1);
 			(*scan_index)[S] = apex;
 
-			float qmz = mz;
-			if (Abs(run->Q1Correction) < Min(Abs(run->tandem_max - mz), Abs(mz - run->tandem_min)) * 0.5) qmz += run->Q1Correction;
+			float qmz = mz, dmz = run->Q1Correction[0] + run->Q1Correction[1] * mz;
+			if (Abs(dmz) < Min(Abs(run->tandem_max - mz), Abs(mz - run->tandem_min)) * 0.5) qmz += dmz;
 			for (high = S, i = apex + 1; i < run->scans.size(); i++) {
-				if (run->scans[i].has(qmz)) (*scan_index)[++high] = i;
+				if (run->scans[Max(0, i - pep->cycle_shift)].has(qmz)) (*scan_index)[++high] = i;
 				if (high >= 2 * S) break;
 			}
 			for (low = S, i = apex - 1; i >= 0; i--) {
-				if (run->scans[i].has(qmz)) (*scan_index)[--low] = i;
+				if (run->scans[Max(0, i - pep->cycle_shift)].has(qmz)) (*scan_index)[--low] = i;
 				if (low <= 0) break;
 			}
 
@@ -4908,6 +5045,7 @@ public:
 
 	void write(char * file_name) {
 		std::ofstream out(file_name, std::ofstream::binary);
+		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << "\n"; return; }
 
 		int size = scans.size();
 		out.write((char*)&size, sizeof(int));
@@ -4945,7 +5083,7 @@ public:
 		}
 		scan_cycle.resize(n_scans); if (n_scans) scan_cycle[0] = 0;
 		for (i = 1; i < n_scans; i++) { // handle overlapping windows
-			if (!scanning && scans[i].window_high > scans[i - 1].window_high + E && Abs(scans[i].window_low - scans[i - 1].window_high) < E && scans[i].RT - scans[i - 1].RT < (1.0 / (60.0 * 50.0)))
+			if (!scanning && scans[i].window_high > scans[i - 1].window_high + E && Abs(scans[i].window_low - scans[i - 1].window_high) < E && scans[i].RT - scans[i - 1].RT < (1.0 / (60.0 * 70.0)))
 				scanning = true;
 			if (scans[i - 1].window_low < scans[i].window_low - E && scans[i - 1].window_high < scans[i].window_high - E && scans[i - 1].window_high > scans[i].window_low + E)
 				scans[i - 1].window_high = scans[i].window_low = (scans[i - 1].window_high + scans[i].window_low) * 0.5;
@@ -4954,7 +5092,8 @@ public:
 			if (scans[i - 1].window_high < scans[i].window_high && scans[i - 1].window_low < scans[i].window_low) scan_cycle[i] = cycle;
 			else scan_cycle[i] = ++cycle;
 		}
-		if (Verbose >= 1 && scanning) Time(), std::cout << "Scanning SWATH run\n";
+		for (cycle_length = 0; cycle_length < scan_cycle.size(); cycle_length++) if (scan_cycle[cycle_length]) break;
+		if (Verbose >= 1 && scanning && !Convert) Time(), std::cout << "Scanning SWATH run\n";
 		scan_RT.resize(n_scans);
 		double t_min = INF, t_max = -INF;
 		for (i = 0; i < n_scans; i++) {
@@ -5111,6 +5250,7 @@ public:
 		Target entry;
 		std::vector<bool> has(lib->entries.size());
 		for (auto it = lib->entries.begin(); it != lib->entries.end(); it++, pos++) {
+			if (it->target.cycle_shift >= cycle_length) continue;
 			double mz = it->target.mz;
 			int max = Min(scans.size(), MaxCycleLength);
 			for (i = 0; i < max; i++)
@@ -5332,7 +5472,7 @@ public:
 	}
 
 	void refine_ids() {
-		int i, j;
+		int i, j, cnt;
 		float mz, delta;
 
 		std::vector<Elution> peaks;
@@ -5343,12 +5483,23 @@ public:
 				auto &es = entries[IDs[i][start]].target;
 				remove_ifs(i, start, es);
 				
-				float qmz = es.pep->mz + Q1Correction, delta = C13delta / (double)es.pep->charge;
-				for (j = Max(0, i - MaxQ1Bins); j < scans.size() && j <= i + MaxIfsSpan; j++) {
+				float qmz = es.pep->mz + Q1Correction[0] + Q1Correction[1] * es.pep->mz, delta = C13delta / (double)es.pep->charge;
+				for (j = Max(0, i - MaxIfsSpan); j < scans.size() && j <= i + MaxIfsSpan; j++) {
 					if (j == i || Sgn(scans[j].window_low - scans[i].window_low) != Sgn(j - i)) continue;
-					if ((scanning && Abs(j - i) <= MaxQ1Bins + 1) || scans[j].has(qmz, QuadrupoleError) || (UseIsotopes &&
+					if (!es.pep->cycle_shift) if ((scanning && Abs(j - i) <= MaxQ1Bins + 1) || scans[j].has(qmz, QuadrupoleError) || (UseIsotopes &&
 						(scans[j].has(qmz + delta, QuadrupoleError) || scans[j].has(qmz + 2.0 * delta, QuadrupoleError)
 							|| scans[j].has(qmz + 3.0 * delta, QuadrupoleError) || scans[j].has(qmz + 4.0 * delta, QuadrupoleError)))) remove_ifs(j, -1, es);
+				}
+
+				if (StrictIntRemoval && !es.pep->cycle_shift) {
+					for (j = i + 1, cnt = 0; j < scans.size(); j++) if (scans[j].has(es.pep->mz)) {
+						remove_ifs(j, -1, es);
+						if ((++cnt) >= es.S / 4) break;
+					}
+					for (j = i - 1, cnt = 0; j >= 0; j--) if (scans[j].has(es.pep->mz)) {
+						remove_ifs(j, -1, es);
+						if ((++cnt) >= es.S / 4) break;
+					}
 				}
 			}
 		}
@@ -5857,12 +6008,12 @@ public:
 			rt_ref.clear();
 			rt_coo.clear();
 #if Q1
-			if (calibrate_q1) q1_diff.clear();
+			if (calibrate_q1) q1_diff.clear(), q1_diff_mz.clear();
 #endif
 
 			for (auto it = entries.begin(); it != entries.end(); it++) {
 				if (!(it->target.flags & fFound)) continue;
-				if ((it->target.info[0].qvalue <= MassCalQvalue || it->target.info[0].cscore >= iRT_cscore) && Abs(it->target.info[0].mass_delta) > E) {
+				if (it->target.info[0].qvalue <= MassCalQvalue && Abs(it->target.info[0].mass_delta) > E) {
 					mass_cnt++;
 					if (calibrate) rt_coo.push_back(it->target.info[0].RT);
 					if (Abs(it->target.info[0].mass_delta_ms1) > E) mass_cnt_ms1++;
@@ -5874,7 +6025,7 @@ public:
 					if (it->target.info[0].qvalue <= iRTMaxQvalue && it->target.info[0].cscore >= iRT_ref_score) {
 						peak_width += it->target.info[0].peak_width, peak_cnt++;
 #if Q1
-						if (calibrate_q1) q1_diff.push_back(it->target.info[0].q1_shift);
+						if (calibrate_q1) q1_diff.push_back(it->target.info[0].q1_shift), q1_diff_mz.push_back(it->target.pep->mz);
 #endif
 					}
 					if (gen_ref && it->target.info[0].cscore >= iRT_ref_score) rt_ref.push_back(it->target.pep->index);
@@ -5930,12 +6081,37 @@ public:
 
 #if Q1
 			if (calibrate_q1) {
-				int k = 0;
+				int k;
 				float diff = 0.0;
-				std::sort(q1_diff.begin(), q1_diff.end());
+
+				if (q1_diff.size() >= 500 && Q1CalLinear) {
+					typedef Eigen::Triplet<double> T;
+					std::vector<T> TL;
+
+					auto qd = q1_diff;
+					std::sort(qd.begin(), qd.end());
+					double dmin = qd[(q1_diff.size() / 5)], dmax = q1_diff.size() - (q1_diff.size() / 5) - 1;
+
+					b.clear(), k = 0;
+					for (int i = 0; i < q1_diff.size(); i++) if (q1_diff[i] >= dmin && q1_diff[i] <= dmax) {
+						b.push_back(q1_diff[i]);
+						TL.push_back(T(k, 0, 1)), TL.push_back(T(k++, 1, q1_diff_mz[i]));
+					}
+
+					auto B = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(b.data(), k);
+					Eigen::SparseMatrix<double, Eigen::RowMajor> A(k, 2);
+					A.setFromTriplets(TL.begin(), TL.end());
+					Eigen::SparseQR <Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int> > SQR;
+					SQR.compute(A);
+					auto X = SQR.solve(B);
+					for (int i = 0; i < 2; i++) Q1Correction[i] = X(i);
+				}
+
+				std::sort(q1_diff.begin(), q1_diff.end()), k = 0;
 				for (int i = (q1_diff.size() / 5); i < q1_diff.size() - (q1_diff.size() / 5); i++) diff += q1_diff[i], k++;
-				Q1Correction = diff / (float)k;
-				if (Verbose >= 1) Time(), std::cout << "Q1 correction: " << Q1Correction << " Th\n";
+				Q1Correction[0] = diff / (float)k;
+
+				if (Verbose >= 1) Time(), std::cout << "Q1 correction: " << Q1Correction[0] << "Th + " << Q1Correction[1] << "(m/z)" << "\n";
 			}
 #endif
 		}
@@ -5966,7 +6142,7 @@ public:
 				mass_cnt = 0;
 				for (auto it = entries.begin(); it != entries.end(); it++) {
 					if (!(it->target.flags & fFound)) continue;
-					if ((it->target.info[0].qvalue <= MassCalQvalue || it->target.info[0].cscore >= iRT_cscore) && Abs(it->target.info[0].mass_delta) > E
+					if (it->target.info[0].qvalue <= MassCalQvalue && Abs(it->target.info[0].mass_delta) > E
 						&& (!RemoveMassAccOutliers
 							|| Abs(it->target.info[0].mass_delta_mz + it->target.info[0].mass_delta -
 								predicted_mz(&(MassCorrection[0]), it->target.info[0].mass_delta_mz, it->target.info[0].RT))
@@ -6012,7 +6188,7 @@ public:
 				b_r.clear(), b_r.reserve(2 * mass_cnt);
 				for (auto it = entries.begin(); it != entries.end(); it++) {
 					if (!(it->target.flags & fFound)) continue;
-					if ((it->target.info[0].qvalue <= MassCalQvalue || it->target.info[0].cscore >= iRT_cscore) && Abs(it->target.info[0].mass_delta) > E)
+					if (it->target.info[0].qvalue <= MassCalQvalue && Abs(it->target.info[0].mass_delta) > E)
 						b_r.push_back(Abs(it->target.info[0].mass_delta_mz + it->target.info[0].mass_delta -
 							predicted_mz(&(MassCorrection[0]), it->target.info[0].mass_delta_mz, it->target.info[0].RT)) / it->target.info[0].mass_delta_mz);
 				}
@@ -6030,7 +6206,7 @@ public:
 					out << "Lib\tDelta\tCorr\tRT\tQ\n";
 					for (auto it = entries.begin(); it != entries.end(); it++) {
 						if (!(it->target.flags & fFound)) continue;
-						if ((it->target.info[0].qvalue <= MassCalQvalue || it->target.info[0].cscore >= iRT_cscore) && Abs(it->target.info[0].mass_delta) > E)
+						if (it->target.info[0].qvalue <= MassCalQvalue && Abs(it->target.info[0].mass_delta) > E)
 							out << it->target.info[0].mass_delta_mz << "\t" << it->target.info[0].mass_delta << "\t"
 								<< predicted_mz(&(MassCorrection[0]), it->target.info[0].mass_delta_mz, it->target.info[0].RT) << "\t"
 								<< it->target.info[0].RT << "\t" << it->target.info[0].qvalue << "\n";
@@ -6042,7 +6218,7 @@ public:
 				b_r.clear();
 				for (auto it = entries.begin(); it != entries.end(); it++) {
 					if (!(it->target.flags & fFound)) continue;
-					if ((it->target.info[0].qvalue <= MassCalQvalue || it->target.info[0].cscore >= iRT_cscore) && Abs(it->target.info[0].mass_delta) > E)
+					if (it->target.info[0].qvalue <= MassCalQvalue && Abs(it->target.info[0].mass_delta) > E)
 						b_r.push_back(Abs(it->target.info[0].mass_delta) / it->target.info[0].mass_delta_mz);
 				}
 				std::sort(b_r.begin(), b_r.end());
@@ -6077,8 +6253,7 @@ public:
 				mass_cnt_ms1 = 0;
 				for (auto it = entries.begin(); it != entries.end(); it++) {
 					if (!(it->target.flags & fFound)) continue;
-					if ((it->target.info[0].qvalue <= MassCalQvalue || it->target.info[0].cscore >= iRT_cscore)
-						&& Abs(it->target.info[0].mass_delta) > E && Abs(it->target.info[0].mass_delta_ms1) > E
+					if (it->target.info[0].qvalue <= MassCalQvalue && Abs(it->target.info[0].mass_delta) > E && Abs(it->target.info[0].mass_delta_ms1) > E
 						&& (!RemoveMassAccOutliers
 							|| Abs(it->target.pep->mz + it->target.info[0].mass_delta_ms1 -
 								predicted_mz_ms1(&(MassCorrectionMs1[0]), it->target.pep->mz, it->target.info[0].RT))
@@ -6124,7 +6299,7 @@ public:
 				b_r.clear(), b_r.reserve(2 * mass_cnt_ms1);
 				for (auto it = entries.begin(); it != entries.end(); it++) {
 					if (!(it->target.flags & fFound)) continue;
-					if ((it->target.info[0].qvalue <= MassCalQvalue || it->target.info[0].cscore >= iRT_cscore)
+					if (it->target.info[0].qvalue <= MassCalQvalue
 						&& Abs(it->target.info[0].mass_delta) > E && Abs(it->target.info[0].mass_delta_ms1) > E)
 						b_r.push_back(Abs(it->target.pep->mz + it->target.info[0].mass_delta_ms1 -
 							predicted_mz_ms1(&(MassCorrectionMs1[0]), it->target.pep->mz, it->target.info[0].RT)) / it->target.pep->mz);
@@ -6144,8 +6319,7 @@ public:
 					out << "Lib\tDelta\tCorr\tRT\tQ\n";
 					for (auto it = entries.begin(); it != entries.end(); it++) {
 						if (!(it->target.flags & fFound)) continue;
-						if ((it->target.info[0].qvalue <= MassCalQvalue || it->target.info[0].cscore >= iRT_cscore)
-							&& Abs(it->target.info[0].mass_delta) > E && Abs(it->target.info[0].mass_delta_ms1) > E)
+						if (it->target.info[0].qvalue <= MassCalQvalue && Abs(it->target.info[0].mass_delta) > E && Abs(it->target.info[0].mass_delta_ms1) > E)
 							out << it->target.pep->mz << "\t" << it->target.info[0].mass_delta_ms1 << "\t"
 							<< predicted_mz_ms1(&(MassCorrectionMs1[0]), it->target.pep->mz, it->target.info[0].RT) << "\t"
 							<< it->target.info[0].RT << "\t" << it->target.info[0].qvalue << "\n";
@@ -6156,8 +6330,7 @@ public:
 				b_r.clear();
 				for (auto it = entries.begin(); it != entries.end(); it++) {
 					if (!(it->target.flags & fFound)) continue;
-					if ((it->target.info[0].qvalue <= MassCalQvalue || it->target.info[0].cscore >= iRT_cscore)
-						&& Abs(it->target.info[0].mass_delta) > E && Abs(it->target.info[0].mass_delta_ms1) > E)
+					if (it->target.info[0].qvalue <= MassCalQvalue && Abs(it->target.info[0].mass_delta) > E && Abs(it->target.info[0].mass_delta_ms1) > E)
 						b_r.push_back(Abs(it->target.info[0].mass_delta_ms1) / it->target.pep->mz);
 				}
 				std::sort(b_r.begin(), b_r.end());
@@ -6516,7 +6689,7 @@ public:
 		quant.lib_size = lib->entries.size();
 		quant.RS = RS;
 		quant.tandem_min = tandem_min, quant.tandem_max = tandem_max;
-		quant.Q1Correction = Q1Correction;
+		quant.Q1Correction[0] = Q1Correction[0], quant.Q1Correction[1] = Q1Correction[1];
 		quant.MassAccuracy = MassAccuracy, quant.MassAccuracyMs1 = MassAccuracyMs1;
 		quant.MassCorrection = MassCorrection, quant.MassCorrectionMs1 = MassCorrectionMs1;
 		quant.MassCalSplit = MassCalSplit, quant.MassCalSplitMs1 = MassCalSplitMs1, quant.MassCalCenter = MassCalCenter, quant.MassCalCenterMs1 = MassCalCenterMs1;
@@ -6630,7 +6803,8 @@ int main(int argc, char *argv[]) {
 	_set_FMA3_enable(0); // essential to make calculations reproducible between CPUs with (new ones) and without (old ones) FMA support
 #endif
 	std::cout.setf(std::ios::unitbuf);
-	std::cout << "DIA-NN (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\n";
+	auto curr_time = time(0);
+	std::cout << std::ctime(&curr_time) << "DIA-NN (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\n";
 #if (HASH > 0)
 	init_hash();
 #endif
@@ -6765,7 +6939,7 @@ quant_only:
 				e->target.info[0].qvalue = pos->pr.qvalue;
 				e->target.info[0].protein_qvalue = pos->pr.protein_qvalue;
 			}
-			run.Q1Correction = Q.Q1Correction;
+			run.Q1Correction[0] = Q.Q1Correction[0], run.Q1Correction[1] = Q.Q1Correction[1];
 			run.MassAccuracy = Q.MassAccuracy, run.MassAccuracyMs1 = Q.MassAccuracyMs1;
 			run.MassCorrection = Q.MassCorrection, run.MassCorrectionMs1 = Q.MassCorrectionMs1;
 			run.MassCalSplit = Q.MassCalSplit, run.MassCalSplitMs1 = Q.MassCalSplitMs1;
@@ -6870,7 +7044,7 @@ gen_spec_lib:
 			run.load_library(&lib);
 			run.full_spectrum = true;
 
-			run.Q1Correction = Q->Q1Correction;
+			run.Q1Correction[0] = Q->Q1Correction[0], run.Q1Correction[1] = Q->Q1Correction[1];
 			run.MassAccuracy = Q->MassAccuracy, run.MassAccuracyMs1 = Q->MassAccuracyMs1;
 			run.MassCorrection = Q->MassCorrection, run.MassCorrectionMs1 = Q->MassCorrectionMs1;
 			run.MassCalSplit = Q->MassCalSplit, run.MassCalSplitMs1 = Q->MassCalSplitMs1;
