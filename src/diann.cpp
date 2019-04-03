@@ -419,7 +419,7 @@ std::vector<std::pair<std::string, float> > Modifications = {
 	std::pair<std::string, float>("UniMod:269", (float)10.027228)
 };
 
-std::vector<string> UnknownMods;
+std::vector<std::string> UnknownMods;
 int MaxCycleShift = 200;
 
 inline char to_lower(char c) { return c + 32; }
