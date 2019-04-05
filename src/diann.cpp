@@ -2185,7 +2185,7 @@ public:
 		std::ifstream in(file, std::ifstream::binary);
 		if (in.fail() || temp_folder.size()) {
 			auto pos = file.find_last_of('.');
-			if (pos >= 1) in = std::ifstream(location_to_file_name(file.substr(0, pos - 1)) + std::string(".quant"), std::ifstream::binary);
+			if (pos >= 1) in = std::ifstream(location_to_file_name(file.substr(0, pos)) + std::string(".quant"), std::ifstream::binary);
 		}
 		read_meta(in, _lib_size);
 		in.close();
