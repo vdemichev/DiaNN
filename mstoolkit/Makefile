@@ -1,3 +1,4 @@
+#Set your paths here.
 ZLIB_PATH = ./src/zlib-1.2.8
 MZPARSER_PATH = ./src/mzParser
 EXPAT_PATH = ./src/expat-2.2.0
@@ -21,46 +22,16 @@ CC = g++
 GCC = gcc
 NOSQLITE = -D_NOSQLITE
 
-SOVER = 82
-RELVER = $(SOVER).0.1
+CFLAGS = -O3 -static -I. -I$(HEADER_PATH) -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DGCC -DHAVE_EXPAT_CONFIG_H
+LIBS = -lm -ldl
 
-AR_CFLAGS = -O3 -static -I. -I$(HEADER_PATH) -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DGCC -DHAVE_EXPAT_CONFIG_H
-SO_CFLAGS = -O3 -shared -fPIC -g -I. -I$(HEADER_PATH) -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DGCC -DHAVE_EXPAT_CONFIG_H
-LIBS = -lm -lpthread -ldl
-CLEAN_LIBS = libmstoolkitlite.a libmstoolkitlite.so libmstoolkitlite.so.$(SOVER)* libmstoolkit.a libmstoolkit.so libmstoolkit.so.$(SOVER)*
+all:  $(ZLIB) $(MZPARSERLITE) $(MSTOOLKIT) $(READERLITE) $(EXPAT)
+	ar rcs libmstoolkitlite.a $(ZLIB) $(EXPAT) $(MZPARSERLITE) $(MSTOOLKIT) $(READERLITE)
+	$(CC) -o ../diann-linux ../src/diann.cpp -static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -std=c++17 -lstdc++fs -fpermissive -O3 -mfpmath=sse -msse2 -march=core2 -w -L. -lmstoolkitlite -I. -I$(HEADER_PATH) -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DGCC -DHAVE_EXPAT_CONFIG_H
 
-all: 
-	make solib
-
-.PHONY: objects
-objects: $(ZLIB) $(MZPARSER) $(MZPARSERLITE) $(MSTOOLKIT) $(READER) $(READERLITE) $(EXPAT) $(SQLITE)
-
-arlib: CFLAGS = $(AR_CFLAGS)
-arlib: clean_objects objects
-	ar rcs libmstoolkitlite.a $(ZLIB) $(EXPAT)$(MZPARSERLITE) $(MSTOOLKIT) $(READERLITE)
-	ar rcs libmstoolkit.a $(ZLIB) $(EXPAT) $(MZPARSER) $(MSTOOLKIT) $(READER) $(SQLITE)
-#	$(CC) $(CFLAGS) MSTDemo.cpp -L. -lmstoolkitlite -o MSTDemo
-	$(CC) $(CFLAGS) -I./include ../src/diann.cpp -L. -lmstoolkitlite -o diann
-#	$(CC) $(CFLAGS) MSConvertFile.cpp -L. -lmstoolkitlite -o MSConvertFile
-
-solib: CFLAGS = $(SO_CFLAGS)
-solib: clean_objects objects 
-	$(CC) $(CFLAGS) -o libmstoolkitlite.so.$(RELVER) -Wl,-z,relro -Wl,-soname,libmstoolkitlite.so.$(SOVER) $(LIBS) $(ZLIB) $(EXPAT) $(MZPARSERLITE) $(MSTOOLKIT) $(READERLITE)
-	ln -sf libmstoolkitlite.so.$(RELVER) libmstoolkitlite.so.$(SOVER)
-	ln -sf libmstoolkitlite.so.$(SOVER) libmstoolkitlite.so
-	$(CC) $(CFLAGS) -o libmstoolkit.so.$(RELVER) -Wl,-z,relro -Wl,-soname,libmstoolkit.so.$(SOVER) $(LIBS) $(ZLIB) $(EXPAT) $(MZPARSER) $(MSTOOLKIT) $(READER) $(SQLITE)
-	ln -sf libmstoolkit.so.$(RELVER) libmstoolkit.so.$(SOVER)
-	ln -sf libmstoolkit.so.$(SOVER) libmstoolkit.so
-	# Be careful not to include in the linker command line below the compilation -shared -fPIC flags!
-	$(CC) -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DGCC -DHAVE_EXPAT_CONFIG_H -I./include -L. ../src/diann.cpp -lmstoolkitlite -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -std=c++17 -lstdc++fs -fpermissive -O3 -mfpmath=sse -msse2 -march=core2 -w -o ../diann-linux
-
-clean_objects: 
-	rm -f *.o diann.*
-
-clean_libs: 
-	rm -f $(CLEAN_LIBS)
-
-clean: clean_libs clean_objects
+clean:
+	rm -f *.o libmstoolkitlite.a libmstoolkit.a msSingleScan diann-linux
+	rm -f ../diann-linux
 
 # zLib objects
 
@@ -123,9 +94,6 @@ sqlite3.o : $(SQLITE_PATH)/sqlite3.c
 	$(GCC) $(CFLAGS) $(SQLITE_PATH)/sqlite3.c -c
 
 
-#mzIMLTools objects
-mzid.%.o : $(MZIMLTOOLS_PATH)/%.cpp
-	$(CC) $(CFLAGS) $< -c -o $@
 
 
 #MSToolkit objects
@@ -147,6 +115,9 @@ mzMLWriter.o : $(MST_PATH)/mzMLWriter.cpp
 	
 pepXMLWriter.o : $(MST_PATH)/pepXMLWriter.cpp
 	$(CC) $(CFLAGS) $(MST_PATH)/pepXMLWriter.cpp -c
+
+
+
 
 
 
