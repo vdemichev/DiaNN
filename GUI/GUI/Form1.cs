@@ -156,7 +156,7 @@ namespace GUI
         private void LibButton_Click(object sender, EventArgs e)
         {
             OpenFileDialog libDialog = new OpenFileDialog();
-            libDialog.Filter = "Text files (*.txt, *csv, *.tsv, *xls)|*.txt;*.csv;*.tsv;*.xls|All files (*.*)|*.*";
+            libDialog.Filter = "Spectral library files (*.txt, *.csv, *.tsv, *.xls, *.speclib)|*.txt;*.csv;*.tsv;*.xls;*.speclib|All files (*.*)|*.*";
             libDialog.FilterIndex = 0;
             if (libDialog.ShowDialog() == DialogResult.OK)
                 LibText.Text = libDialog.FileName;
@@ -210,13 +210,15 @@ namespace GUI
 
             if (in_pipeline) PipelineList.Items[processed].BackColor = System.Drawing.Color.GreenYellow;
 
-            bool external = false;
-            if (S.add_s.Length >= 1) if (S.add_s[0] == '>') external = true; // run some external tool; only "Additional options" will be past to the tool
+            bool external = false, save_cfg = false;
+            if (S.add_s.Length >= 1)
+            {
+                if (S.add_s[0] == '>') external = true; // run some external tool; only "Additional options" will be passed to the tool
+                if (S.add_s[0] == '!') save_cfg = true;
+            }
             string opts;
-            if (external) opts = S.add_s.Substring(1);
+            if (external || save_cfg) opts = S.add_s.Substring(1);
             else opts = S.add_s;
-
-            if (!external && S.add_s.Contains("--convert")) convert = true;
 
             process = new Process();
             process.StartInfo.FileName = S.diann_s;
@@ -308,15 +310,15 @@ namespace GUI
                     }
                 }
 
-                process.StartInfo.Arguments += " " + S.add_s;
+                process.StartInfo.Arguments += " " + opts;
             }
 
             process.OutputDataReceived += new DataReceivedEventHandler(OutputHandler);
             process.Exited += new EventHandler(ExitedHandler);
 
-            if (process.StartInfo.Arguments.Length >= 32000 && !external)
+            if ((process.StartInfo.Arguments.Length >= 32000 && !external) || save_cfg)
             {
-                LogText.Text += "Large number of files cannot be passed to the command line tool as command line arguments. " +
+                if (!save_cfg) LogText.Text += "Large number of files cannot be passed to the command line tool as command line arguments. " +
                     "A config file will therefore be created and referenced with a --cfg command. " +
                     "Alternatively, one can use --dir command to include all files in a directory." + Environment.NewLine;
                 String fname = Directory.GetCurrentDirectory() + "\\DIA-NN-launch-cfg.txt";
@@ -328,6 +330,7 @@ namespace GUI
                 catch (Exception ex) { LogText.Text += "ERROR: cannot create a config file, check if the folder with DIA-NN GUI is write-protected." + Environment.NewLine; }
             }
 
+            if (save_cfg) return;
             try
             {
                 running = process.Start();
@@ -439,7 +442,7 @@ namespace GUI
         private void LearnLibButton_Click(object sender, EventArgs e)
         {
             OpenFileDialog libDialog = new OpenFileDialog();
-            libDialog.Filter = "Text files (*.txt, *csv, *.tsv, *xls)|*.txt;*.csv;*.tsv;*.xls|All files (*.*)|*.*";
+            libDialog.Filter = "Spectral library files (*.txt, *.csv, *.tsv, *.xls, *.speclib)|*.txt;*.csv;*.tsv;*.xls;*.speclib|All files (*.*)|*.*";
             libDialog.FilterIndex = 0;
             if (libDialog.ShowDialog() == DialogResult.OK)
                 LearnLibText.Text = libDialog.FileName;
