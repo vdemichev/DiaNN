@@ -149,7 +149,7 @@ public:
 		(*iptr++) = peaks.size();
 		(*iptr++) = MS_level;
 		double * dptr = (double*)iptr;
-		(*dptr++) = RT; (*dptr++) = window_high; (*dptr++) = window_low;
+		(*dptr++) = RT; (*dptr++) = window_low; (*dptr++) = window_high;
 		float * fptr = (float*)dptr;
 		for (int i = 0; i < peaks.size(); i++) (*fptr++) = peaks[i].mz, (*fptr++) = peaks[i].height;
 		return (int*)fptr;
@@ -173,86 +173,92 @@ public:
 	}
 
 	void load_spectra() {
-		int pos = 0, e = 0, ns = 0, s = 0, m;
-		auto provider = gcnew AnalystWiffDataProvider();
-		auto batch = AnalystDataProviderFactory::CreateBatch(gcnew System::String(file), provider);
-		auto sample = batch->GetSample(0);
-		auto mss = sample->MassSpectrometerSample;
-		int en = mss->ExperimentCount;
-
-		std::vector<double> X, Y;
-		for (e = 0; e < en; e++) {
-			auto exp = mss->GetMSExperiment(e);
-			int n = exp->Details->NumberOfScans;
-			double res = Max(10000.0, exp->Details->DefaultResolution);
-			double wl = 0.0, wh = 0.0, win, centre;
-			if (exp->Details->ExperimentType == (ExperimentType)1 && exp->Details->MassRangeInfo->Length > 0) try {
-				win = (double)((FragmentBasedScanMassRange^)(exp->Details->MassRangeInfo[0]))->IsolationWindow;
-				centre = (double)((FragmentBasedScanMassRange^)(exp->Details->MassRangeInfo[0]))->FixedMasses[0];
-			} catch (std::exception &exc) {}
-			for (s = 0; s < n; s++) {
-				if ((*locks)[pos].set()) {
-					auto spi = exp->GetMassSpectrumInfo(s);
-					wl = centre - 0.5 * win, wh = centre + 0.5 * win;
-					if (!vendor) {
-						try {
-							auto sp = exp->GetMassSpectrum(s);
-							auto x = sp->GetActualXValues();
-							auto y = sp->GetActualYValues();
-							m = x->Length;
-							X.resize(m), Y.resize(m);
-							for (int i = 0; i < m; i++) X[i] = x[i], Y[i] = y[i];
-							if (spi->MSLevel == 1) (*spectra)[pos].init(&(X[0]), &(Y[0]), m, !spi->CentroidMode, 0.6 / res, 2.0 / res, 1, 0.5 * (spi->StartRT + spi->EndRT), 0.0, 0.0);
-							else if (spi->MSLevel == 2) (*spectra)[pos].init(&(X[0]), &(Y[0]), m, !spi->CentroidMode, 0.6 / res, 2.0 / res, 2, 0.5 * (spi->StartRT + spi->EndRT), wl, wh);
-						} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout);  provider->Close(); return; }
-					} else {
-						try {
-							auto pl = exp->GetPeakArray(s);
-							m = pl->Length;
-							int i, k;
-							auto &se = (*spectra)[pos];
-							se.peaks.clear();
-							se.MS_level = spi->MSLevel;
-							se.RT = 0.5 * (spi->StartRT + spi->EndRT);
-							if (spi->MSLevel == 1) se.window_low = se.window_high = 0.0;
-							else se.window_low = wl, se.window_high = wh;
-							for (i = k = 0; i < m; i++) if (pl[i]->area >= MinPeakHeight) k++;
-							se.peaks.resize(k);
-							for (i = k = 0; i < m; i++) if (pl[i]->area >= MinPeakHeight) {
-								se.peaks[k].mz = pl[i]->xValue;
-								se.peaks[k++].height = pl[i]->area;
+		try {
+			int pos = 0, e = 0, ns = 0, s = 0, m;
+			auto provider = gcnew AnalystWiffDataProvider();
+			auto batch = AnalystDataProviderFactory::CreateBatch(gcnew System::String(file), provider);
+			auto sample = batch->GetSample(0);
+			auto mss = sample->MassSpectrometerSample;
+			int en = mss->ExperimentCount;
+			
+			try {
+				std::vector<double> X, Y;
+				for (e = 0; e < en; e++) {
+					auto exp = mss->GetMSExperiment(e);
+					int n = exp->Details->NumberOfScans;
+					double res = Max(10000.0, exp->Details->DefaultResolution);
+					double wl = 0.0, wh = 0.0, win, centre;
+					if (exp->Details->ExperimentType == (ExperimentType)1 && exp->Details->MassRangeInfo->Length > 0) try {
+						win = (double)((FragmentBasedScanMassRange^)(exp->Details->MassRangeInfo[0]))->IsolationWindow;
+						centre = (double)((FragmentBasedScanMassRange^)(exp->Details->MassRangeInfo[0]))->FixedMasses[0];
+					} catch (std::exception &exc) {}
+					for (s = 0; s < n; s++) {
+						if ((*locks)[pos].set()) {
+							auto spi = exp->GetMassSpectrumInfo(s);
+							wl = centre - 0.5 * win, wh = centre + 0.5 * win;
+							if (!vendor) {
+								try {
+									auto sp = exp->GetMassSpectrum(s);
+									auto x = sp->GetActualXValues();
+									auto y = sp->GetActualYValues();
+									m = x->Length;
+									X.resize(m), Y.resize(m);
+									for (int i = 0; i < m; i++) X[i] = x[i], Y[i] = y[i];
+									if (spi->MSLevel == 1) (*spectra)[pos].init(&(X[0]), &(Y[0]), m, !spi->CentroidMode, 0.6 / res, 2.0 / res, 1, 0.5 * (spi->StartRT + spi->EndRT), 0.0, 0.0);
+									else if (spi->MSLevel == 2) (*spectra)[pos].init(&(X[0]), &(Y[0]), m, !spi->CentroidMode, 0.6 / res, 2.0 / res, 2, 0.5 * (spi->StartRT + spi->EndRT), wl, wh);
+								} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout);  provider->Close(); return; }
+							} else {
+								try {
+									auto pl = exp->GetPeakArray(s);
+									m = pl->Length;
+									int i, k;
+									auto &se = (*spectra)[pos];
+									se.peaks.clear();
+									se.MS_level = spi->MSLevel;
+									se.RT = 0.5 * (spi->StartRT + spi->EndRT);
+									if (spi->MSLevel == 1) se.window_low = se.window_high = 0.0;
+									else se.window_low = wl, se.window_high = wh;
+									for (i = k = 0; i < m; i++) if (pl[i]->area >= MinPeakHeight) k++;
+									se.peaks.resize(k);
+									for (i = k = 0; i < m; i++) if (pl[i]->area >= MinPeakHeight) {
+										se.peaks[k].mz = pl[i]->xValue;
+										se.peaks[k++].height = pl[i]->area;
+									}
+								} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout);  provider->Close(); return; }
 							}
-						} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout);  provider->Close(); return; }
+						}
+						pos++;
 					}
 				}
-				pos++;
-			}
-		}
-		provider->Close();
+			} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout); }
+			provider->Close();
+		} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout);  return; }
 	}
 };
 
 __declspec(dllexport) HANDLE diann_wiff_load(char * file, bool vendor, int Threads) {
 	int i, e, ns = 0, verbose = false;
-	long long mem;
+	long long mem, tot_peaks;
 	if (verbose) {
 		std::cout.setf(std::ios::unitbuf);
 		std::cout << "Loading wiff file\n";
 	}
 	auto provider = gcnew AnalystWiffDataProvider();
-	auto batch = AnalystDataProviderFactory::CreateBatch(gcnew System::String(file), provider);
-	auto sample = batch->GetSample(0);
-	auto mss = sample->MassSpectrometerSample;
-	int en = mss->ExperimentCount;
+	try {
+		auto batch = AnalystDataProviderFactory::CreateBatch(gcnew System::String(file), provider);
+		auto sample = batch->GetSample(0);
+		auto mss = sample->MassSpectrometerSample;
+		int en = mss->ExperimentCount;
 
-	if (verbose) std::cout << en << " experiments\n";
+		if (verbose) std::cout << en << " experiments\n";
 
-	for (e = 0; e < en; e++) {
-		auto exp = mss->GetMSExperiment(e);
-		ns += exp->Details->NumberOfScans;
-		if (verbose) std::cout << "Experiment " << e << ": " << exp->Details->NumberOfScans << " scans\n";
-	}
-	if (verbose) std::cout << ns << " total scans\n";
+		for (e = 0; e < en; e++) {
+			auto exp = mss->GetMSExperiment(e);
+			ns += exp->Details->NumberOfScans;
+			if (verbose) std::cout << "Experiment " << e << ": " << exp->Details->NumberOfScans << " scans\n";
+		}
+		if (verbose) std::cout << ns << " total scans\n";
+	} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout); provider->Close(); return false; }
 
 	provider->Close();
 	std::vector<Spectrum> spectra(ns);
@@ -266,12 +272,14 @@ __declspec(dllexport) HANDLE diann_wiff_load(char * file, bool vendor, int Threa
 
 	if (verbose) std::cout << "File read successfully\n";
 
-	for (i = mem = 0; i < ns; i++) mem += spectra[i].mem_size();
+	for (i = mem = tot_peaks = 0; i < ns; i++) mem += spectra[i].mem_size(), tot_peaks += spectra[i].peaks.size();
 	if (verbose) std::cout << "Total memory required: " << mem << " bytes\n";
-	HANDLE data = GlobalAlloc(0, mem + 8);
+	HANDLE data = GlobalAlloc(0, mem + 16);
 	if (verbose) std::cout << "Memory allocated\n";
 	int * ptr = (int*)data;
 	*(ptr++) = ns;
+	long long* lptr = (long long*)ptr; 
+	*(lptr++) = tot_peaks; ptr = (int*)lptr;
 
 	std::vector<int> index(ns);
 	for (i = 0; i < ns; i++) index[i] = i;
