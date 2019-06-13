@@ -64,7 +64,7 @@
             this.IsotopeBox = new System.Windows.Forms.CheckBox();
             this.InterferenceBox = new System.Windows.Forms.CheckBox();
             this.OxidationBox = new System.Windows.Forms.CheckBox();
-            this.GeneRepButton = new System.Windows.Forms.Button();
+            this.TempFolderButton = new System.Windows.Forms.Button();
             this.ProtInfBox = new System.Windows.Forms.CheckBox();
             this.PipAdd = new System.Windows.Forms.Button();
             this.PipName = new System.Windows.Forms.TextBox();
@@ -101,7 +101,7 @@
             this.FilesBox = new System.Windows.Forms.GroupBox();
             this.FilesList = new System.Windows.Forms.TextBox();
             this.MainSettingsBox = new System.Windows.Forms.GroupBox();
-            this.GeneRepBox = new System.Windows.Forms.TextBox();
+            this.TempFolderBox = new System.Windows.Forms.TextBox();
             this.ProteinFDRLabel = new System.Windows.Forms.Label();
             this.FDRLabel = new System.Windows.Forms.Label();
             this.StatusLabel = new System.Windows.Forms.Label();
@@ -357,7 +357,7 @@
             this.OutputButton.Name = "OutputButton";
             this.OutputButton.Size = new System.Drawing.Size(91, 23);
             this.OutputButton.TabIndex = 10;
-            this.OutputButton.Text = "Full report";
+            this.OutputButton.Text = "Report";
             this.toolTip1.SetToolTip(this.OutputButton, "Specify where to save the full report once the analysis is finished");
             this.OutputButton.UseVisualStyleBackColor = true;
             this.OutputButton.Click += new System.EventHandler(this.OutputButton_Click);
@@ -559,16 +559,17 @@
             this.OxidationBox.UseVisualStyleBackColor = true;
             this.OxidationBox.CheckedChanged += new System.EventHandler(this.OxidationBox_CheckedChanged);
             // 
-            // GeneRepButton
+            // TempFolderButton
             // 
-            this.GeneRepButton.Location = new System.Drawing.Point(6, 145);
-            this.GeneRepButton.Name = "GeneRepButton";
-            this.GeneRepButton.Size = new System.Drawing.Size(91, 23);
-            this.GeneRepButton.TabIndex = 41;
-            this.GeneRepButton.Text = "Gene report";
-            this.toolTip1.SetToolTip(this.GeneRepButton, "Specify where to save the report once the gene-level quantification report");
-            this.GeneRepButton.UseVisualStyleBackColor = true;
-            this.GeneRepButton.Click += new System.EventHandler(this.GeneRepButton_Click);
+            this.TempFolderButton.Location = new System.Drawing.Point(6, 145);
+            this.TempFolderButton.Name = "TempFolderButton";
+            this.TempFolderButton.Size = new System.Drawing.Size(91, 23);
+            this.TempFolderButton.TabIndex = 41;
+            this.TempFolderButton.Text = "Temp folder";
+            this.toolTip1.SetToolTip(this.TempFolderButton, "Specify a folder for temporary information; required if either the raw data folde" +
+        "r or the folder containing DIA-NN GUI are write protected");
+            this.TempFolderButton.UseVisualStyleBackColor = true;
+            this.TempFolderButton.Click += new System.EventHandler(this.TempFolderButton_Click);
             // 
             // ProtInfBox
             // 
@@ -1010,8 +1011,8 @@
             // 
             // MainSettingsBox
             // 
-            this.MainSettingsBox.Controls.Add(this.GeneRepBox);
-            this.MainSettingsBox.Controls.Add(this.GeneRepButton);
+            this.MainSettingsBox.Controls.Add(this.TempFolderBox);
+            this.MainSettingsBox.Controls.Add(this.TempFolderButton);
             this.MainSettingsBox.Controls.Add(this.ClearFastaButton);
             this.MainSettingsBox.Controls.Add(this.ProteinFDRLabel);
             this.MainSettingsBox.Controls.Add(this.ProteinFDRUpDown);
@@ -1042,13 +1043,12 @@
             this.MainSettingsBox.TabStop = false;
             this.MainSettingsBox.Text = "Main Settings";
             // 
-            // GeneRepBox
+            // TempFolderBox
             // 
-            this.GeneRepBox.Location = new System.Drawing.Point(103, 147);
-            this.GeneRepBox.Name = "GeneRepBox";
-            this.GeneRepBox.Size = new System.Drawing.Size(182, 20);
-            this.GeneRepBox.TabIndex = 42;
-            this.GeneRepBox.Text = "gene_quant.tsv";
+            this.TempFolderBox.Location = new System.Drawing.Point(103, 147);
+            this.TempFolderBox.Name = "TempFolderBox";
+            this.TempFolderBox.Size = new System.Drawing.Size(182, 20);
+            this.TempFolderBox.TabIndex = 42;
             // 
             // ProteinFDRLabel
             // 
@@ -1390,8 +1390,8 @@
         private System.Windows.Forms.Label MaxVarModsLabel;
         private System.Windows.Forms.NumericUpDown VarModsUpDown;
         private System.Windows.Forms.TextBox LogText;
-        private System.Windows.Forms.TextBox GeneRepBox;
-        private System.Windows.Forms.Button GeneRepButton;
+        private System.Windows.Forms.TextBox TempFolderBox;
+        private System.Windows.Forms.Button TempFolderButton;
         private System.Windows.Forms.CheckBox ProtInfBox;
         private System.Windows.Forms.Button PipAdd;
         private System.Windows.Forms.TextBox PipName;

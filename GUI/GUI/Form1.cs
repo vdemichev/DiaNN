@@ -19,7 +19,7 @@ namespace GUI
     public struct Settings
     {
         public string name;
-        public string files_s, lib_s, out_s, out_gene_s, fasta_s, diann_s, learn_lib_s, out_lib_s, add_s;
+        public string files_s, lib_s, out_s, temp_folder_s, fasta_s, diann_s, learn_lib_s, out_lib_s, add_s;
         public decimal threads_i, log_i, missed_i, varmod_i, scan_i, pep_min_i, pep_max_i,
             pr_min_i, pr_max_i, fr_min_i, fr_max_i;
         public int grouping_i, protease_i;
@@ -60,7 +60,7 @@ namespace GUI
             S.threads_i = ThreadsUpDown.Value;
             S.log_i = VerboseUpDown.Value;
             S.out_s = OutputText.Text;
-            S.out_gene_s = GeneRepBox.Text;
+            S.temp_folder_s = TempFolderBox.Text;
             S.prec_fdr_d = FDRUpDown.Value;
             S.prot_fdr_d = ProteinFDRUpDown.Value;
             S.fasta_s = FastaText.Text;
@@ -103,7 +103,7 @@ namespace GUI
             ThreadsUpDown.Value = S.threads_i;
             VerboseUpDown.Value = S.log_i;
             OutputText.Text = S.out_s;
-            GeneRepBox.Text = S.out_gene_s;
+            TempFolderBox.Text = S.temp_folder_s;
             FDRUpDown.Value = S.prec_fdr_d;
             ProteinFDRUpDown.Value = S.prot_fdr_d;
             FastaText.Text = S.fasta_s;
@@ -136,6 +136,8 @@ namespace GUI
             InterferenceBox.Checked = S.ifr_b;
             PGBox.SelectedIndex = S.grouping_i;
             OptionsText.Text = S.add_s;
+
+            if (!System.IO.Directory.Exists(S.temp_folder_s)) TempFolderBox.Text = S.temp_folder_s = "";
         }
 
         private void RawDataButton_Click(object sender, EventArgs e)
@@ -249,9 +251,14 @@ namespace GUI
                     process.StartInfo.Arguments += " --threads " + S.threads_i.ToString();
                     process.StartInfo.Arguments += " --verbose " + S.log_i.ToString();
                     process.StartInfo.Arguments += " --out \"" + S.out_s + "\"";
-                    process.StartInfo.Arguments += " --out-gene \"" + S.out_gene_s + "\"";
+                    process.StartInfo.Arguments += " --out-gene \"" 
+                        + System.IO.Path.Combine(System.IO.Path.GetDirectoryName(S.out_s), System.IO.Path.GetFileNameWithoutExtension(S.out_s))
+                        + ".genes.tsv\"";
                     process.StartInfo.Arguments += " --qvalue " + Convert.ToString(0.01 * (double)S.prec_fdr_d);
                     process.StartInfo.Arguments += " --protein-qvalue " + Convert.ToString(0.01 * (double)S.prot_fdr_d);
+
+                    if (!System.IO.Directory.Exists(S.temp_folder_s)) TempFolderBox.Text = S.temp_folder_s = "";
+                    else process.StartInfo.Arguments += " --temp \"" + S.temp_folder_s + "\"";
 
                     if (S.fasta_s != "")
                     {
@@ -322,12 +329,13 @@ namespace GUI
                     "A config file will therefore be created and referenced with a --cfg command. " +
                     "Alternatively, one can use --dir command to include all files in a directory." + Environment.NewLine;
                 String fname = Directory.GetCurrentDirectory() + "\\DIA-NN-launch-cfg.txt";
+                if (S.temp_folder_s.Length >= 1) if (System.IO.Directory.Exists(S.temp_folder_s)) fname = S.temp_folder_s + "\\DIA-NN-launch-cfg.txt";
                 try
                 {
                     File.WriteAllText(fname, process.StartInfo.Arguments);
                     process.StartInfo.Arguments = " --cfg \"" + fname + "\"";
                 }
-                catch (Exception ex) { LogText.Text += "ERROR: cannot create a config file, check if the folder with DIA-NN GUI is write-protected." + Environment.NewLine; }
+                catch (Exception ex) { LogText.Text += "ERROR: cannot create the config file " + fname + ": check if the location is write protected. Error message: " + Environment.NewLine + ex.ToString() + Environment.NewLine; }
             }
 
             if (save_cfg) return;
@@ -536,14 +544,11 @@ namespace GUI
                 VarModsUpDown.Value = 1;
         }
 
-        private void GeneRepButton_Click(object sender, EventArgs e)
+        private void TempFolderButton_Click(object sender, EventArgs e)
         {
-            SaveFileDialog outDialog = new SaveFileDialog();
-            outDialog.Filter = "Tab-separated files (*.tsv)|*.tsv|All files (*.*)|*.*";
-            outDialog.FilterIndex = 0;
-            outDialog.RestoreDirectory = true;
+            var outDialog = new FolderBrowserDialog();
             if (outDialog.ShowDialog() == DialogResult.OK)
-                GeneRepBox.Text = outDialog.FileName;
+                TempFolderBox.Text = outDialog.SelectedPath;
         }
 
         private void PipAdd_Click(object sender, EventArgs e)

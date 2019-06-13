@@ -38,7 +38,7 @@ Uncomment "#define _NO_THERMORAW" in RAWReader.cpp, MSReader.cpp and MSReader.h 
 #define CPP17
 
 #ifdef LINUX
-#undef MSTOOLKIT
+//#undef MSTOOLKIT
 #undef WIFFREADER
 #undef CPP17
 #if (__GNUC__ >= 7) 
@@ -228,7 +228,7 @@ bool UseQuant = false; // use .quant files created previously; implies UseRTInfo
 bool QuantOnly = false; // quantification will be performed anew using identification info from .quant files
 bool ReportOnly = false; // generate report from quant files
 bool GenRef = false; // update the .ref file with newly computed data
-std::string args, lib_file, learn_lib_file, out_file = "quant.tsv", out_lib_file = "lib.tsv", out_gene_file = "gene_quant.tsv", temp_folder = "";
+std::string args, lib_file, learn_lib_file, out_file = "quant.tsv", out_lib_file = "lib.tsv", out_dir = "", out_gene_file = "gene_quant.tsv", temp_folder = "";
 std::string ref_file, gen_ref_file, all_fastas;
 std::vector<std::string> ms_files, fasta_files, fasta_filter_files;
 std::set<std::string> failed_files;
@@ -666,6 +666,17 @@ std::string remove_extension(const std::string &file) {
 	int pos = file.find_last_of('.');
 	if (pos == std::string::npos) return file;
 	res = file.substr(0, pos);
+	return res;
+}
+
+std::string get_file_name(const std::string &file) {
+	std::string res;
+	int pos = file.size() - 1;
+	while (pos >= 0) {
+		if (file[pos] == '\\' || file[pos] == '/') { pos++; break; }
+		pos--;
+	}
+	res = file.substr(pos);
 	return res;
 }
 
@@ -1541,6 +1552,7 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "individual-reports ", 19)) IndividualReports = true, std::cout << "Reports will be generated separately for different runs (in the respective folders)\n";
 		else if (!memcmp(&(args[start]), "no-stats ", 9)) SaveRunStats = false;
 		else if (!memcmp(&(args[start]), "convert ", 8)) Convert = true, std::cout << "MS data files will be converted to .dia format\n";
+		else if (!memcmp(&(args[start]), "out-dir ", 8)) out_dir = trim(args.substr(start + 8, end - start - 8));
 #ifdef CPP17
 		else if (!memcmp(&(args[start]), "remove-quant ", 13)) RemoveQuant = true, std::cout << ".quant files will be removed when the analysis is finished\n";
 #endif
@@ -2015,7 +2027,7 @@ public:
 		write_string(out, gene);
 		out.write((char*)&name_index, sizeof(int));
 		out.write((char*)&gene_index, sizeof(int));
-		for (auto &it = precursors.begin(); it != precursors.end(); it++) out.write((char*)&(*it), sizeof(int));
+		for (auto it = precursors.begin(); it != precursors.end(); it++) out.write((char*)&(*it), sizeof(int));
 	}
 
 	template <class F> void read(F &in) {
@@ -2094,7 +2106,7 @@ public:
 		write_vector(out, name_indices);
 		write_vector(out, gene_indices);
 		write_vector(out, precursors);
-		for (auto &it = proteins.begin(); it != proteins.end(); it++) out.write((char*)&(*it), sizeof(int));
+		for (auto it = proteins.begin(); it != proteins.end(); it++) out.write((char*)&(*it), sizeof(int));
 	}
 
 	template <class F> void read(F &in) {
@@ -2142,29 +2154,15 @@ public:
 
 class QuantEntry {
 public:
-	int index = -1, window;
+	int index = -1, window, fr_n = 0;
     mutable PrecursorEntry pr;
-    mutable std::vector<Fragment> fr;
+    mutable Fragment fr[auxF];
 
 	QuantEntry() {  }
 
-	template <class F> void write(F &out) {
-        int size = fr.size();
-		out.write((char*)&index, sizeof(int));
-		out.write((char*)&window, sizeof(int));
-        out.write((char*)&pr, sizeof(PrecursorEntry));
-        out.write((char*)&size, sizeof(int));
-        for (int i = 0; i < size; i++) out.write((char*)&(fr[i]), sizeof(Fragment));
-    }
+	template <class F> void write(F &out) { out.write((char*)this, sizeof(QuantEntry)); }
 
-	template <class F> void read(F &in) {
-		in.read((char*)&index, sizeof(int));
-		in.read((char*)&window, sizeof(int));
-        in.read((char*)&pr, sizeof(PrecursorEntry));
-        int size; in.read((char*)&size, sizeof(int));
-        fr.resize(size);
-        for (int i = 0; i < size; i++) in.read((char*)&(fr[i]), sizeof(Fragment));
-    }
+	template <class F> void read(F &in) { in.read((char*)this, sizeof(QuantEntry)); }
 
 	friend inline bool operator < (const QuantEntry &left, const QuantEntry &right) { return left.index < right.index; }
 };
@@ -2191,7 +2189,7 @@ class Quant {
 public:
 	RunStats RS;
 	std::vector<QuantEntry> entries;
-	std::vector<DecoyEntry> decoys;
+	std::vector<DecoyEntry> decoys; // used only for cross-run q-value calculation - for spectral library generation from DIA data; 
 	std::vector<int> proteins; // protein ids at <= ProteinIDQvalue
 	double weights[pN], guide_weights[pN];
 	double tandem_min, tandem_max;
@@ -3040,7 +3038,7 @@ public:
 			if (Verbose >= 1) Time(), std::cout << "Quantifying peptides\n";
 			for (auto it = map.begin(); it != map.end(); it++) {
 				auto v = &(it->second);
-				m = (*v)[0].second.fr.size(), k = 0;
+				m = (*v)[0].second.fr_n, k = 0;
 
 				std::vector<double> score(m);
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) if (jt->second.pr.qvalue <= MaxQuantQvalue) {
@@ -3882,9 +3880,9 @@ public:
 						<< jt->second.pr.cscore << '\t'
 						<< jt->second.pr.decoy_evidence << '\t'
 						<< jt->second.pr.decoy_cscore;
-					out << '\t'; for (int fr = 0; fr < jt->second.fr.size(); fr++) out << jt->second.fr[fr].quantity[qTotal] << ";";
-					out << '\t'; for (int fr = 0; fr < jt->second.fr.size(); fr++) out << jt->second.fr[fr].quantity[qFiltered] << ";";
-					out << '\t'; for (int fr = 0; fr < jt->second.fr.size(); fr++) out << jt->second.fr[fr].corr << ";";
+					out << '\t'; for (int fr = 0; fr < jt->second.fr_n; fr++) out << jt->second.fr[fr].quantity[qTotal] << ";";
+					out << '\t'; for (int fr = 0; fr < jt->second.fr_n; fr++) out << jt->second.fr[fr].quantity[qFiltered] << ";";
+					out << '\t'; for (int fr = 0; fr < jt->second.fr_n; fr++) out << jt->second.fr[fr].corr << ";";
 				}
 #if REPORT_SCORES
 				for (int i = 0; i < pN; i++) out << '\t' << jt->second.pr.scores[i];
@@ -4811,7 +4809,7 @@ public:
 				int k = inf->peaks[peak].peak, pos, fr, l = scan_index->size(), ind, i, best_fr = inf->peaks[peak].best_fragment, apex = inf->peaks[peak].apex;
 				float *x = (float*)alloca(m * sizeof(float)), *ref = (float*)alloca(m * sizeof(float));
 				float *elution = (float*)alloca(W * sizeof(float)), *sc = &(inf->scoring[peak * pN]);
-				double w, weight;
+				double w, weight;	
 
 				assert(k >= 0);
 				assert(k < l - pr->S);
@@ -6897,7 +6895,7 @@ public:
 		return true;
 	}
 
-    void process() {
+	void process(std::vector<QuantEntry> * result = NULL, float q_filtering = 0.01) {
 		int i, ids = 0, best_ids = 0, best1, best50, cal_batch = 0;
 
 		if (QuantOnly) goto report;
@@ -7127,15 +7125,21 @@ public:
 		quant.MassCorrection = MassCorrection, quant.MassCorrectionMs1 = MassCorrectionMs1;
 		quant.MassCalSplit = MassCalSplit, quant.MassCalSplitMs1 = MassCalSplitMs1, quant.MassCalCenter = MassCalCenter, quant.MassCalCenterMs1 = MassCalCenterMs1;
 
-        for (auto it = entries.begin(); it != entries.end(); it++) {
-			if (it->decoy.flags & fFound) if (it->decoy.info[0].qvalue <= QFilter) {
+		double q_threshold = (result == NULL ? QFilter : q_filtering);
+		if (result != NULL) {
+			int tot_entries = 0;
+			for (auto it = entries.begin(); it != entries.end(); it++) if (it->target.flags & fFound) if (it->target.info[0].qvalue <= q_threshold) tot_entries++;
+			result->clear(); result->reserve(tot_entries);
+		}
+		for (auto it = entries.begin(); it != entries.end(); it++) {
+			if (result == NULL) if (it->decoy.flags & fFound) if (it->decoy.info[0].qvalue <= QFilter) {
 				de.index = it->target.pep->index;
 				de.qvalue = it->decoy.info[0].qvalue;
 				quant.decoys.push_back(de);
 			}
 
-            if (!(it->target.flags & fFound)) continue;
-			if (it->target.info[0].qvalue > QFilter) continue;
+			if (!(it->target.flags & fFound)) continue;
+			if (it->target.info[0].qvalue > q_threshold) continue;
 
 			qe.index = std::distance(entries.begin(), it);
 			qe.window = it->target.S;
@@ -7162,15 +7166,17 @@ public:
 			else qe.pr.decoy_qvalue = 1.0;
 			qe.pr.profile_qvalue = 1.0;
 
-			qe.fr.resize(it->target.info[0].quant.size());
-			for (i = 0; i < qe.fr.size(); i++) qe.fr[i] = it->target.info[0].quant[i];
+			qe.fr_n = Min(it->target.info[0].quant.size(), auxF);
+			for (i = 0; i < qe.fr_n; i++) qe.fr[i] = it->target.info[0].quant[i];
+			if (qe.fr_n < auxF) memset(&(qe.fr[qe.fr_n]), 0, (auxF - qe.fr_n) * sizeof(Fragment));
 #if REPORT_SCORES
 			for (i = 0; i < pN; i++) qe.pr.scores[i] = it->target.info[0].scores[i];
-			if (qe.pr.decoy_found) { for (i = 0; i < pN; i++) qe.pr.decoy_scores[i] = it->decoy.info[0].scores[i]; }
-			else for (i = 0; i < pN; i++) qe.pr.decoy_scores[i] = 0.0;
+			if (qe.pr.decoy_found) { for (i = 0; i < pN; i++) qe.pr.decoy_scores[i] = it->decoy.info[0].scores[i]; } else for (i = 0; i < pN; i++) qe.pr.decoy_scores[i] = 0.0;
 #endif
-			quant.entries.push_back(qe);
-        }
+			if (result == NULL) quant.entries.push_back(qe);
+			else result->push_back(qe);
+		}
+		if (result != NULL) return;
 
 		if (QuantInMem) { quants.push_back(quant); std::cout << "\n"; }
 		else {
@@ -7231,7 +7237,7 @@ public:
 };
 
 #if (EXTERNAL > 0)
-int analyse(char * lib_bytes, long long lib_bytes_size, int threads, double acc_ms1, double acc_ms2, int win_size,
+std::vector<QuantEntry> analyse(char * lib_bytes, long long lib_bytes_size, int threads, double acc_ms1, double acc_ms2, int win_size, float q_value_threshold,
 	int n_ms1, float *ms1_rt, int *ms1_peak_n, float *ms1_peaks,
 	int n_ms2, float *ms2_rt, float *ms2_low, float *ms2_high, int *ms2_peak_n, float *ms2_peaks) {
 
@@ -7263,9 +7269,9 @@ int analyse(char * lib_bytes, long long lib_bytes_size, int threads, double acc_
 	run.init();
 	run.load_library(&lib);
 
-	run.no_report = true;
-	run.process();
-	return run.Ids1;
+	std::vector<QuantEntry> result;
+	run.process(&result, q_value_threshold);
+	return result;
 }
 
 int analyse_unit_test(int threads) {
@@ -7293,8 +7299,13 @@ int analyse_unit_test(int threads) {
 	for (int i = 0; i < run.ms2h.size(); i++) ms2_rt[i] = run.ms2h[i].RT, ms2_peak_n[i] = run.ms2h[i].n,
 		ms2_low[i] = run.ms2h[i].window_low, ms2_high[i] = run.ms2h[i].window_high;
 
-	return analyse(&(lib_bytes[0]), lib_bytes.size(), threads, 20.0 / 1000000.0, 20.0 / 1000000.0, 8, run.ms1h.size(), &(ms1_rt[0]), &(ms1_peak_n[0]), (float*)(run.ms1h[0].peaks),
+	auto result = analyse(&(lib_bytes[0]), lib_bytes.size(), threads, 20.0 / 1000000.0, 20.0 / 1000000.0, 8, 0.01, run.ms1h.size(), &(ms1_rt[0]), &(ms1_peak_n[0]), (float*)(run.ms1h[0].peaks),
 		run.ms2h.size(), &(ms2_rt[0]), &(ms2_low[0]), &(ms2_high[0]), &(ms2_peak_n[0]), (float*)(run.ms2h[0].peaks));
+
+	std::cout << result.size() << " precursors at 1% FDR:\n";
+	std::cout << "Precursor.Index.In.Library\tPrecursor.RT\tPrecursor.iRT\tPrecursor.Quantity\tPrecursor.QValue\n";
+	for (auto &qe : result) std::cout << qe.pr.index << '\t' << qe.pr.RT << '\t' << qe.pr.iRT << '\t' << qe.pr.quantity << '\t' << qe.pr.qvalue << '\n';
+	return result.size();
 }
 #endif
 
@@ -7318,8 +7329,8 @@ int main(int argc, char *argv[]) {
 
 #if (EXTERNAL > 0)
 	if (args.find("--!test") != std::string::npos) {
-		std::cout << "Analyse() function unit test: ";
-		std::cout << analyse_unit_test(Threads) << "\n";
+		std::cout << "Analyse() function unit test:\n"; analyse_unit_test(Threads);
+		std::cout << "\n";
 	}
 #endif
 
@@ -7329,6 +7340,7 @@ int main(int argc, char *argv[]) {
 			Run run(std::distance(ms_files.begin(), it));
 			if (!run.load(&((*it)[0]))) continue;
 			std::string(dia_name) = run.name + std::string(".dia");
+			if (out_dir.size()) dia_name = out_dir + '\\' + get_file_name(dia_name);
 			run.write(&(dia_name[0]));
 		}
 		std::cout << "Finished\n\n";
@@ -7549,8 +7561,14 @@ gen_spec_lib:
 		for (auto it = ms_files.begin(); it != ms_files.end(); it++) {
 			Quant Qt;
 			auto Q = &Qt;
-			if (!QuantInMem) Q->read_meta(*it + std::string(".quant"), lib.entries.size());
-			else Q = &(quants[std::distance(ms_files.begin(), it)]);
+			if (!QuantInMem) {
+				std::ifstream in((*it) + std::string(".quant"));
+				if (in.fail() || temp_folder.size()) in = std::ifstream(location_to_file_name(*it) + std::string(".quant"), std::ifstream::binary);
+				if (in.is_open()) {
+					Q->read_meta(in, lib.entries.size());
+					in.close();
+				}
+			} else Q = &(quants[std::distance(ms_files.begin(), it)]);
 
 			Run run(Q->run_index);
 			if (!run.load(&((*it)[0]))) std::cout << "ERROR: cannot load the file, skipping\n", failed_files.insert(*it);
