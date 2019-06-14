@@ -153,6 +153,8 @@ bool MassCalFilter = true;
 int RTSegments = 20;
 int MinRTPredBin = 20;
 
+bool ForceScanningSWATH = false;
+bool ForceNormalSWATH = false;
 bool UseQ1 = true;
 bool ForceQ1 = false;
 bool Q1Cal = false;
@@ -1573,13 +1575,13 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "rt-profiling ", 13)) RTProfiling = true, std::cout << "RT profiling enabled\n";
 		else if (!memcmp(&(args[start]), "prefix ", 7)) prefix = trim(args.substr(start + 7, end - start - 7)); // prefix added to input file names
 		else if (!memcmp(&(args[start]), "ext ", 4)) ext = trim(args.substr(start + 4, end - start - 4)); // extension added to input file names
-		else if (!memcmp(&(args[start]), "test-dataset ", 13)) TestDataset = true, std::cout << "Library will be split into training and test datasets for neural network training\n";
-		else if (!memcmp(&(args[start]), "test-proportion ", 16)) TestDatasetSize = std::stod(args.substr(start + 16, std::string::npos)),
-			std::cout << "The " << TestDatasetSize << " fraction of the precursors will be used as the test dataset\n";
+		//else if (!memcmp(&(args[start]), "test-dataset ", 13)) TestDataset = true, std::cout << "Library will be split into training and test datasets for neural network training\n";
+		/*else if (!memcmp(&(args[start]), "test-proportion ", 16)) TestDatasetSize = std::stod(args.substr(start + 16, std::string::npos)),
+			std::cout << "The " << TestDatasetSize << " fraction of the precursors will be used as the test dataset\n";*/
 		else if (!memcmp(&(args[start]), "lc-all-scores ", 14)) LCAllScores = true, std::cout << "All scores will be used by the linear classifier (not recommended)\n";
 		else if (!memcmp(&(args[start]), "no-ifs-removal ", 15)) NoIfsRemoval = true, std::cout << "Interference removal from fragment elution curves disabled (not recommended)\n";
 		else if (!memcmp(&(args[start]), "no-fr-selection ", 16)) NoFragmentSelectionForQuant = true, std::cout << "Cross-run selection of fragments for quantification disabled (not recommended)\n";
-		else if (!memcmp(&(args[start]), "tight-quant ", 12)) TightQuant = true, std::cout << "Chromatogram extraction with tight mass accuracy will be attempted for fragment quantification\n";
+		//else if (!memcmp(&(args[start]), "tight-quant ", 12)) TightQuant = true, std::cout << "Chromatogram extraction with tight mass accuracy will be attempted for fragment quantification\n";
 		else if (!memcmp(&(args[start]), "no-standardisation ", 19)) Standardise = false, std::cout << "Scores will not be standardised for neural network training\n";
 		/*else if (!memcmp(&(args[start]), "standardisation-scale ", 22)) StandardisationScale = std::stod(args.substr(start + 22, std::string::npos)),
 			std::cout << "Standardisation scale set to " << StandardisationScale << "\n";*/
@@ -1628,6 +1630,8 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Minimum number of precursors identified at 10% FDR used for calibration set to " << MinCal << "\n";
 		else if (!memcmp(&(args[start]), "min-class ", 10)) MinClassifier = std::stoi(args.substr(start + 10, std::string::npos)),
 			std::cout << "Minimum number of precursors identified at 10% FDR used for linear classifier training set to " << MinClassifier << "\n";*/
+		else if (!memcmp(&(args[start]), "scanning-swath ", 15)) ForceScanningSWATH = true, std::cout << "All runs will be analysed as Scanning SWATH runs\n";
+		else if (!memcmp(&(args[start]), "regular-swath ", 14)) ForceNormalSWATH = true, std::cout << "All runs will be analysed as regular SWATH runs\n";
 #if Q1
 		else if (!memcmp(&(args[start]), "no-q1 ", 6)) UseQ1 = false, std::cout << "Q1 scores disabled\n";
 		else if (!memcmp(&(args[start]), "use-q1 ", 8)) ForceQ1 = true, std::cout << "Q1 scores will be used for regular SWATH runs\n";
@@ -5465,7 +5469,7 @@ public:
 		}
 		scan_cycle.resize(n_scans); if (n_scans) scan_cycle[0] = 0;
 		for (i = 1; i < n_scans; i++) { // handle overlapping windows
-			if (!scanning && ms2h[i].window_high > ms2h[i - 1].window_high + E && Abs(ms2h[i].window_low - ms2h[i - 1].window_high) < E && ms2h[i].RT - ms2h[i - 1].RT < (1.0 / (60.0 * 70.0)))
+			if (!ForceNormalSWATH && !ForceScanningSWATH) if (!scanning && ms2h[i].window_high > ms2h[i - 1].window_high + E && Abs(ms2h[i].window_low - ms2h[i - 1].window_high) < E && ms2h[i].RT - ms2h[i - 1].RT < (1.0 / (60.0 * 70.0)))
 				scanning = true;
 			if (ms2h[i - 1].window_low < ms2h[i].window_low - E && ms2h[i - 1].window_high < ms2h[i].window_high - E && ms2h[i - 1].window_high > ms2h[i].window_low + E)
 				ms2h[i - 1].window_high = ms2h[i].window_low = (ms2h[i - 1].window_high + ms2h[i].window_low) * 0.5;
@@ -5475,7 +5479,9 @@ public:
 			else scan_cycle[i] = ++cycle;
 		}
 		for (cycle_length = 0; cycle_length < scan_cycle.size(); cycle_length++) if (scan_cycle[cycle_length]) break;
-		if (Verbose >= 1 && scanning && !Convert) Time(), std::cout << "Scanning SWATH run\n";
+		if (ForceNormalSWATH) scanning = false;
+		if (ForceScanningSWATH) scanning = true;
+		if (Verbose >= 1 && scanning && !Convert) Time(), std::cout << "Analysing as Scanning SWATH run\n";
 		scan_RT.resize(n_scans);
 		double t_min = INF, t_max = -INF;
 		for (i = 0; i < n_scans; i++) {
