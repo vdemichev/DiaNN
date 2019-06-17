@@ -315,6 +315,8 @@ std::vector<std::string> TrackedPrecursors;
 #define LOGSC FALSE
 #define REPORT_SCORES FALSE
 #define EXTERNAL 1
+#define ELUTION_PROFILE FALSE
+const int ElutionProfileRadius = 10;
 
 enum {
 	libPr, libCharge, libPrMz,
@@ -2161,6 +2163,9 @@ public:
 	int index = -1, window, fr_n = 0;
     mutable PrecursorEntry pr;
     mutable Fragment fr[auxF];
+#if ELUTION_PROFILE
+	mutable std::pair<float, float> ms1_elution_profile[2 * ElutionProfileRadius + 1]; // (retention time, intensity) pairs
+#endif
 
 	QuantEntry() {  }
 
@@ -4423,6 +4428,9 @@ public:
 		int flags = 0, S, thread_id = 0;
 
 		std::vector<Search> info; // used only for precursors detected in the sample
+#if ELUTION_PROFILE
+		std::vector<std::pair<float, float> > ms1_elution_profile;
+#endif
 
 		void init(Run * _run, Peptide * p) {
 			run = _run;
@@ -4723,6 +4731,38 @@ public:
 					}
 				}
 			}
+
+#if ELUTION_PROFILE
+			void get_ms1_elution_profile(std::vector<std::pair<float, float> > &ms1_elution_profile, float rt) {
+				ms1_elution_profile.clear(); ms1_elution_profile.resize(2 * ElutionProfileRadius + 1, std::pair<float, float>(0.0, 0.0));
+				if (!run->ms1h.size()) return;
+
+				int pos, low = 0, high = run->ms1h.size();
+				while (true) {
+					pos = (low + high) >> 1;
+					if (high <= low + 1) break;
+					if (run->ms1h[pos].RT > rt) high = pos;
+					else low = pos;
+				}
+				if (pos < run->ms1h.size() - 1) if (rt - run->ms1h[pos].RT > run->ms1h[pos + 1].RT - rt) pos++;
+				int step = Max(1, S / ElutionProfileRadius);
+
+				for (int i = 0; i <= ElutionProfileRadius; i++) {
+					int ind = pos + i * step;
+					if (ind >= run->ms1h.size()) break;
+					double query_mz = run->predicted_mz_ms1(&(run->MassCorrectionMs1[0]), mz, run->ms1h[ind].RT);
+					float height = run->ms1h[ind].level<false>(query_mz, run->MassAccuracyMs1);
+					ms1_elution_profile[i + ElutionProfileRadius] = std::pair<float, float>(run->ms1h[ind].RT, height);
+				}
+				for (int i = 1; i <= ElutionProfileRadius; i++) {
+					int ind = pos - i * step;
+					if (ind < 0) break;
+					double query_mz = run->predicted_mz_ms1(&(run->MassCorrectionMs1[0]), mz, run->ms1h[ind].RT);
+					float height = run->ms1h[ind].level<false>(query_mz, run->MassAccuracyMs1);
+					ms1_elution_profile[ElutionProfileRadius - i] = std::pair<float, float>(run->ms1h[ind].RT, height);
+				}
+			}
+#endif
 
 			noninline void peaks() {
 				if (!m) return;
@@ -5183,6 +5223,10 @@ public:
 			}
 			if (NoIfsRemoval) for (fr = 0, info[0].quantity = 0.0; fr < searcher.m; fr++)
 				info[0].quantity += (info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered] = info[0].quant[(*searcher.fri)[fr]].quantity[qTotal]);
+
+#if ELUTION_PROFILE
+			searcher.get_ms1_elution_profile(ms1_elution_profile, info[0].RT);
+#endif
 
 			if (info[0].qvalue <= 0.01 && (e = signal[k - low] * 0.5) >= MinPeakHeight) { // for run stats
 				double fwhm_sc = 0.0, fwhm_rt = 0.0;
@@ -7179,6 +7223,10 @@ public:
 			for (i = 0; i < pN; i++) qe.pr.scores[i] = it->target.info[0].scores[i];
 			if (qe.pr.decoy_found) { for (i = 0; i < pN; i++) qe.pr.decoy_scores[i] = it->decoy.info[0].scores[i]; } else for (i = 0; i < pN; i++) qe.pr.decoy_scores[i] = 0.0;
 #endif
+#if ELUTION_PROFILE
+			assert(it->target.ms1_elution_profile.size() == 2 * ElutionProfileRadius + 1);
+			for (i = 0; i <= 2 * ElutionProfileRadius; i++) qe.ms1_elution_profile[i] = it->target.ms1_elution_profile[i];
+#endif
 			if (result == NULL) quant.entries.push_back(qe);
 			else result->push_back(qe);
 		}
@@ -7199,8 +7247,28 @@ public:
 			if (out.fail()) std::cout << "ERROR: cannot save the .quant file to " << out_quant << '\n';
 			else {
 				quant.write(out);
+				long long fsize = out.tellp();
 				out.close();
 				if (Verbose >= 1) Time(), std::cout << "Quantification information saved to " << out_quant << ".\n\n";
+#ifdef _MSC_VER
+				if (args.find("--!mmap-quant") != std::string::npos) {
+					std::string mapping_name(1000, 0);
+					sprintf(&(mapping_name[0]), "DIA-NN_%d_%d", GetCurrentProcessId(),run_index);
+					for (i = 0; i < 1000; i++) if (mapping_name[i] == 0) break; mapping_name.resize(i);
+					if (Verbose >= 1) Time(), std::cout << "Creating a file mapping " << mapping_name << " with the quantification information\n";
+					auto map = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, fsize, mapping_name.c_str());
+					if (map == NULL) std::cout << "ERROR: Cannot create file mapping\n";
+					else {
+						auto buf = (LPTSTR)MapViewOfFile(map, FILE_MAP_ALL_ACCESS, 0, 0, fsize);
+						if (buf == NULL) std::cout << "ERROR: Cannot access file mapping\n";
+						else {
+							std::stringstream ss(buf);
+							quant.write(ss);
+							quant.read(ss);
+						}
+					}
+				}
+#endif
 			}
 		}
 
