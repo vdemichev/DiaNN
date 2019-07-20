@@ -52,7 +52,6 @@
             this.OutputButton = new System.Windows.Forms.Button();
             this.VerboseLabel = new System.Windows.Forms.Label();
             this.FDRUpDown = new System.Windows.Forms.NumericUpDown();
-            this.ProteinFDRUpDown = new System.Windows.Forms.NumericUpDown();
             this.MethionineBox = new System.Windows.Forms.CheckBox();
             this.CysteineBox = new System.Windows.Forms.CheckBox();
             this.RTProfilingBox = new System.Windows.Forms.CheckBox();
@@ -73,6 +72,9 @@
             this.OptimiseTrainingBox = new System.Windows.Forms.CheckBox();
             this.OpenPipelineButton = new System.Windows.Forms.Button();
             this.SavePipelineButton = new System.Windows.Forms.Button();
+            this.QuantBox = new System.Windows.Forms.ComboBox();
+            this.GenLibBox = new System.Windows.Forms.CheckBox();
+            this.PrositBox = new System.Windows.Forms.CheckBox();
             this.VarModsUpDown = new System.Windows.Forms.NumericUpDown();
             this.LibFreeSettings = new System.Windows.Forms.GroupBox();
             this.MaxVarModsLabel = new System.Windows.Forms.Label();
@@ -90,31 +92,32 @@
             this.PepLenMin = new System.Windows.Forms.NumericUpDown();
             this.MissedCleavageLabel = new System.Windows.Forms.Label();
             this.EnzymeLabel = new System.Windows.Forms.Label();
-            this.OutputLibText = new System.Windows.Forms.TextBox();
             this.LearnLibText = new System.Windows.Forms.TextBox();
+            this.OutputLibText = new System.Windows.Forms.TextBox();
             this.FastaText = new System.Windows.Forms.TextBox();
             this.AlgorithmSettings = new System.Windows.Forms.GroupBox();
+            this.QuantLabel = new System.Windows.Forms.Label();
             this.PGLabel = new System.Windows.Forms.Label();
             this.WindowLabel = new System.Windows.Forms.Label();
             this.Ms1AccLabel = new System.Windows.Forms.Label();
             this.MassAccLabel = new System.Windows.Forms.Label();
             this.FilesBox = new System.Windows.Forms.GroupBox();
             this.FilesList = new System.Windows.Forms.TextBox();
+            this.LibText = new System.Windows.Forms.TextBox();
+            this.ExeText = new System.Windows.Forms.TextBox();
             this.MainSettingsBox = new System.Windows.Forms.GroupBox();
+            this.PDFRepBox = new System.Windows.Forms.CheckBox();
             this.TempFolderBox = new System.Windows.Forms.TextBox();
-            this.ProteinFDRLabel = new System.Windows.Forms.Label();
             this.FDRLabel = new System.Windows.Forms.Label();
             this.StatusLabel = new System.Windows.Forms.Label();
             this.StatusIndicator = new System.Windows.Forms.Button();
             this.OptionsText = new System.Windows.Forms.TextBox();
             this.OutputText = new System.Windows.Forms.TextBox();
             this.ThreadsUpDown = new System.Windows.Forms.NumericUpDown();
-            this.LibText = new System.Windows.Forms.TextBox();
             this.ThreadsLabel = new System.Windows.Forms.Label();
             this.RunButton = new System.Windows.Forms.Button();
             this.VerboseUpDown = new System.Windows.Forms.NumericUpDown();
             this.StopButton = new System.Windows.Forms.Button();
-            this.ExeText = new System.Windows.Forms.TextBox();
             this.LogText = new System.Windows.Forms.TextBox();
             this.PipClear = new System.Windows.Forms.Button();
             this.PipRemove = new System.Windows.Forms.Button();
@@ -125,7 +128,6 @@
             ((System.ComponentModel.ISupportInitialize)(this.MassAccMs1UpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MassAccUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.FDRUpDown)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.ProteinFDRUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MissedCleavageUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.VarModsUpDown)).BeginInit();
             this.LibFreeSettings.SuspendLayout();
@@ -145,7 +147,7 @@
             // SaveLogButton
             // 
             this.SaveLogButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.SaveLogButton.Location = new System.Drawing.Point(899, 695);
+            this.SaveLogButton.Location = new System.Drawing.Point(899, 703);
             this.SaveLogButton.Name = "SaveLogButton";
             this.SaveLogButton.Size = new System.Drawing.Size(89, 23);
             this.SaveLogButton.TabIndex = 6;
@@ -156,7 +158,7 @@
             // LogClearButton
             // 
             this.LogClearButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.LogClearButton.Location = new System.Drawing.Point(802, 695);
+            this.LogClearButton.Location = new System.Drawing.Point(802, 703);
             this.LogClearButton.Name = "LogClearButton";
             this.LogClearButton.Size = new System.Drawing.Size(91, 23);
             this.LogClearButton.TabIndex = 24;
@@ -166,9 +168,9 @@
             // 
             // OutputLibButton
             // 
-            this.OutputLibButton.Location = new System.Drawing.Point(6, 74);
+            this.OutputLibButton.Location = new System.Drawing.Point(5, 122);
             this.OutputLibButton.Name = "OutputLibButton";
-            this.OutputLibButton.Size = new System.Drawing.Size(91, 23);
+            this.OutputLibButton.Size = new System.Drawing.Size(90, 23);
             this.OutputLibButton.TabIndex = 33;
             this.OutputLibButton.Text = "Output library";
             this.toolTip1.SetToolTip(this.OutputLibButton, "Specify where to save the spectral library produced");
@@ -177,7 +179,7 @@
             // 
             // LearnLibButton
             // 
-            this.LearnLibButton.Location = new System.Drawing.Point(6, 45);
+            this.LearnLibButton.Location = new System.Drawing.Point(6, 41);
             this.LearnLibButton.Name = "LearnLibButton";
             this.LearnLibButton.Size = new System.Drawing.Size(91, 23);
             this.LearnLibButton.TabIndex = 30;
@@ -189,7 +191,7 @@
             // 
             // FastaButton
             // 
-            this.FastaButton.Location = new System.Drawing.Point(6, 44);
+            this.FastaButton.Location = new System.Drawing.Point(6, 276);
             this.FastaButton.Name = "FastaButton";
             this.FastaButton.Size = new System.Drawing.Size(91, 23);
             this.FastaButton.TabIndex = 28;
@@ -276,7 +278,7 @@
             // UseQuantCheck
             // 
             this.UseQuantCheck.AutoSize = true;
-            this.UseQuantCheck.Location = new System.Drawing.Point(6, 362);
+            this.UseQuantCheck.Location = new System.Drawing.Point(6, 20);
             this.UseQuantCheck.Name = "UseQuantCheck";
             this.UseQuantCheck.Size = new System.Drawing.Size(208, 17);
             this.UseQuantCheck.TabIndex = 26;
@@ -321,7 +323,7 @@
             // 
             // ExeButton
             // 
-            this.ExeButton.Location = new System.Drawing.Point(6, 174);
+            this.ExeButton.Location = new System.Drawing.Point(6, 399);
             this.ExeButton.Name = "ExeButton";
             this.ExeButton.Size = new System.Drawing.Size(91, 23);
             this.ExeButton.TabIndex = 15;
@@ -333,7 +335,7 @@
             // OptionsLabel
             // 
             this.OptionsLabel.AutoSize = true;
-            this.OptionsLabel.Location = new System.Drawing.Point(2, 256);
+            this.OptionsLabel.Location = new System.Drawing.Point(3, 228);
             this.OptionsLabel.Name = "OptionsLabel";
             this.OptionsLabel.Size = new System.Drawing.Size(90, 13);
             this.OptionsLabel.TabIndex = 5;
@@ -342,7 +344,7 @@
             // 
             // LibButton
             // 
-            this.LibButton.Location = new System.Drawing.Point(6, 16);
+            this.LibButton.Location = new System.Drawing.Point(6, 247);
             this.LibButton.Name = "LibButton";
             this.LibButton.Size = new System.Drawing.Size(91, 23);
             this.LibButton.TabIndex = 3;
@@ -353,11 +355,11 @@
             // 
             // OutputButton
             // 
-            this.OutputButton.Location = new System.Drawing.Point(6, 116);
+            this.OutputButton.Location = new System.Drawing.Point(5, 42);
             this.OutputButton.Name = "OutputButton";
             this.OutputButton.Size = new System.Drawing.Size(91, 23);
             this.OutputButton.TabIndex = 10;
-            this.OutputButton.Text = "Report";
+            this.OutputButton.Text = "Main output";
             this.toolTip1.SetToolTip(this.OutputButton, "Specify where to save the full report once the analysis is finished");
             this.OutputButton.UseVisualStyleBackColor = true;
             this.OutputButton.Click += new System.EventHandler(this.OutputButton_Click);
@@ -365,7 +367,7 @@
             // VerboseLabel
             // 
             this.VerboseLabel.AutoSize = true;
-            this.VerboseLabel.Location = new System.Drawing.Point(3, 231);
+            this.VerboseLabel.Location = new System.Drawing.Point(188, 202);
             this.VerboseLabel.Name = "VerboseLabel";
             this.VerboseLabel.Size = new System.Drawing.Size(50, 13);
             this.VerboseLabel.TabIndex = 19;
@@ -376,7 +378,7 @@
             // FDRUpDown
             // 
             this.FDRUpDown.DecimalPlaces = 1;
-            this.FDRUpDown.Location = new System.Drawing.Point(229, 203);
+            this.FDRUpDown.Location = new System.Drawing.Point(101, 174);
             this.FDRUpDown.Minimum = new decimal(new int[] {
             1,
             0,
@@ -393,32 +395,12 @@
             65536});
             this.FDRUpDown.ValueChanged += new System.EventHandler(this.FDRUpDown_ValueChanged);
             // 
-            // ProteinFDRUpDown
-            // 
-            this.ProteinFDRUpDown.DecimalPlaces = 1;
-            this.ProteinFDRUpDown.Location = new System.Drawing.Point(229, 229);
-            this.ProteinFDRUpDown.Minimum = new decimal(new int[] {
-            1,
-            0,
-            0,
-            131072});
-            this.ProteinFDRUpDown.Name = "ProteinFDRUpDown";
-            this.ProteinFDRUpDown.Size = new System.Drawing.Size(55, 20);
-            this.ProteinFDRUpDown.TabIndex = 38;
-            this.toolTip1.SetToolTip(this.ProteinFDRUpDown, "Protein-level false discovery rate level at which the output files will be filter" +
-        "ed");
-            this.ProteinFDRUpDown.Value = new decimal(new int[] {
-            1000,
-            0,
-            0,
-            65536});
-            // 
             // MethionineBox
             // 
             this.MethionineBox.AutoSize = true;
             this.MethionineBox.Checked = true;
             this.MethionineBox.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.MethionineBox.Location = new System.Drawing.Point(6, 159);
+            this.MethionineBox.Location = new System.Drawing.Point(6, 121);
             this.MethionineBox.Name = "MethionineBox";
             this.MethionineBox.Size = new System.Drawing.Size(110, 17);
             this.MethionineBox.TabIndex = 47;
@@ -431,7 +413,7 @@
             this.CysteineBox.AutoSize = true;
             this.CysteineBox.Checked = true;
             this.CysteineBox.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.CysteineBox.Location = new System.Drawing.Point(153, 159);
+            this.CysteineBox.Location = new System.Drawing.Point(153, 121);
             this.CysteineBox.Name = "CysteineBox";
             this.CysteineBox.Size = new System.Drawing.Size(138, 17);
             this.CysteineBox.TabIndex = 48;
@@ -460,7 +442,7 @@
             "Lys-C/P",
             "Lys-C",
             "Chymotrypsin"});
-            this.EnzymeCombo.Location = new System.Drawing.Point(61, 107);
+            this.EnzymeCombo.Location = new System.Drawing.Point(61, 69);
             this.EnzymeCombo.Name = "EnzymeCombo";
             this.EnzymeCombo.Size = new System.Drawing.Size(81, 21);
             this.EnzymeCombo.TabIndex = 35;
@@ -468,7 +450,7 @@
             // 
             // MissedCleavageUpDown
             // 
-            this.MissedCleavageUpDown.Location = new System.Drawing.Point(246, 108);
+            this.MissedCleavageUpDown.Location = new System.Drawing.Point(246, 70);
             this.MissedCleavageUpDown.Maximum = new decimal(new int[] {
             5,
             0,
@@ -489,15 +471,16 @@
             this.LibraryFreeBox.AutoSize = true;
             this.LibraryFreeBox.Location = new System.Drawing.Point(6, 20);
             this.LibraryFreeBox.Name = "LibraryFreeBox";
-            this.LibraryFreeBox.Size = new System.Drawing.Size(254, 17);
+            this.LibraryFreeBox.Size = new System.Drawing.Size(131, 17);
             this.LibraryFreeBox.TabIndex = 27;
-            this.LibraryFreeBox.Text = "Use library-free search / generate spectral library";
+            this.LibraryFreeBox.Text = "Use library-free search";
             this.toolTip1.SetToolTip(this.LibraryFreeBox, "In silico digest the FASTA file provided and search the generated peptides");
             this.LibraryFreeBox.UseVisualStyleBackColor = true;
+            this.LibraryFreeBox.CheckedChanged += new System.EventHandler(this.LibraryFreeBox_CheckedChanged);
             // 
             // ClearFastaButton
             // 
-            this.ClearFastaButton.Location = new System.Drawing.Point(6, 73);
+            this.ClearFastaButton.Location = new System.Drawing.Point(6, 305);
             this.ClearFastaButton.Name = "ClearFastaButton";
             this.ClearFastaButton.Size = new System.Drawing.Size(91, 23);
             this.ClearFastaButton.TabIndex = 40;
@@ -514,9 +497,9 @@
             "protein names (from FASTA)",
             "genes (species-specific)",
             "genes"});
-            this.PGBox.Location = new System.Drawing.Point(132, 150);
+            this.PGBox.Location = new System.Drawing.Point(131, 156);
             this.PGBox.Name = "PGBox";
-            this.PGBox.Size = new System.Drawing.Size(153, 21);
+            this.PGBox.Size = new System.Drawing.Size(154, 21);
             this.PGBox.TabIndex = 49;
             this.toolTip1.SetToolTip(this.PGBox, "Protein isoforms are always grouped based on...");
             // 
@@ -550,7 +533,7 @@
             // OxidationBox
             // 
             this.OxidationBox.AutoSize = true;
-            this.OxidationBox.Location = new System.Drawing.Point(6, 186);
+            this.OxidationBox.Location = new System.Drawing.Point(6, 148);
             this.OxidationBox.Name = "OxidationBox";
             this.OxidationBox.Size = new System.Drawing.Size(80, 17);
             this.OxidationBox.TabIndex = 62;
@@ -561,13 +544,13 @@
             // 
             // TempFolderButton
             // 
-            this.TempFolderButton.Location = new System.Drawing.Point(6, 145);
+            this.TempFolderButton.Location = new System.Drawing.Point(5, 71);
             this.TempFolderButton.Name = "TempFolderButton";
             this.TempFolderButton.Size = new System.Drawing.Size(91, 23);
             this.TempFolderButton.TabIndex = 41;
-            this.TempFolderButton.Text = "Temp folder";
+            this.TempFolderButton.Text = "Temp/.dia dir";
             this.toolTip1.SetToolTip(this.TempFolderButton, "Specify a folder for temporary information; required if either the raw data folde" +
-        "r or the folder containing DIA-NN GUI are write protected");
+        "r or the folder containing DIA-NN GUI are write-protected");
             this.TempFolderButton.UseVisualStyleBackColor = true;
             this.TempFolderButton.Click += new System.EventHandler(this.TempFolderButton_Click);
             // 
@@ -587,7 +570,7 @@
             // 
             // PipAdd
             // 
-            this.PipAdd.Location = new System.Drawing.Point(606, 17);
+            this.PipAdd.Location = new System.Drawing.Point(605, 15);
             this.PipAdd.Name = "PipAdd";
             this.PipAdd.Size = new System.Drawing.Size(91, 23);
             this.PipAdd.TabIndex = 39;
@@ -601,7 +584,7 @@
             // 
             this.PipName.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.PipName.Location = new System.Drawing.Point(703, 19);
+            this.PipName.Location = new System.Drawing.Point(702, 17);
             this.PipName.Name = "PipName";
             this.PipName.Size = new System.Drawing.Size(286, 20);
             this.PipName.TabIndex = 40;
@@ -611,7 +594,7 @@
             // PipExec
             // 
             this.PipExec.BackColor = System.Drawing.SystemColors.GradientInactiveCaption;
-            this.PipExec.Location = new System.Drawing.Point(802, 175);
+            this.PipExec.Location = new System.Drawing.Point(802, 173);
             this.PipExec.Name = "PipExec";
             this.PipExec.Size = new System.Drawing.Size(91, 23);
             this.PipExec.TabIndex = 44;
@@ -622,7 +605,7 @@
             // 
             // PipUpdate
             // 
-            this.PipUpdate.Location = new System.Drawing.Point(606, 74);
+            this.PipUpdate.Location = new System.Drawing.Point(605, 72);
             this.PipUpdate.Name = "PipUpdate";
             this.PipUpdate.Size = new System.Drawing.Size(91, 23);
             this.PipUpdate.TabIndex = 47;
@@ -634,7 +617,7 @@
             // OptimiseTrainingBox
             // 
             this.OptimiseTrainingBox.AutoSize = true;
-            this.OptimiseTrainingBox.Location = new System.Drawing.Point(153, 186);
+            this.OptimiseTrainingBox.Location = new System.Drawing.Point(174, 100);
             this.OptimiseTrainingBox.Name = "OptimiseTrainingBox";
             this.OptimiseTrainingBox.Size = new System.Drawing.Size(118, 17);
             this.OptimiseTrainingBox.TabIndex = 65;
@@ -642,11 +625,12 @@
             this.toolTip1.SetToolTip(this.OptimiseTrainingBox, "The spectral library generated will be optimised specifically for the training of" +
         " peptide fragmentation predictor");
             this.OptimiseTrainingBox.UseVisualStyleBackColor = true;
+            this.OptimiseTrainingBox.CheckedChanged += new System.EventHandler(this.OptimiseTrainingBox_CheckedChanged);
             // 
             // OpenPipelineButton
             // 
             this.OpenPipelineButton.Image = ((System.Drawing.Image)(resources.GetObject("OpenPipelineButton.Image")));
-            this.OpenPipelineButton.Location = new System.Drawing.Point(702, 175);
+            this.OpenPipelineButton.Location = new System.Drawing.Point(702, 173);
             this.OpenPipelineButton.Name = "OpenPipelineButton";
             this.OpenPipelineButton.Size = new System.Drawing.Size(32, 23);
             this.OpenPipelineButton.TabIndex = 48;
@@ -657,7 +641,7 @@
             // SavePipelineButton
             // 
             this.SavePipelineButton.Image = ((System.Drawing.Image)(resources.GetObject("SavePipelineButton.Image")));
-            this.SavePipelineButton.Location = new System.Drawing.Point(739, 175);
+            this.SavePipelineButton.Location = new System.Drawing.Point(739, 173);
             this.SavePipelineButton.Name = "SavePipelineButton";
             this.SavePipelineButton.Size = new System.Drawing.Size(32, 23);
             this.SavePipelineButton.TabIndex = 49;
@@ -665,9 +649,45 @@
             this.SavePipelineButton.UseVisualStyleBackColor = true;
             this.SavePipelineButton.Click += new System.EventHandler(this.SavePipelineButton_Click);
             // 
+            // QuantBox
+            // 
+            this.QuantBox.FormattingEnabled = true;
+            this.QuantBox.Items.AddRange(new object[] {
+            "any LC",
+            "robust LC"});
+            this.QuantBox.Location = new System.Drawing.Point(131, 186);
+            this.QuantBox.Name = "QuantBox";
+            this.QuantBox.Size = new System.Drawing.Size(154, 21);
+            this.QuantBox.TabIndex = 54;
+            this.toolTip1.SetToolTip(this.QuantBox, "Quantification algortihms optimised for...");
+            // 
+            // GenLibBox
+            // 
+            this.GenLibBox.AutoSize = true;
+            this.GenLibBox.Location = new System.Drawing.Point(6, 100);
+            this.GenLibBox.Name = "GenLibBox";
+            this.GenLibBox.Size = new System.Drawing.Size(140, 17);
+            this.GenLibBox.TabIndex = 54;
+            this.GenLibBox.Text = "Generate spectral library";
+            this.toolTip1.SetToolTip(this.GenLibBox, "In silico digest the FASTA file provided and search the generated peptides");
+            this.GenLibBox.UseVisualStyleBackColor = true;
+            this.GenLibBox.CheckedChanged += new System.EventHandler(this.GenLibBox_CheckedChanged);
+            // 
+            // PrositBox
+            // 
+            this.PrositBox.AutoSize = true;
+            this.PrositBox.Location = new System.Drawing.Point(6, 151);
+            this.PrositBox.Name = "PrositBox";
+            this.PrositBox.Size = new System.Drawing.Size(267, 17);
+            this.PrositBox.TabIndex = 66;
+            this.PrositBox.Text = "Generate Prosit input from FASTA or spectral library";
+            this.toolTip1.SetToolTip(this.PrositBox, "In silico digest the FASTA file and save the list of precursors in a format compa" +
+        "tible with Prosit");
+            this.PrositBox.UseVisualStyleBackColor = true;
+            // 
             // VarModsUpDown
             // 
-            this.VarModsUpDown.Location = new System.Drawing.Point(246, 135);
+            this.VarModsUpDown.Location = new System.Drawing.Point(246, 97);
             this.VarModsUpDown.Maximum = new decimal(new int[] {
             5,
             0,
@@ -679,7 +699,6 @@
             // 
             // LibFreeSettings
             // 
-            this.LibFreeSettings.Controls.Add(this.OptimiseTrainingBox);
             this.LibFreeSettings.Controls.Add(this.MaxVarModsLabel);
             this.LibFreeSettings.Controls.Add(this.VarModsUpDown);
             this.LibFreeSettings.Controls.Add(this.OxidationBox);
@@ -702,13 +721,11 @@
             this.LibFreeSettings.Controls.Add(this.EnzymeLabel);
             this.LibFreeSettings.Controls.Add(this.EnzymeCombo);
             this.LibFreeSettings.Controls.Add(this.MissedCleavageUpDown);
-            this.LibFreeSettings.Controls.Add(this.OutputLibButton);
-            this.LibFreeSettings.Controls.Add(this.OutputLibText);
             this.LibFreeSettings.Controls.Add(this.LearnLibText);
             this.LibFreeSettings.Controls.Add(this.LearnLibButton);
-            this.LibFreeSettings.Location = new System.Drawing.Point(3, 396);
+            this.LibFreeSettings.Location = new System.Drawing.Point(3, 437);
             this.LibFreeSettings.Name = "LibFreeSettings";
-            this.LibFreeSettings.Size = new System.Drawing.Size(292, 294);
+            this.LibFreeSettings.Size = new System.Drawing.Size(292, 260);
             this.LibFreeSettings.TabIndex = 37;
             this.LibFreeSettings.TabStop = false;
             this.LibFreeSettings.Text = "Library-free search";
@@ -716,7 +733,7 @@
             // MaxVarModsLabel
             // 
             this.MaxVarModsLabel.AutoSize = true;
-            this.MaxVarModsLabel.Location = new System.Drawing.Point(35, 137);
+            this.MaxVarModsLabel.Location = new System.Drawing.Point(35, 99);
             this.MaxVarModsLabel.Name = "MaxVarModsLabel";
             this.MaxVarModsLabel.Size = new System.Drawing.Size(205, 13);
             this.MaxVarModsLabel.TabIndex = 64;
@@ -725,7 +742,7 @@
             // FrMzDash
             // 
             this.FrMzDash.AutoSize = true;
-            this.FrMzDash.Location = new System.Drawing.Point(213, 269);
+            this.FrMzDash.Location = new System.Drawing.Point(213, 235);
             this.FrMzDash.Name = "FrMzDash";
             this.FrMzDash.Size = new System.Drawing.Size(12, 13);
             this.FrMzDash.TabIndex = 60;
@@ -733,7 +750,7 @@
             // 
             // FrMzMax
             // 
-            this.FrMzMax.Location = new System.Drawing.Point(231, 267);
+            this.FrMzMax.Location = new System.Drawing.Point(231, 233);
             this.FrMzMax.Maximum = new decimal(new int[] {
             2000,
             0,
@@ -752,7 +769,7 @@
             // FrMzLabel
             // 
             this.FrMzLabel.AutoSize = true;
-            this.FrMzLabel.Location = new System.Drawing.Point(3, 269);
+            this.FrMzLabel.Location = new System.Drawing.Point(3, 235);
             this.FrMzLabel.Name = "FrMzLabel";
             this.FrMzLabel.Size = new System.Drawing.Size(119, 13);
             this.FrMzLabel.TabIndex = 58;
@@ -760,7 +777,7 @@
             // 
             // FrMzMin
             // 
-            this.FrMzMin.Location = new System.Drawing.Point(153, 267);
+            this.FrMzMin.Location = new System.Drawing.Point(153, 233);
             this.FrMzMin.Maximum = new decimal(new int[] {
             2000,
             0,
@@ -779,7 +796,7 @@
             // PrMzDash
             // 
             this.PrMzDash.AutoSize = true;
-            this.PrMzDash.Location = new System.Drawing.Point(213, 240);
+            this.PrMzDash.Location = new System.Drawing.Point(213, 206);
             this.PrMzDash.Name = "PrMzDash";
             this.PrMzDash.Size = new System.Drawing.Size(12, 13);
             this.PrMzDash.TabIndex = 56;
@@ -787,7 +804,7 @@
             // 
             // PrMzMax
             // 
-            this.PrMzMax.Location = new System.Drawing.Point(231, 238);
+            this.PrMzMax.Location = new System.Drawing.Point(231, 204);
             this.PrMzMax.Maximum = new decimal(new int[] {
             2000,
             0,
@@ -806,7 +823,7 @@
             // PrMzLabel
             // 
             this.PrMzLabel.AutoSize = true;
-            this.PrMzLabel.Location = new System.Drawing.Point(3, 240);
+            this.PrMzLabel.Location = new System.Drawing.Point(3, 206);
             this.PrMzLabel.Name = "PrMzLabel";
             this.PrMzLabel.Size = new System.Drawing.Size(103, 13);
             this.PrMzLabel.TabIndex = 54;
@@ -814,7 +831,7 @@
             // 
             // PrMzMin
             // 
-            this.PrMzMin.Location = new System.Drawing.Point(153, 238);
+            this.PrMzMin.Location = new System.Drawing.Point(153, 204);
             this.PrMzMin.Maximum = new decimal(new int[] {
             2000,
             0,
@@ -833,7 +850,7 @@
             // PepLenDash
             // 
             this.PepLenDash.AutoSize = true;
-            this.PepLenDash.Location = new System.Drawing.Point(213, 211);
+            this.PepLenDash.Location = new System.Drawing.Point(213, 177);
             this.PepLenDash.Name = "PepLenDash";
             this.PepLenDash.Size = new System.Drawing.Size(12, 13);
             this.PepLenDash.TabIndex = 52;
@@ -841,7 +858,7 @@
             // 
             // PepLenMax
             // 
-            this.PepLenMax.Location = new System.Drawing.Point(231, 209);
+            this.PepLenMax.Location = new System.Drawing.Point(231, 175);
             this.PepLenMax.Name = "PepLenMax";
             this.PepLenMax.Size = new System.Drawing.Size(54, 20);
             this.PepLenMax.TabIndex = 51;
@@ -855,7 +872,7 @@
             // PepLenLabel
             // 
             this.PepLenLabel.AutoSize = true;
-            this.PepLenLabel.Location = new System.Drawing.Point(3, 211);
+            this.PepLenLabel.Location = new System.Drawing.Point(3, 177);
             this.PepLenLabel.Name = "PepLenLabel";
             this.PepLenLabel.Size = new System.Drawing.Size(105, 13);
             this.PepLenLabel.TabIndex = 50;
@@ -863,7 +880,7 @@
             // 
             // PepLenMin
             // 
-            this.PepLenMin.Location = new System.Drawing.Point(153, 209);
+            this.PepLenMin.Location = new System.Drawing.Point(153, 175);
             this.PepLenMin.Minimum = new decimal(new int[] {
             5,
             0,
@@ -882,7 +899,7 @@
             // MissedCleavageLabel
             // 
             this.MissedCleavageLabel.AutoSize = true;
-            this.MissedCleavageLabel.Location = new System.Drawing.Point(148, 110);
+            this.MissedCleavageLabel.Location = new System.Drawing.Point(148, 72);
             this.MissedCleavageLabel.Name = "MissedCleavageLabel";
             this.MissedCleavageLabel.Size = new System.Drawing.Size(92, 13);
             this.MissedCleavageLabel.TabIndex = 41;
@@ -891,40 +908,43 @@
             // EnzymeLabel
             // 
             this.EnzymeLabel.AutoSize = true;
-            this.EnzymeLabel.Location = new System.Drawing.Point(6, 110);
+            this.EnzymeLabel.Location = new System.Drawing.Point(6, 72);
             this.EnzymeLabel.Name = "EnzymeLabel";
             this.EnzymeLabel.Size = new System.Drawing.Size(49, 13);
             this.EnzymeLabel.TabIndex = 40;
             this.EnzymeLabel.Text = "Protease";
             // 
-            // OutputLibText
-            // 
-            this.OutputLibText.Location = new System.Drawing.Point(103, 76);
-            this.OutputLibText.Name = "OutputLibText";
-            this.OutputLibText.Size = new System.Drawing.Size(182, 20);
-            this.OutputLibText.TabIndex = 32;
-            this.OutputLibText.Text = "lib.tsv";
-            // 
             // LearnLibText
             // 
-            this.LearnLibText.Location = new System.Drawing.Point(103, 47);
+            this.LearnLibText.Location = new System.Drawing.Point(103, 43);
             this.LearnLibText.Name = "LearnLibText";
             this.LearnLibText.Size = new System.Drawing.Size(182, 20);
             this.LearnLibText.TabIndex = 31;
+            this.LearnLibText.TextChanged += new System.EventHandler(this.LearnLibText_TextChanged);
+            // 
+            // OutputLibText
+            // 
+            this.OutputLibText.Location = new System.Drawing.Point(102, 124);
+            this.OutputLibText.Name = "OutputLibText";
+            this.OutputLibText.Size = new System.Drawing.Size(181, 20);
+            this.OutputLibText.TabIndex = 32;
+            this.OutputLibText.TextChanged += new System.EventHandler(this.OutputLibText_TextChanged);
             // 
             // FastaText
             // 
             this.FastaText.AcceptsReturn = true;
-            this.FastaText.Location = new System.Drawing.Point(103, 44);
+            this.FastaText.Location = new System.Drawing.Point(103, 276);
             this.FastaText.Multiline = true;
             this.FastaText.Name = "FastaText";
             this.FastaText.ReadOnly = true;
             this.FastaText.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.FastaText.Size = new System.Drawing.Size(182, 68);
+            this.FastaText.Size = new System.Drawing.Size(182, 119);
             this.FastaText.TabIndex = 29;
             // 
             // AlgorithmSettings
             // 
+            this.AlgorithmSettings.Controls.Add(this.QuantBox);
+            this.AlgorithmSettings.Controls.Add(this.QuantLabel);
             this.AlgorithmSettings.Controls.Add(this.ProtInfBox);
             this.AlgorithmSettings.Controls.Add(this.InterferenceBox);
             this.AlgorithmSettings.Controls.Add(this.IsotopeBox);
@@ -940,17 +960,26 @@
             this.AlgorithmSettings.Controls.Add(this.MassAccLabel);
             this.AlgorithmSettings.Controls.Add(this.NNCheck);
             this.AlgorithmSettings.Controls.Add(this.BatchModeCheck);
-            this.AlgorithmSettings.Location = new System.Drawing.Point(307, 396);
+            this.AlgorithmSettings.Location = new System.Drawing.Point(307, 437);
             this.AlgorithmSettings.Name = "AlgorithmSettings";
-            this.AlgorithmSettings.Size = new System.Drawing.Size(293, 294);
+            this.AlgorithmSettings.Size = new System.Drawing.Size(293, 260);
             this.AlgorithmSettings.TabIndex = 38;
             this.AlgorithmSettings.TabStop = false;
             this.AlgorithmSettings.Text = "Algorithm";
             // 
+            // QuantLabel
+            // 
+            this.QuantLabel.AutoSize = true;
+            this.QuantLabel.Location = new System.Drawing.Point(7, 189);
+            this.QuantLabel.Name = "QuantLabel";
+            this.QuantLabel.Size = new System.Drawing.Size(112, 13);
+            this.QuantLabel.TabIndex = 53;
+            this.QuantLabel.Text = "Quantification strategy";
+            // 
             // PGLabel
             // 
             this.PGLabel.AutoSize = true;
-            this.PGLabel.Location = new System.Drawing.Point(7, 153);
+            this.PGLabel.Location = new System.Drawing.Point(7, 159);
             this.PGLabel.Name = "PGLabel";
             this.PGLabel.Size = new System.Drawing.Size(118, 13);
             this.PGLabel.TabIndex = 48;
@@ -985,17 +1014,23 @@
             // 
             // FilesBox
             // 
-            this.FilesBox.Controls.Add(this.UseQuantCheck);
             this.FilesBox.Controls.Add(this.RawDataButton);
             this.FilesBox.Controls.Add(this.ConvertButton);
+            this.FilesBox.Controls.Add(this.ClearFastaButton);
             this.FilesBox.Controls.Add(this.FilesList);
             this.FilesBox.Controls.Add(this.ClearButton);
+            this.FilesBox.Controls.Add(this.LibButton);
+            this.FilesBox.Controls.Add(this.ExeButton);
+            this.FilesBox.Controls.Add(this.LibText);
+            this.FilesBox.Controls.Add(this.FastaButton);
+            this.FilesBox.Controls.Add(this.FastaText);
+            this.FilesBox.Controls.Add(this.ExeText);
             this.FilesBox.Location = new System.Drawing.Point(3, 1);
             this.FilesBox.Name = "FilesBox";
-            this.FilesBox.Size = new System.Drawing.Size(292, 389);
+            this.FilesBox.Size = new System.Drawing.Size(292, 430);
             this.FilesBox.TabIndex = 36;
             this.FilesBox.TabStop = false;
-            this.FilesBox.Text = "Files";
+            this.FilesBox.Text = "Input";
             // 
             // FilesList
             // 
@@ -1006,63 +1041,80 @@
             this.FilesList.Name = "FilesList";
             this.FilesList.ReadOnly = true;
             this.FilesList.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.FilesList.Size = new System.Drawing.Size(279, 307);
+            this.FilesList.Size = new System.Drawing.Size(279, 197);
             this.FilesList.TabIndex = 1;
+            // 
+            // LibText
+            // 
+            this.LibText.Location = new System.Drawing.Point(103, 249);
+            this.LibText.Name = "LibText";
+            this.LibText.Size = new System.Drawing.Size(182, 20);
+            this.LibText.TabIndex = 2;
+            // 
+            // ExeText
+            // 
+            this.ExeText.Location = new System.Drawing.Point(103, 401);
+            this.ExeText.Name = "ExeText";
+            this.ExeText.Size = new System.Drawing.Size(182, 20);
+            this.ExeText.TabIndex = 17;
+            this.ExeText.Text = "diann.exe";
             // 
             // MainSettingsBox
             // 
+            this.MainSettingsBox.Controls.Add(this.PrositBox);
+            this.MainSettingsBox.Controls.Add(this.OptimiseTrainingBox);
+            this.MainSettingsBox.Controls.Add(this.GenLibBox);
+            this.MainSettingsBox.Controls.Add(this.UseQuantCheck);
+            this.MainSettingsBox.Controls.Add(this.PDFRepBox);
             this.MainSettingsBox.Controls.Add(this.TempFolderBox);
             this.MainSettingsBox.Controls.Add(this.TempFolderButton);
-            this.MainSettingsBox.Controls.Add(this.ClearFastaButton);
-            this.MainSettingsBox.Controls.Add(this.ProteinFDRLabel);
-            this.MainSettingsBox.Controls.Add(this.ProteinFDRUpDown);
             this.MainSettingsBox.Controls.Add(this.FDRUpDown);
             this.MainSettingsBox.Controls.Add(this.FDRLabel);
             this.MainSettingsBox.Controls.Add(this.StatusLabel);
             this.MainSettingsBox.Controls.Add(this.StatusIndicator);
-            this.MainSettingsBox.Controls.Add(this.ExeButton);
             this.MainSettingsBox.Controls.Add(this.OptionsText);
             this.MainSettingsBox.Controls.Add(this.OptionsLabel);
             this.MainSettingsBox.Controls.Add(this.OutputText);
             this.MainSettingsBox.Controls.Add(this.ThreadsUpDown);
-            this.MainSettingsBox.Controls.Add(this.LibButton);
-            this.MainSettingsBox.Controls.Add(this.LibText);
             this.MainSettingsBox.Controls.Add(this.OutputButton);
             this.MainSettingsBox.Controls.Add(this.ThreadsLabel);
             this.MainSettingsBox.Controls.Add(this.RunButton);
             this.MainSettingsBox.Controls.Add(this.VerboseUpDown);
             this.MainSettingsBox.Controls.Add(this.StopButton);
             this.MainSettingsBox.Controls.Add(this.VerboseLabel);
-            this.MainSettingsBox.Controls.Add(this.ExeText);
-            this.MainSettingsBox.Controls.Add(this.FastaButton);
-            this.MainSettingsBox.Controls.Add(this.FastaText);
+            this.MainSettingsBox.Controls.Add(this.OutputLibText);
+            this.MainSettingsBox.Controls.Add(this.OutputLibButton);
             this.MainSettingsBox.Location = new System.Drawing.Point(307, 1);
             this.MainSettingsBox.Name = "MainSettingsBox";
-            this.MainSettingsBox.Size = new System.Drawing.Size(293, 389);
+            this.MainSettingsBox.Size = new System.Drawing.Size(293, 430);
             this.MainSettingsBox.TabIndex = 35;
             this.MainSettingsBox.TabStop = false;
-            this.MainSettingsBox.Text = "Main Settings";
+            this.MainSettingsBox.Text = "Output";
+            // 
+            // PDFRepBox
+            // 
+            this.PDFRepBox.AutoSize = true;
+            this.PDFRepBox.Checked = true;
+            this.PDFRepBox.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.PDFRepBox.Location = new System.Drawing.Point(5, 200);
+            this.PDFRepBox.Name = "PDFRepBox";
+            this.PDFRepBox.Size = new System.Drawing.Size(129, 18);
+            this.PDFRepBox.TabIndex = 53;
+            this.PDFRepBox.Text = "Generate PDF report";
+            this.PDFRepBox.UseCompatibleTextRendering = true;
+            this.PDFRepBox.UseVisualStyleBackColor = true;
             // 
             // TempFolderBox
             // 
-            this.TempFolderBox.Location = new System.Drawing.Point(103, 147);
+            this.TempFolderBox.Location = new System.Drawing.Point(102, 73);
             this.TempFolderBox.Name = "TempFolderBox";
             this.TempFolderBox.Size = new System.Drawing.Size(182, 20);
             this.TempFolderBox.TabIndex = 42;
             // 
-            // ProteinFDRLabel
-            // 
-            this.ProteinFDRLabel.AutoSize = true;
-            this.ProteinFDRLabel.Location = new System.Drawing.Point(141, 231);
-            this.ProteinFDRLabel.Name = "ProteinFDRLabel";
-            this.ProteinFDRLabel.Size = new System.Drawing.Size(82, 13);
-            this.ProteinFDRLabel.TabIndex = 39;
-            this.ProteinFDRLabel.Text = "Protein FDR (%)";
-            // 
             // FDRLabel
             // 
             this.FDRLabel.AutoSize = true;
-            this.FDRLabel.Location = new System.Drawing.Point(129, 205);
+            this.FDRLabel.Location = new System.Drawing.Point(3, 177);
             this.FDRLabel.Name = "FDRLabel";
             this.FDRLabel.Size = new System.Drawing.Size(94, 13);
             this.FDRLabel.TabIndex = 37;
@@ -1072,7 +1124,7 @@
             // 
             this.StatusLabel.AutoSize = true;
             this.StatusLabel.BackColor = System.Drawing.SystemColors.Control;
-            this.StatusLabel.Location = new System.Drawing.Point(129, 363);
+            this.StatusLabel.Location = new System.Drawing.Point(128, 406);
             this.StatusLabel.Name = "StatusLabel";
             this.StatusLabel.Size = new System.Drawing.Size(59, 13);
             this.StatusLabel.TabIndex = 26;
@@ -1080,7 +1132,7 @@
             // 
             // StatusIndicator
             // 
-            this.StatusIndicator.Location = new System.Drawing.Point(101, 358);
+            this.StatusIndicator.Location = new System.Drawing.Point(100, 401);
             this.StatusIndicator.Name = "StatusIndicator";
             this.StatusIndicator.Size = new System.Drawing.Size(22, 23);
             this.StatusIndicator.TabIndex = 27;
@@ -1088,24 +1140,25 @@
             // 
             // OptionsText
             // 
-            this.OptionsText.Location = new System.Drawing.Point(5, 275);
+            this.OptionsText.Location = new System.Drawing.Point(5, 249);
             this.OptionsText.Multiline = true;
             this.OptionsText.Name = "OptionsText";
             this.OptionsText.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.OptionsText.Size = new System.Drawing.Size(279, 76);
+            this.OptionsText.Size = new System.Drawing.Size(279, 146);
             this.OptionsText.TabIndex = 4;
             // 
             // OutputText
             // 
-            this.OutputText.Location = new System.Drawing.Point(103, 118);
+            this.OutputText.Location = new System.Drawing.Point(102, 44);
             this.OutputText.Name = "OutputText";
             this.OutputText.Size = new System.Drawing.Size(182, 20);
             this.OutputText.TabIndex = 9;
-            this.OutputText.Text = "quant.tsv";
+            this.OutputText.Text = "report.tsv";
+            this.OutputText.TextChanged += new System.EventHandler(this.OutputText_TextChanged);
             // 
             // ThreadsUpDown
             // 
-            this.ThreadsUpDown.Location = new System.Drawing.Point(58, 203);
+            this.ThreadsUpDown.Location = new System.Drawing.Point(244, 175);
             this.ThreadsUpDown.Maximum = new decimal(new int[] {
             1024,
             0,
@@ -1125,17 +1178,10 @@
             0,
             0});
             // 
-            // LibText
-            // 
-            this.LibText.Location = new System.Drawing.Point(103, 18);
-            this.LibText.Name = "LibText";
-            this.LibText.Size = new System.Drawing.Size(182, 20);
-            this.LibText.TabIndex = 2;
-            // 
             // ThreadsLabel
             // 
             this.ThreadsLabel.AutoSize = true;
-            this.ThreadsLabel.Location = new System.Drawing.Point(2, 205);
+            this.ThreadsLabel.Location = new System.Drawing.Point(192, 176);
             this.ThreadsLabel.Name = "ThreadsLabel";
             this.ThreadsLabel.Size = new System.Drawing.Size(46, 13);
             this.ThreadsLabel.TabIndex = 22;
@@ -1144,7 +1190,7 @@
             // RunButton
             // 
             this.RunButton.BackColor = System.Drawing.Color.PaleGoldenrod;
-            this.RunButton.Location = new System.Drawing.Point(5, 358);
+            this.RunButton.Location = new System.Drawing.Point(4, 401);
             this.RunButton.Name = "RunButton";
             this.RunButton.Size = new System.Drawing.Size(91, 23);
             this.RunButton.TabIndex = 12;
@@ -1154,7 +1200,7 @@
             // 
             // VerboseUpDown
             // 
-            this.VerboseUpDown.Location = new System.Drawing.Point(58, 229);
+            this.VerboseUpDown.Location = new System.Drawing.Point(244, 200);
             this.VerboseUpDown.Maximum = new decimal(new int[] {
             5,
             0,
@@ -1172,7 +1218,7 @@
             // StopButton
             // 
             this.StopButton.BackColor = System.Drawing.Color.LightSalmon;
-            this.StopButton.Location = new System.Drawing.Point(193, 358);
+            this.StopButton.Location = new System.Drawing.Point(193, 401);
             this.StopButton.Name = "StopButton";
             this.StopButton.Size = new System.Drawing.Size(91, 23);
             this.StopButton.TabIndex = 13;
@@ -1180,32 +1226,24 @@
             this.StopButton.UseVisualStyleBackColor = false;
             this.StopButton.Click += new System.EventHandler(this.StopButton_Click);
             // 
-            // ExeText
-            // 
-            this.ExeText.Location = new System.Drawing.Point(103, 176);
-            this.ExeText.Name = "ExeText";
-            this.ExeText.Size = new System.Drawing.Size(182, 20);
-            this.ExeText.TabIndex = 17;
-            this.ExeText.Text = "diann.exe";
-            // 
             // LogText
             // 
             this.LogText.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.LogText.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.LogText.Location = new System.Drawing.Point(606, 204);
+            this.LogText.Location = new System.Drawing.Point(606, 201);
             this.LogText.Multiline = true;
             this.LogText.Name = "LogText";
             this.LogText.ReadOnly = true;
             this.LogText.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.LogText.Size = new System.Drawing.Size(402, 485);
+            this.LogText.Size = new System.Drawing.Size(402, 496);
             this.LogText.TabIndex = 20;
             this.LogText.TabStop = false;
             // 
             // PipClear
             // 
-            this.PipClear.Location = new System.Drawing.Point(606, 175);
+            this.PipClear.Location = new System.Drawing.Point(606, 173);
             this.PipClear.Name = "PipClear";
             this.PipClear.Size = new System.Drawing.Size(91, 23);
             this.PipClear.TabIndex = 42;
@@ -1215,7 +1253,7 @@
             // 
             // PipRemove
             // 
-            this.PipRemove.Location = new System.Drawing.Point(606, 45);
+            this.PipRemove.Location = new System.Drawing.Point(605, 43);
             this.PipRemove.Name = "PipRemove";
             this.PipRemove.Size = new System.Drawing.Size(91, 23);
             this.PipRemove.TabIndex = 43;
@@ -1230,10 +1268,10 @@
             this.PipelineList.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
             this.PipHeader});
             this.PipelineList.HideSelection = false;
-            this.PipelineList.Location = new System.Drawing.Point(703, 45);
+            this.PipelineList.Location = new System.Drawing.Point(702, 43);
             this.PipelineList.MultiSelect = false;
             this.PipelineList.Name = "PipelineList";
-            this.PipelineList.Size = new System.Drawing.Size(286, 123);
+            this.PipelineList.Size = new System.Drawing.Size(286, 124);
             this.PipelineList.TabIndex = 45;
             this.PipelineList.UseCompatibleStateImageBehavior = false;
             this.PipelineList.View = System.Windows.Forms.View.Details;
@@ -1248,7 +1286,7 @@
             // PipAbort
             // 
             this.PipAbort.BackColor = System.Drawing.Color.LightSalmon;
-            this.PipAbort.Location = new System.Drawing.Point(899, 175);
+            this.PipAbort.Location = new System.Drawing.Point(899, 173);
             this.PipAbort.Name = "PipAbort";
             this.PipAbort.Size = new System.Drawing.Size(91, 23);
             this.PipAbort.TabIndex = 46;
@@ -1262,7 +1300,7 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
             this.AutoScroll = true;
             this.BackColor = System.Drawing.SystemColors.Control;
-            this.ClientSize = new System.Drawing.Size(1008, 726);
+            this.ClientSize = new System.Drawing.Size(1008, 729);
             this.Controls.Add(this.SavePipelineButton);
             this.Controls.Add(this.OpenPipelineButton);
             this.Controls.Add(this.PipUpdate);
@@ -1289,7 +1327,6 @@
             ((System.ComponentModel.ISupportInitialize)(this.MassAccMs1UpDown)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.MassAccUpDown)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.FDRUpDown)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.ProteinFDRUpDown)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.MissedCleavageUpDown)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.VarModsUpDown)).EndInit();
             this.LibFreeSettings.ResumeLayout(false);
@@ -1361,8 +1398,6 @@
         private System.Windows.Forms.Label FDRLabel;
         private System.Windows.Forms.NumericUpDown MissedCleavageUpDown;
         private System.Windows.Forms.ComboBox EnzymeCombo;
-        private System.Windows.Forms.Label ProteinFDRLabel;
-        private System.Windows.Forms.NumericUpDown ProteinFDRUpDown;
         private System.Windows.Forms.Label MissedCleavageLabel;
         private System.Windows.Forms.Label EnzymeLabel;
         private System.Windows.Forms.CheckBox MethionineBox;
@@ -1405,6 +1440,11 @@
         private System.Windows.Forms.CheckBox OptimiseTrainingBox;
         private System.Windows.Forms.Button OpenPipelineButton;
         private System.Windows.Forms.Button SavePipelineButton;
+        private System.Windows.Forms.ComboBox QuantBox;
+        private System.Windows.Forms.Label QuantLabel;
+        private System.Windows.Forms.CheckBox PDFRepBox;
+        private System.Windows.Forms.CheckBox GenLibBox;
+        private System.Windows.Forms.CheckBox PrositBox;
     }
 }
 

@@ -26,6 +26,8 @@ namespace GUI
         public bool batches_b, nn_b, unrelated_b, rtprof_b, protinf_b, iso_b, ifr_b,
             use_quant_b, use_lib_free_b, met_exc_b, carbamet_b, oxid_b, opt_training_b;
         public decimal prec_fdr_d, prot_fdr_d, mass_acc_d, mass_acc_ms1_d;
+        public int quant_i;
+        public bool pdf_rep_b, prosit_b;
     }
 
     public partial class Form1 : Form
@@ -34,6 +36,8 @@ namespace GUI
         {
             InitializeComponent();
         }
+
+        public string curr_dir;
 
         private void Form1_Load(object sender, EventArgs e)
         {
@@ -44,6 +48,9 @@ namespace GUI
             ThreadsUpDown.Maximum = Environment.ProcessorCount;
             EnzymeCombo.SelectedIndex = 0;
             PGBox.SelectedIndex = 3;
+            QuantBox.SelectedIndex = 0;
+            curr_dir = System.IO.Directory.GetCurrentDirectory();
+            OutputText.Text = curr_dir + "\\report.tsv";
         }
 
         bool running = false, finished = false, in_pipeline = false, finished_pipeline = false;
@@ -51,6 +58,7 @@ namespace GUI
         List<Settings> Pipeline = new List<Settings>();
         List<string> PipNames = new List<string>();
         int pip_last_index = 0, processed = 0;
+        string stats_file, report_file, pdf_file;
         
         private void SaveSettings(ref Settings S)
         {
@@ -62,7 +70,7 @@ namespace GUI
             S.out_s = OutputText.Text;
             S.temp_folder_s = TempFolderBox.Text;
             S.prec_fdr_d = FDRUpDown.Value;
-            S.prot_fdr_d = ProteinFDRUpDown.Value;
+            S.prot_fdr_d = (Decimal)1.0;
             S.fasta_s = FastaText.Text;
             S.use_lib_free_b = LibraryFreeBox.Checked;
             S.out_lib_s = OutputLibText.Text;
@@ -93,6 +101,9 @@ namespace GUI
             S.ifr_b = InterferenceBox.Checked;
             S.grouping_i = PGBox.SelectedIndex;
             S.add_s = OptionsText.Text;
+            S.quant_i = QuantBox.SelectedIndex;
+            S.pdf_rep_b = PDFRepBox.Checked;
+            S.prosit_b = PrositBox.Checked;
         }
 
         private void LoadSettings(Settings S)
@@ -105,7 +116,6 @@ namespace GUI
             OutputText.Text = S.out_s;
             TempFolderBox.Text = S.temp_folder_s;
             FDRUpDown.Value = S.prec_fdr_d;
-            ProteinFDRUpDown.Value = S.prot_fdr_d;
             FastaText.Text = S.fasta_s;
             LibraryFreeBox.Checked = S.use_lib_free_b;
             OutputLibText.Text = S.out_lib_s;
@@ -136,6 +146,9 @@ namespace GUI
             InterferenceBox.Checked = S.ifr_b;
             PGBox.SelectedIndex = S.grouping_i;
             OptionsText.Text = S.add_s;
+            QuantBox.SelectedIndex = S.quant_i;
+            PDFRepBox.Checked = S.pdf_rep_b;
+            PrositBox.Checked = S.prosit_b;
 
             if (!System.IO.Directory.Exists(S.temp_folder_s)) TempFolderBox.Text = S.temp_folder_s = "";
         }
@@ -181,6 +194,29 @@ namespace GUI
             Invoke(new Action(() => LogText.Text += "DIA-NN exited" + Environment.NewLine));
             Invoke(new Action(() => StatusLabel.Text = "Finished"));
             Invoke(new Action(() => StatusIndicator.BackColor = System.Drawing.SystemColors.Control));
+
+            if (pdf_file.Length > 0)
+            {
+                bool pdf_running = false;
+                var plotter = new Process();
+                plotter.StartInfo.FileName = "DIA-NN-plotter.exe";
+                plotter.StartInfo.CreateNoWindow = true;
+                plotter.StartInfo.UseShellExecute = false;
+                plotter.StartInfo.RedirectStandardOutput = false;
+                plotter.StartInfo.RedirectStandardInput = false;
+                plotter.EnableRaisingEvents = false;
+
+                plotter.StartInfo.Arguments += " " + stats_file + " " + report_file + " " + pdf_file;
+                LogText.Text += "DIA-NN-plotter.exe" + plotter.StartInfo.Arguments + Environment.NewLine;
+                try
+                {
+                    pdf_running = plotter.Start();
+                }
+                catch (Exception ex) { pdf_running = false; }
+                if (!pdf_running) LogText.Text += "Failed to start DIA-NN-plotter.exe" + Environment.NewLine;
+                else LogText.Text += "PDF report will be generated in the background" + Environment.NewLine + Environment.NewLine;
+            }
+
             if (in_pipeline)
             {
                 bool failed = false;
@@ -242,6 +278,7 @@ namespace GUI
                 process.StartInfo.Arguments += " --convert";
                 process.StartInfo.Arguments += " --threads " + S.threads_i.ToString();
                 process.StartInfo.Arguments += " --verbose " + S.log_i.ToString();
+                if (S.temp_folder_s != "") process.StartInfo.Arguments += " --out-dir \"" + S.temp_folder_s + "\"";
             }
             else
             {
@@ -251,14 +288,24 @@ namespace GUI
                     process.StartInfo.Arguments += " --threads " + S.threads_i.ToString();
                     process.StartInfo.Arguments += " --verbose " + S.log_i.ToString();
                     process.StartInfo.Arguments += " --out \"" + S.out_s + "\"";
-                    process.StartInfo.Arguments += " --out-gene \"" 
-                        + System.IO.Path.Combine(System.IO.Path.GetDirectoryName(S.out_s), System.IO.Path.GetFileNameWithoutExtension(S.out_s))
-                        + ".genes.tsv\"";
+                    var report = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(S.out_s), System.IO.Path.GetFileNameWithoutExtension(S.out_s));
+                    process.StartInfo.Arguments += " --out-gene \"" + report + ".genes.tsv\"";
                     process.StartInfo.Arguments += " --qvalue " + Convert.ToString(0.01 * (double)S.prec_fdr_d);
-                    process.StartInfo.Arguments += " --protein-qvalue " + Convert.ToString(0.01 * (double)S.prot_fdr_d);
+
+                    if (S.pdf_rep_b)
+                    {
+                        stats_file = "\"" + report + ".stats.tsv\"";
+                        report_file = "\"" + S.out_s + "\"";
+                        pdf_file = "\"" + report + ".pdf\"";
+                    } else stats_file = report_file = pdf_file = "";
 
                     if (!System.IO.Directory.Exists(S.temp_folder_s)) TempFolderBox.Text = S.temp_folder_s = "";
                     else process.StartInfo.Arguments += " --temp \"" + S.temp_folder_s + "\"";
+                    if (S.out_lib_s != "") {
+                        process.StartInfo.Arguments += " --out-lib \"" + S.out_lib_s + "\"";
+                        if (!S.use_lib_free_b) process.StartInfo.Arguments += " --gen-spec-lib";
+                    }
+                    if (S.prosit_b) process.StartInfo.Arguments += " --prosit"; 
 
                     if (S.fasta_s != "")
                     {
@@ -267,27 +314,30 @@ namespace GUI
                             if (file.Length >= 2) process.StartInfo.Arguments += " --fasta \"" + file + "\"";
                         if (S.use_lib_free_b)
                         {
-                            process.StartInfo.Arguments += " --fasta-search --out-lib \"" + S.out_lib_s + "\"";
+                            process.StartInfo.Arguments += " --fasta-search";
                             if (S.learn_lib_s != "") process.StartInfo.Arguments += " --learn-lib \"" + S.learn_lib_s + "\"";
 
+                            process.StartInfo.Arguments += " --min-fr-mz " + S.fr_min_i.ToString();
+                            process.StartInfo.Arguments += " --max-fr-mz " + S.fr_max_i.ToString();
+
+                            if (S.opt_training_b) process.StartInfo.Arguments += " --min-fr-corr 0.9 --min-gen-fr 2";
+                        }
+                        if (S.use_lib_free_b || S.prosit_b)
+                        {
                             if (S.protease_i == 0) process.StartInfo.Arguments += " --cut-after KR";
                             if (S.protease_i == 1) process.StartInfo.Arguments += " --cut-after KR --no-cut-before P";
                             if (S.protease_i == 2) process.StartInfo.Arguments += " --cut-after K";
                             if (S.protease_i == 3) process.StartInfo.Arguments += " --cut-after K --no-cut-before P";
                             if (S.protease_i == 4) process.StartInfo.Arguments += " --cut-after FYWL --no-cut-before P";
-
                             process.StartInfo.Arguments += " --missed-cleavages " + S.missed_i.ToString();
 
                             process.StartInfo.Arguments += " --min-pep-len " + S.pep_min_i.ToString();
                             process.StartInfo.Arguments += " --max-pep-len " + S.pep_max_i.ToString();
                             process.StartInfo.Arguments += " --min-pr-mz " + S.pr_min_i.ToString();
                             process.StartInfo.Arguments += " --max-pr-mz " + S.pr_max_i.ToString();
-                            process.StartInfo.Arguments += " --min-fr-mz " + S.fr_min_i.ToString();
-                            process.StartInfo.Arguments += " --max-fr-mz " + S.fr_max_i.ToString();
 
-                            if (S.opt_training_b) process.StartInfo.Arguments += " --min-fr-corr 0.9 --min-gen-fr 2";
+                            if (S.carbamet_b || S.prosit_b) process.StartInfo.Arguments += " --unimod4";
                             if (S.met_exc_b) process.StartInfo.Arguments += " --met-excision";
-                            if (S.carbamet_b) process.StartInfo.Arguments += " --unimod4";
                             if (S.varmod_i >= 1)
                             {
                                 process.StartInfo.Arguments += " --var-mods " + S.varmod_i.ToString();
@@ -315,6 +365,7 @@ namespace GUI
                         process.StartInfo.Arguments += " --pg-level " + S.grouping_i.ToString();
                         if (S.grouping_i == 2) process.StartInfo.Arguments += " --species-genes";
                     }
+                    if (S.quant_i == 1) process.StartInfo.Arguments += " --peak-center";
                 }
 
                 process.StartInfo.Arguments += " " + opts;
@@ -660,6 +711,54 @@ namespace GUI
                 }
                 stream.Close();
             }
+        }
+
+        private void LibraryFreeBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (LibraryFreeBox.Checked)
+            {
+                GenLibBox.Checked = true;
+                if (OutputLibText.Text == "") OutputLibText.Text = curr_dir + "\\lib.tsv";
+            }
+        }
+
+        private void GenLibBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (GenLibBox.Checked)
+            {
+                if (OutputLibText.Text == "") OutputLibText.Text = curr_dir + "\\lib.tsv";
+            }
+            else OutputLibText.Text = "";
+        }
+
+        private void OutputLibText_TextChanged(object sender, EventArgs e)
+        {
+            if (OutputLibText.Text != "") GenLibBox.Checked = true;
+            else GenLibBox.Checked = false;
+        }
+
+        private void OptimiseTrainingBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (OptimiseTrainingBox.Checked)
+            {
+                GenLibBox.Checked = true;
+                if (OutputLibText.Text == "") OutputLibText.Text = curr_dir + "\\lib.tsv";
+            }
+        }
+
+        private void LearnLibText_TextChanged(object sender, EventArgs e)
+        {
+            if (LearnLibText.Text != "")
+            {
+                LibraryFreeBox.Checked = true;
+                GenLibBox.Checked = true;
+                if (OutputLibText.Text == "") OutputLibText.Text = curr_dir + "\\lib.tsv";
+            }
+        }
+
+        private void OutputText_TextChanged(object sender, EventArgs e)
+        {
+
         }
 
         private void OpenPipelineButton_Click(object sender, EventArgs e)

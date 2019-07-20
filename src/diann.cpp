@@ -112,9 +112,10 @@ bool LCAllScores = false;
 bool Standardise = true;
 float StandardisationScale = 1.0;
 
+int QuantMode = 0; // 0 - full peak integration, 1 - fixed window
+double PeakBoundary = 5.0;
 bool NoIfsRemoval = false;
 bool NoFragmentSelectionForQuant = false;
-bool TightQuant = false;
 
 bool BatchMode = true;
 int MinBatch = 2000;
@@ -207,12 +208,13 @@ double MaxProfilingQvalue = 0.001;
 double MaxQuantQvalue = 0.01;
 double ProteinQuantQvalue = 0.01;
 double ProteinIDQvalue = 0.01;
-double PeakApexEvidence = 0.9; // force peak apexes to be close to the detection evidence maxima
+double PeakApexEvidence = 0.99; // force peak apexes to be close to the detection evidence maxima
 double MinCorrScore = 0.5;
 double MaxCorrDiff = 2.0;
 bool LibFreeAllPeaks = false;
 bool ForceMs1 = false;
 bool MS1PeakSelection = true;
+int TopN = 1;
 
 int MinMassDeltaCal = 20;
 int MinMassDeltaCalRef = 8;
@@ -222,7 +224,6 @@ int MinCal = 1000;
 int MinClassifier = 2000;
 
 double FilterFactor = 1.5;
-double QuantRatioCorrThreshold = 0.8;
 
 bool Convert = false;
 bool UseRTInfo = false; // use .quant files created previously for RT profiling
@@ -230,7 +231,7 @@ bool UseQuant = false; // use .quant files created previously; implies UseRTInfo
 bool QuantOnly = false; // quantification will be performed anew using identification info from .quant files
 bool ReportOnly = false; // generate report from quant files
 bool GenRef = false; // update the .ref file with newly computed data
-std::string args, lib_file, learn_lib_file, out_file = "quant.tsv", out_lib_file = "lib.tsv", out_dir = "", out_gene_file = "gene_quant.tsv", temp_folder = "";
+std::string args, lib_file, learn_lib_file, out_file = "report.tsv", prosit_file = "report.prosit.csv", out_lib_file = "lib.tsv", out_dir = "", out_gene_file = "report.genes.tsv", temp_folder = "";
 std::string ref_file, gen_ref_file, all_fastas;
 std::vector<std::string> ms_files, fasta_files, fasta_filter_files;
 std::set<std::string> failed_files;
@@ -252,6 +253,8 @@ bool InSilicoRTPrediction = true;
 bool ReverseDecoys = false;
 bool ForceFragRec = false;
 bool ExportRecFragOnly = true;
+
+bool ExportProsit = false;
 
 enum {
 	loss_none, loss_H2O, loss_NH3, loss_CO,
@@ -290,6 +293,8 @@ const int MaxGenCharge = 4;
 
 double QFilter = 1.0;
 double RubbishFilter = 0.5;
+int MinRubbishFactor = 5;
+int MinNonRubbish = 5000;
 
 bool InferPGs = true;
 bool PGsInferred = false;
@@ -307,8 +312,6 @@ bool SpeciesGenes = false;
 bool ExtendedReport = true;
 bool RemoveQuant = false;
 bool QuantInMem = false;
-
-std::vector<std::string> TrackedPrecursors;
 
 #define Q1 TRUE
 #define AAS FALSE
@@ -487,7 +490,7 @@ std::vector<std::string> MSFormatsExt = { ".dia", ".mzml", ".raw" };
 #endif
 
 enum {
-	outFile, outPG, outPID, outPNames, outGenes, outPGQ, outPGN, outGQ, outGN, outGQP, outGNP, outModSeq,
+	outFile, outPG, outPID, outPNames, outGenes, outPGQ, outPGN, outGQ, outGN, outGQP, outGNP, outModSeq, outStrSeq,
 	outPrId, outCharge, outQv, outPQv, outPPt, outPrQ, outPrN,
 	outRT, outiRT, outpRT, outpiRT,
 	outCols
@@ -506,6 +509,7 @@ std::vector<std::string> oh = { // output headers
 	"Gene.Quantity.Unique",
 	"Gene.Normalised.Unique",
 	"Modified.Sequence",
+	"Stripped.Sequence",
 	"Precursor.Id",
 	"Precursor.Charge",
 	"Q.Value",
@@ -607,12 +611,14 @@ enum {
 #endif
 };
 
+const int TIC_n = 250;
 class RunStats {
 public:
 	RunStats() {}
 	int precursors, proteins;
-	double tot_quantity, MS1_acc, MS1_acc_corrected, MS2_acc, MS2_acc_corrected, RT_acc, pep_length, pep_charge, fwhm_scans, fwhm_RT;
+	double tot_quantity, MS1_tot, MS2_tot, MS1_acc, MS1_acc_corrected, MS2_acc, MS2_acc_corrected, RT_acc, pep_length, pep_charge, pep_mc, fwhm_scans, fwhm_RT;
 	int cnt_valid;
+	float TIC[TIC_n];
 };
 bool SaveRunStats = true;
 
@@ -761,6 +767,49 @@ inline double spearman_corr(double * x, double * y, int n) {
 	std::sort(rx.begin(), rx.end(), [&](const int &l, const int &r) { return x[l] < x[r]; });
 	std::sort(ry.begin(), ry.end(), [&](const int &l, const int &r) { return y[l] < y[r]; });
 	return corr(&(rx[0]), &(ry[0]), n);
+}
+
+template <class Tx, class Ty> inline double grad_corr(Tx * x, Ty * y, int n) {
+	assert(n >= 1);
+
+	double sx2 = 0.0, sy2 = 0.0, sxy = 0.0;
+	int j = 1;
+	for (int i = 0; i < n - 1; i = j) {
+		j = i + 1;
+		double xi = x[j] - x[i], yi = y[j] - y[i];
+		sx2 += Sqr(xi), sy2 += Sqr(yi);
+		sxy += xi * yi;
+	}
+	return sxy / sqrt(Max(E, sx2 * sy2));
+}
+
+template <class T> inline void get_grad_corr_matrix(double * mat, T * x, int p, int imul, int n) {
+	double *s2 = (double*)alloca(p * sizeof(double));
+
+	int i, j, k;
+	for (i = 0; i < p; i++) {
+		s2[i] = 0.0;
+		auto m_ind = i * p;
+		for (j = i + 1; j < p; j++) mat[m_ind + j] = 0.0;
+	}
+
+	for (i = 0; i < p; i++) {
+		auto v = x + i * imul;
+		auto ps2 = s2 + i;
+		for (k = 0; k < n; k++) *ps2 += Sqr(v[k]);
+		auto m_ind = i * p, ii = i * imul;
+		for (j = i + 1; j < p; j++) {
+			auto ji = j * imul;
+			for (k = 0; k < n; k++) mat[m_ind + j] += x[ii + k] * x[ji + k];
+		}
+	}
+
+	for (i = 0; i < p; i++) {
+		auto m_ind = i * p;
+		double s2i = s2[i];
+		for (j = i + 1; j < p; j++)
+			mat[j * p + i] = mat[m_ind + j] = mat[m_ind + j] / sqrt(Max(E, s2i * s2[j]));
+	}
 }
 
 template <class Tx, class Ty> inline double cos(Tx * x, Ty * y, int n) {
@@ -1207,6 +1256,22 @@ inline int peptide_length(const std::string &name) {
 	return n;
 }
 
+inline int missed_KR_cleavages(const std::string &name) {
+	int i, n = 0, last = 0;
+	for (i = 0; i < name.size() - 1; i++) {
+		char symbol = name[i];
+		if (symbol < 'A' || symbol > 'Z') {
+			if (symbol != '(' && symbol != '[') continue;
+			int end = name.find(symbol == '(' ? ")" : "]", i + 1);
+			i = end;
+			continue;
+		}
+		if (symbol == 'K' || symbol == 'R') n++, last = 1;
+		else last = 0;
+	}
+	return n - last;
+}
+
 std::string get_aas(const std::string &name) {
 	int i;
 	std::string result;
@@ -1285,6 +1350,27 @@ std::string to_canonical(const std::string &name) {
 }
 inline std::string to_canonical(const std::string &name, int charge) { return to_canonical(name) + std::to_string(charge); }
 
+std::string to_prosit(const std::string &name) {
+	int i, j;
+	std::string result;
+
+	for (i = 0; i < name.size(); i++) {
+		char symbol = name[i];
+		if (symbol < 'A' || symbol > 'Z') {
+			if (symbol != '(' && symbol != '[') continue;
+			i++;
+
+			int end = name.find(symbol == '(' ? ")" : "]", i);
+			if (end == std::string::npos) Throw(std::string("incorrect peptide name format: ") + name);
+
+			if (i + 9 < name.size()) if (!memcmp(&(name[i]), "UniMod:35", 9)) result += "(ox)"; // methionine oxidation
+			i = end;
+			continue;
+		} else result.push_back(symbol);
+	}
+	return result;
+}
+
 std::string pep_name(const std::string &pr_name) {
 	int i;
 	std::string result = pr_name;
@@ -1355,6 +1441,7 @@ void arguments(int argc, char *argv[]) {
 		next = args.find("--", start);
 		end = (next == std::string::npos) ? args.length() : next;
 
+		bool flag = false;
 		if (!memcmp(&(args[start]), "cfg", 3)) { // parse the contents of the file
 			std::string name = args.substr(start + 4, end - start - 4);
 			std::ifstream in(name);
@@ -1378,10 +1465,11 @@ void arguments(int argc, char *argv[]) {
 					  << "; this determines which peptides are considered 'proteotypic' and thus affects protein FDR calculation\n";
 		else if (!memcmp(&(args[start]), "no-batch-mode ", 14)) BatchMode = false, std::cout << "Batch mode disabled\n";
 		else if (!memcmp(&(args[start]), "verbose ", 8)) Verbose = std::stoi(args.substr(start + 8, std::string::npos));
-		//else if (!memcmp(&(args[start]), "export-windows ", 15)) ExportWindows = true;
+		else if (!memcmp(&(args[start]), "export-windows ", 15)) ExportWindows = true;
 		else if (!memcmp(&(args[start]), "export-library ", 15)) ExportLibrary = true;
 		else if (!memcmp(&(args[start]), "export-decoys ", 14)) ExportDecoys = true;
-		//else if (!memcmp(&(args[start]), "cal-info ", 9)) SaveCalInfo = true;
+		else if (!memcmp(&(args[start]), "prosit ", 7)) ExportProsit = true;
+		else if (!memcmp(&(args[start]), "cal-info ", 9)) SaveCalInfo = true;
 		else if (!memcmp(&(args[start]), "compact-report ", 15)) ExtendedReport = false;
 		else if (!memcmp(&(args[start]), "no-isotopes ", 12)) UseIsotopes = false, std::cout << "Isotopologue chromatograms will not be used\n";
 		else if (!memcmp(&(args[start]), "no-ms2-range ", 13)) MS2Range = false, std::cout << "MS2 range inference will not be performed\n";
@@ -1392,7 +1480,7 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Peptides with modifications that can cause interferences with isotopologues will be used for neural network training\n";
 		else if (!memcmp(&(args[start]), "nn-cross-val ", 13)) nnCrossVal = true,
 			std::cout << "Neural network cross-validation will be used to tackle potential overfitting\n";
-		//else if (!memcmp(&(args[start]), "guide-classifier ", 17)) GuideClassifier = true, std::cout << "A separate classifier for the guide library will be used\n";
+		else if (!memcmp(&(args[start]), "guide-classifier ", 17)) GuideClassifier = true, std::cout << "A separate classifier for the guide library will be used\n";
 		else if (!memcmp(&(args[start]), "int-removal ", 12)) IDsInterference = std::stoi(args.substr(start + 12, std::string::npos)),
 			std::cout << "Number of interference removal iterations set to " << IDsInterference << "\n";
 		else if (!memcmp(&(args[start]), "int-margin ", 11)) InterferenceCorrMargin = std::stod(args.substr(start + 11, std::string::npos)),
@@ -1561,45 +1649,55 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "remove-quant ", 13)) RemoveQuant = true, std::cout << ".quant files will be removed when the analysis is finished\n";
 #endif
 		else if (!memcmp(&(args[start]), "no-quant-files ", 15)) QuantInMem = true, std::cout << ".quant files will not be saved to the disk\n";
-		else if (!memcmp(&(args[start]), "track ", 6)) TrackedPrecursors.push_back(trim(args.substr(start + 6, end - start - 6)));
 		else if (!memcmp(&(args[start]), "use-rt ", 7)) UseRTInfo = true, std::cout << "Existing .quant files will be used for RT profiling\n";
 		else if (!memcmp(&(args[start]), "use-quant ", 10)) UseQuant = true, std::cout << "Existing .quant files will be used\n";
 		else if (!memcmp(&(args[start]), "quant-only ", 11)) QuantOnly = true, std::cout << "Quantification will be performed anew using existing identification info\n";
 		else if (!memcmp(&(args[start]), "report-only ", 12)) ReportOnly = true, std::cout << "Report will be generated using .quant files\n";
-		/*else if (!memcmp(&(args[start]), "iter ", 5)) iN = Max(CalibrationIter + 4, std::stoi(args.substr(start + 5, std::string::npos))),
-			std::cout << "Number of iterations set to " << iN << "\n";*/
+		else flag = true; 
+		
+		if (!flag) {}
+		else if (!memcmp(&(args[start]), "iter ", 5)) iN = Max(CalibrationIter + 4, std::stoi(args.substr(start + 5, std::string::npos))),
+			std::cout << "Number of iterations set to " << iN << "\n";
 		else if (!memcmp(&(args[start]), "profiling-qvalue ", 17)) MaxProfilingQvalue = std::stod(args.substr(start + 17, std::string::npos)),
 			std::cout << "RT profiling q-value threshold set to " << MaxProfilingQvalue << "\n";
 		else if (!memcmp(&(args[start]), "quant-qvalue ", 13)) MaxQuantQvalue = std::stod(args.substr(start + 13, std::string::npos)),
 			std::cout << "Q-value threshold for cross-run quantification set to " << MaxQuantQvalue << "\n";
+		else if (!memcmp(&(args[start]), "protein-quant-qvalue ", 21)) ProteinQuantQvalue = std::stod(args.substr(start + 21, std::string::npos)),
+			std::cout << "Precursor Q-value threshold for protein quantification set to " << ProteinQuantQvalue << "\n";
+		else if (!memcmp(&(args[start]), "top ", 4)) TopN = std::stoi(args.substr(start + 4, std::string::npos)),
+			std::cout << "Top " << TopN << " precursors will be used for protein quantification in each run\n";
 		else if (!memcmp(&(args[start]), "out-lib-qvalue ", 15)) ReportQValue = std::stod(args.substr(start + 15, std::string::npos)),
 			std::cout << "Q-value threshold for spectral library generation set to " << ReportQValue << "\n";
 		else if (!memcmp(&(args[start]), "rt-profiling ", 13)) RTProfiling = true, std::cout << "RT profiling enabled\n";
 		else if (!memcmp(&(args[start]), "prefix ", 7)) prefix = trim(args.substr(start + 7, end - start - 7)); // prefix added to input file names
 		else if (!memcmp(&(args[start]), "ext ", 4)) ext = trim(args.substr(start + 4, end - start - 4)); // extension added to input file names
-		//else if (!memcmp(&(args[start]), "test-dataset ", 13)) TestDataset = true, std::cout << "Library will be split into training and test datasets for neural network training\n";
-		/*else if (!memcmp(&(args[start]), "test-proportion ", 16)) TestDatasetSize = std::stod(args.substr(start + 16, std::string::npos)),
-			std::cout << "The " << TestDatasetSize << " fraction of the precursors will be used as the test dataset\n";*/
+		else if (!memcmp(&(args[start]), "test-dataset ", 13)) TestDataset = true, std::cout << "Library will be split into training and test datasets for neural network training\n";
+		else if (!memcmp(&(args[start]), "test-proportion ", 16)) TestDatasetSize = std::stod(args.substr(start + 16, std::string::npos)),
+			std::cout << "The " << TestDatasetSize << " fraction of the precursors will be used as the test dataset\n";
 		else if (!memcmp(&(args[start]), "lc-all-scores ", 14)) LCAllScores = true, std::cout << "All scores will be used by the linear classifier (not recommended)\n";
-		else if (!memcmp(&(args[start]), "no-ifs-removal ", 15)) NoIfsRemoval = true, std::cout << "Interference removal from fragment elution curves disabled (not recommended)\n";
+		else if (!memcmp(&(args[start]), "peak-center ", 12)) QuantMode = 1, std::cout << "Fixed-width center of each elution peak will be used for quantification\n";
+		else if (!memcmp(&(args[start]), "peak-boundary ", 14)) PeakBoundary = std::stod(args.substr(start + 14, std::string::npos)),
+			std::cout << "Peak boundary intensity factor set to " << PeakBoundary << "\n";
+		else if (!memcmp(&(args[start]), "standardisation-scale ", 22)) StandardisationScale = std::stod(args.substr(start + 22, std::string::npos)),
+			std::cout << "Standardisation scale set to " << StandardisationScale << "\n";
+		else if (!memcmp(&(args[start]), "no-ifs-removal ", 15)) NoIfsRemoval = true, std::cout << "Interference removal from fragment elution curves disabled\n";
 		else if (!memcmp(&(args[start]), "no-fr-selection ", 16)) NoFragmentSelectionForQuant = true, std::cout << "Cross-run selection of fragments for quantification disabled (not recommended)\n";
-		//else if (!memcmp(&(args[start]), "tight-quant ", 12)) TightQuant = true, std::cout << "Chromatogram extraction with tight mass accuracy will be attempted for fragment quantification\n";
 		else if (!memcmp(&(args[start]), "no-standardisation ", 19)) Standardise = false, std::cout << "Scores will not be standardised for neural network training\n";
-		/*else if (!memcmp(&(args[start]), "standardisation-scale ", 22)) StandardisationScale = std::stod(args.substr(start + 22, std::string::npos)),
-			std::cout << "Standardisation scale set to " << StandardisationScale << "\n";*/
+		else if (!memcmp(&(args[start]), "standardisation-scale ", 22)) StandardisationScale = std::stod(args.substr(start + 22, std::string::npos)),
+			std::cout << "Standardisation scale set to " << StandardisationScale << "\n";
 		else if (!memcmp(&(args[start]), "no-nn ", 6)) nnIter = INF, std::cout << "Neural network classifier disabled\n";
-		/*else if (!memcmp(&(args[start]), "nn-iter ", 8)) nnIter = Max(CalibrationIter + 3, std::stoi(args.substr(start + 8, std::string::npos))),
-			std::cout << "Neural network classifier will be used starting from the interation number " << nnIter << "\n";*/
+		else if (!memcmp(&(args[start]), "nn-iter ", 8)) nnIter = Max(CalibrationIter + 3, std::stoi(args.substr(start + 8, std::string::npos))),
+			std::cout << "Neural network classifier will be used starting from the interation number " << nnIter << "\n";
 		else if (!memcmp(&(args[start]), "nn-bagging ", 11)) nnBagging = std::stoi(args.substr(start + 11, std::string::npos)),
 			std::cout << "Neural network bagging set to " << nnBagging << "\n";
 		else if (!memcmp(&(args[start]), "nn-epochs ", 10)) nnEpochs = std::stoi(args.substr(start + 10, std::string::npos)),
 			std::cout << "Neural network epochs number set to " << nnEpochs << "\n";
-		/*else if (!memcmp(&(args[start]), "nn-learning-rate ", 17)) nnLearning = std::stod(args.substr(start + 17, std::string::npos)),
+		else if (!memcmp(&(args[start]), "nn-learning-rate ", 17)) nnLearning = std::stod(args.substr(start + 17, std::string::npos)),
 			std::cout << "Neural network learning rate set to " << nnLearning << "\n";
 		else if (!memcmp(&(args[start]), "nn-reg ", 7)) Regularisation = std::stod(args.substr(start + 7, std::string::npos)),
 			std::cout << "Neural network regularisation set to " << Regularisation << "\n";
 		else if (!memcmp(&(args[start]), "nn-hidden ", 10)) nnHidden = Max(1, std::stoi(args.substr(start + 10, std::string::npos))),
-			std::cout << "Number of hidden layers set to " << nnHidden << "\n";*/
+			std::cout << "Number of hidden layers set to " << nnHidden << "\n";
 		else if (!memcmp(&(args[start]), "mass-acc-cal ", 13)) CalibrationMassAccuracy = std::stod(args.substr(start + 13, std::string::npos)) / 1000000.0,
 			std::cout << "Calibration mass accuracy set to " << CalibrationMassAccuracy << "\n";
 		else if (!memcmp(&(args[start]), "fix-mass-acc ", 13)) ForceMassAcc = true;
@@ -1612,7 +1710,7 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "corr-diff ", 10)) MaxCorrDiff = Max(std::stod(args.substr(start + 10, std::string::npos)), E),
 			std::cout << "Peaks with correlation sum below " << MaxCorrDiff << " from maximum will not be considered\n";
 		else if (!memcmp(&(args[start]), "peak-apex ", 10)) PeakApexEvidence = Min(std::stod(args.substr(start + 10, std::string::npos)), 0.99),
-			std::cout << "Peaks must have apex height which is at least " << MinCorrScore << " of the maximum within the m/z scan window\n";
+			std::cout << "Peaks must have apex height which is at least " << PeakApexEvidence << " of the maximum within the m/z scan window\n";
 		else if (!memcmp(&(args[start]), "all-peaks ", 10)) LibFreeAllPeaks = true,
 			std::cout << "The number of putative elution peaks considered in library-free mode will not be reduced to decrease RAM usage\n";
 		else if (!memcmp(&(args[start]), "norm-qvalue ", 12)) NormalisationQvalue = std::stod(args.substr(start + 11, std::string::npos)),
@@ -1626,12 +1724,12 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "q1-cal ", 7)) Q1Cal = true, std::cout << "Q1 calibration enabled\n";
 #endif
 		else if (!memcmp(&(args[start]), "no-calibration ", 15)) Calibrate = false, std::cout << "Mass calibration disabled\n";
-		/*else if (!memcmp(&(args[start]), "mass-cal-bins ", 14)) MassCalBinsMax = std::stoi(args.substr(start + 14, std::string::npos)),
+		else if (!memcmp(&(args[start]), "mass-cal-bins ", 14)) MassCalBinsMax = std::stoi(args.substr(start + 14, std::string::npos)),
 			std::cout << "Maximum number of mass calibration bins set to " << MassCalBinsMax << "\n";
 		else if (!memcmp(&(args[start]), "min-cal ", 8)) MinCal = std::stoi(args.substr(start + 8, std::string::npos)),
 			std::cout << "Minimum number of precursors identified at 10% FDR used for calibration set to " << MinCal << "\n";
 		else if (!memcmp(&(args[start]), "min-class ", 10)) MinClassifier = std::stoi(args.substr(start + 10, std::string::npos)),
-			std::cout << "Minimum number of precursors identified at 10% FDR used for linear classifier training set to " << MinClassifier << "\n";*/
+			std::cout << "Minimum number of precursors identified at 10% FDR used for linear classifier training set to " << MinClassifier << "\n";
 		else if (!memcmp(&(args[start]), "scanning-swath ", 15)) ForceScanningSWATH = true, std::cout << "All runs will be analysed as Scanning SWATH runs\n";
 		else if (!memcmp(&(args[start]), "regular-swath ", 14)) ForceNormalSWATH = true, std::cout << "All runs will be analysed as regular SWATH runs\n";
 #if Q1
@@ -1652,19 +1750,7 @@ void arguments(int argc, char *argv[]) {
 		}
 #endif
 	}
-	if (DisableRT) RTWindowedSearch = false;
-	if (!ExportLibrary && !GenSpecLib && !FastaSearch) out_lib_file.clear();
-	if (out_file.find_first_not_of(' ') == std::string::npos || out_file.find_first_of('\r') != std::string::npos || out_file.find_first_of('\n') != std::string::npos) out_file.clear();
-	if (out_gene_file.find_first_not_of(' ') == std::string::npos || out_gene_file.find_first_of('\r') != std::string::npos || out_gene_file.find_first_of('\n') != std::string::npos) out_gene_file.clear();
-	if (out_lib_file.find_first_not_of(' ') == std::string::npos || out_lib_file.find_first_of('\r') != std::string::npos || out_lib_file.find_first_of('\n') != std::string::npos) out_lib_file.clear();
-	if (!out_file.size() && !out_gene_file.size() && !out_lib_file.size() && !IndividualReports) {
-		IndividualReports = true;
-		std::cout << "No output files specified: reports will be generated separately for different runs (in the respective folders)\n";
-	}
-	if (ExportLibrary && !out_lib_file.size()) {
-		ExportLibrary = false;
-		std::cout << "No output library file, library export disabled\n";
-	}
+
 	if (prefix.length()) for (auto it = files.begin(); it != files.end(); it++) *it = prefix + *it;
 	if (ext.length()) for (auto it = files.begin(); it != files.end(); it++) *it += ext;
 	for (int i = 0; i < files.size(); i++) {
@@ -1692,7 +1778,23 @@ void arguments(int argc, char *argv[]) {
 		}
 		ms_files.push_back(files[i]);
 	}
+	if (!ms_files.size() && GenSpecLib) ExportLibrary = true, GenSpecLib = false;
 	if (ms_files.size() < 2) RTProfiling = false;
+
+	if (DisableRT) RTWindowedSearch = false;
+	if (!ExportLibrary && !GenSpecLib) out_lib_file.clear();
+	if (out_file.find_first_not_of(' ') == std::string::npos || out_file.find_first_of('\r') != std::string::npos || out_file.find_first_of('\n') != std::string::npos) out_file.clear();
+	if (out_gene_file.find_first_not_of(' ') == std::string::npos || out_gene_file.find_first_of('\r') != std::string::npos || out_gene_file.find_first_of('\n') != std::string::npos) out_gene_file.clear();
+	if (out_lib_file.find_first_not_of(' ') == std::string::npos || out_lib_file.find_first_of('\r') != std::string::npos || out_lib_file.find_first_of('\n') != std::string::npos) out_lib_file.clear();
+	if (!out_file.size() && !out_gene_file.size() && !out_lib_file.size() && !IndividualReports) {
+		IndividualReports = true;
+		std::cout << "No output files specified: reports will be generated separately for different runs (in the respective folders)\n";
+	}
+	if (ExportLibrary && !out_lib_file.size()) {
+		ExportLibrary = false;
+		std::cout << "No output library file, library export disabled\n";
+	}
+	
 	if (UseQuant || QuantOnly) UseRTInfo = true;
 	if (VarMods.size()) {
 		MaxVarMods = Max(1, MaxVarMods);
@@ -2134,24 +2236,26 @@ public:
 };
 
 enum {
-	qScaled, qTotal, qFiltered,
+	qTotal, qFiltered,
 	qN
 };
 
 class Fragment {
 public:
+	mutable int index; // index of the fragment in the library (i.e. its number among the fragments of the precursor)
 	mutable float quantity[qN];
 	mutable float corr;
 };
 
 class PrecursorEntry {
 public:
-	int index, run_index;
+	int index; // index of the precursor in the spectral library
+	int run_index;
 	mutable bool decoy_found;
 	mutable int apex, peak, best_fragment, peak_width;
 	mutable float RT, iRT, predicted_RT, predicted_iRT, best_fr_mz, profile_qvalue, qvalue, decoy_qvalue, protein_qvalue, quantity, level, norm;
 	mutable float pg_quantity, pg_norm, gene_quantity, gene_norm, gene_quantity_u, gene_norm_u;
-	mutable float evidence, decoy_evidence, cscore, decoy_cscore;
+	mutable float evidence, decoy_evidence, ms1_corr, cscore, decoy_cscore;
 #if REPORT_SCORES
 	float scores[pN], decoy_scores[pN];
 #endif
@@ -2162,7 +2266,7 @@ class QuantEntry {
 public:
 	int index = -1, window, fr_n = 0;
     mutable PrecursorEntry pr;
-    mutable Fragment fr[auxF];
+    mutable Fragment fr[TopF];
 #if ELUTION_PROFILE
 	mutable std::pair<float, float> ms1_elution_profile[2 * ElutionProfileRadius + 1]; // (retention time, intensity) pairs
 #endif
@@ -2561,8 +2665,8 @@ public:
 				std::cout << "cannot read the file\n";
 				return false;
 			}
-			sequence.clear(), id.clear(), name.clear(), gene.clear(), peptide.clear();
 
+			sequence.clear(), id.clear(), name.clear(), gene.clear(), peptide.clear();
 			bool skip = false, eof = !getline(in, line);
 			if (!eof) while (true) {
 				bool new_prot = (line.size() != 0);
@@ -2794,6 +2898,8 @@ public:
 
 			target.length = decoy.length = peptide_length(name);
 		}
+
+		friend bool operator < (const Entry &left, const Entry &right) { return left.name < right.name; }
 
 		inline void generate_decoy() {
 			int i;
@@ -3045,26 +3151,33 @@ public:
 			int i, j, m, k;
 
 			if (Verbose >= 1) Time(), std::cout << "Quantifying peptides\n";
+			std::vector<std::pair<float, int> > fr_score(1000), fr_ordered(1000);
 			for (auto it = map.begin(); it != map.end(); it++) {
 				auto v = &(it->second);
-				m = (*v)[0].second.fr_n, k = 0;
+				m = lib->entries[it->first].target.fragments.size();
 
-				std::vector<double> score(m);
+				fr_score.clear();
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) if (jt->second.pr.qvalue <= MaxQuantQvalue) {
-					for (i = 0; i < m; i++) score[i] += jt->second.fr[i].corr;
-					k++;
+					for (i = 0; i < jt->second.fr_n; i++) {
+						int ind = jt->second.fr[i].index;
+						if (ind >= fr_score.size()) fr_score.resize(ind + 1, std::pair<float, int>(0.0, 0));
+						fr_score[ind].first += jt->second.fr[i].corr;
+						fr_score[ind].second++;
+					}
 				}
-				if (k) for (i = 0; i < m; i++) score[i] /= (double)k;
+				for (auto &s : fr_score) if (s.second) s.first /= (double)s.second;
 
-				std::vector<double> ordered(m);
-				ordered = score;
-				std::sort(ordered.begin(), ordered.end());
-				double margin = ordered[Max(0, m - 3)] - E;
+				fr_ordered.resize(fr_score.size());
+				fr_ordered.assign(fr_score.begin(), fr_score.end());
+				std::sort(fr_ordered.begin(), fr_ordered.end());
+				double margin = fr_ordered[Max(0, m - 3)].first - E;
 				if (NoFragmentSelectionForQuant) margin = -INF;
 
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
-					for (i = 0, jt->second.pr.quantity = 0.0; i < m; i++)
-						if (score[i] >= margin) jt->second.pr.quantity += jt->second.fr[i].quantity[qFiltered];
+					for (i = 0, jt->second.pr.quantity = 0.0; i < jt->second.fr_n; i++) {
+						int ind = jt->second.fr[i].index;
+						if (fr_score[ind].first >= margin) jt->second.pr.quantity += jt->second.fr[i].quantity[qFiltered];
+					}
 					jt->second.pr.norm = jt->second.pr.level = jt->second.pr.quantity;
 				}
 			}
@@ -3308,6 +3421,10 @@ public:
 
 			std::set<PG> prot;
 			while (std::getline(csv, line)) {
+				if (!cnt) {
+					if (delim == '\t' && line.find("\t") == std::string::npos) delim = ',';
+					if (delim == ',' && line.find(",") == std::string::npos) delim = '\t';
+				}
 				int in_quote = 0, nw = 0, start = 0, end = 0;
 				for (; end < line.size(); end++) {
 					if (line[end] == delim && !in_quote) {
@@ -3432,6 +3549,54 @@ public:
 		return true;
 	}
 
+	void export_prosit() {
+		prosit_file = remove_extension(out_file) + std::string(".prosit.csv");
+		std::ofstream out(prosit_file);
+		if (out.fail()) {
+			std::cout << "ERROR: cannot save precursors in the Prosit format to " << prosit_file << ". Check if the destination folder is write-protected or the file is in use";
+			return;
+		}
+		out << "modified_sequence,collision_energy,precursor_charge\n";
+		std::set<std::pair<std::pair<std::string, int>, float> > prs;
+		for (auto &e : entries) prs.insert(std::pair<std::pair<std::string, int>, float>(std::pair<std::string, int>(to_prosit(e.name), e.target.charge), e.target.mz));
+		for (auto &s : prs) out << s.first.first << ",27," << s.first.second << '\n';
+		out.close();
+		if (Verbose >= 1) Time(), std::cout << "Prosit input saved to " << prosit_file << "\n";
+	}
+
+	void load_protein_annotations(Fasta &fasta) {
+		std::set<PG> pid;
+		std::string s;
+		for (int i = 0; i < entries.size(); i++) {
+			bool prot_from_lib = false;
+			if (OverwriteLibraryPGs || entries[i].from_fasta) {
+				auto stripped = get_aas(entries[i].name);
+				auto pos = std::lower_bound(fasta.entries.begin(), fasta.entries.end(), FastaEntry(stripped, s, s, s));
+				if (pos != fasta.entries.end()) if (pos->stripped == stripped) { // checks needed when !entries[i].from_fasta
+					auto ins = pid.insert(PG(pos->ids));
+					ins.first->precursors.push_back(i);
+				} else prot_from_lib = true;
+			}
+			if (prot_from_lib || (!entries[i].from_fasta && !OverwriteLibraryPGs)) {
+				auto ins = pid.insert(PG(protein_ids[entries[i].pid_index].ids));
+				ins.first->precursors.push_back(i);
+			}
+		}
+
+		protein_ids.clear();
+		protein_ids.insert(protein_ids.begin(), pid.begin(), pid.end());
+		pid.clear();
+
+		for (int i = 0; i < protein_ids.size(); i++)
+			for (auto it = protein_ids[i].precursors.begin(); it != protein_ids[i].precursors.end(); it++)
+				entries[*it].pid_index = i;
+
+		extract_proteins();
+		if (Verbose >= 1) Time(), std::cout << entries.size() << " precursors generated\n";
+
+		if (ExportProsit) export_prosit();
+	}
+
 	void load(Fasta &fasta) {
 		if (Verbose >= 1) Time(), std::cout << "Processing FASTA\n";
 
@@ -3468,36 +3633,7 @@ public:
 			}
 		}
 
-		std::set<PG> pid;
-		std::string s;
-		for (i = 0; i < entries.size(); i++) {
-			bool prot_from_lib = false;
-			if (OverwriteLibraryPGs || entries[i].from_fasta) {
-				auto stripped = get_aas(entries[i].name);
-				auto pos = std::lower_bound(fasta.entries.begin(), fasta.entries.end(), FastaEntry(stripped, s, s, s));
-				if (pos != fasta.entries.end()) if (pos->stripped == stripped) { // checks needed when !entries[i].from_fasta
-					auto ins = pid.insert(PG(pos->ids));
-					ins.first->precursors.push_back(i);
-				}
-				else prot_from_lib = true;
-			}
-			if (prot_from_lib || (!entries[i].from_fasta && !OverwriteLibraryPGs)) {
-				if (!GuideLibrary) std::cout << "WARNING: FASTA database was processed incorrectly\n";
-				auto ins = pid.insert(PG(protein_ids[entries[i].pid_index].ids));
-				ins.first->precursors.push_back(i);
-			}
-		}
-
-		protein_ids.clear();
-		protein_ids.insert(protein_ids.begin(), pid.begin(), pid.end());
-		pid.clear();
-
-		for (i = 0; i < protein_ids.size(); i++)
-			for (auto it = protein_ids[i].precursors.begin(); it != protein_ids[i].precursors.end(); it++)
-				entries[*it].pid_index = i;
-
-		extract_proteins();
-		if (Verbose >= 1) Time(), std::cout << entries.size() << " precursors generated\n";
+		load_protein_annotations(fasta);
 	}
 
 	void library_protein_stats() {
@@ -3533,7 +3669,7 @@ public:
 	void save(const std::string &file_name, std::vector<int> * ref, bool searched, bool decoys = false) {
 		if (Verbose >= 1) Time(), std::cout << "Saving spectral library to " << file_name << "\n";
 		std::ofstream out(file_name, std::ofstream::out);
-		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << "\n"; return; }
+		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 		out << "FileName\tPrecursorMz\tProductMz\tTr_recalibrated\ttransition_name\tLibraryIntensity\ttransition_group_id\tdecoy\tPeptideSequence\tProteotypic\tQValue\t";
 		out << "ProteinGroup\tProteinName\tGenes\tFullUniModPeptideName\tModifiedPeptide\t";
 		out << "PrecursorCharge\tPeptideGroupLabel\tUniprotID\tFragmentType\tFragmentCharge\tFragmentSeriesNumber\tFragmentLossType\n";
@@ -3768,9 +3904,13 @@ public:
 			}
 			n = gene_groups.size();
 		}
+		if (!n) {
+			if (stage < 2) quantify_proteins(N, q_cutoff, stage + 1);
+			return;
+		}
 
-		if (Verbose >= 1 && stage == 9) Time(), std::cout << "Quantifying proteins\n";
-		std::vector<float> max_q(n * info.n_s, 1.0), top_l(n * info.n_s * N), quant(n * info.n_s), norm(n * info.n_s);
+		if (Verbose >= 1 && stage == 0) Time(), std::cout << "Quantifying proteins\n";
+		std::vector<float> max_q(n * info.n_s, 1.0), top_l(n * info.n_s * N, 0.0), quant(n * info.n_s, 0.0), norm(n * info.n_s, 0.0);
 
 		for (pass = 0; pass <= 3; pass++) {
 			for (auto it = info.map.begin(); it != info.map.end(); it++) {
@@ -3796,7 +3936,7 @@ public:
 						continue;
 					}
 
-					float quantity = pr->quantity;
+					float quantity = pr->norm;
 					float q = pr->qvalue;
 
 					int index = (stage == 2 ? ggi : (stage == 1 ? gi : pg)) * info.n_s + s;
@@ -3805,16 +3945,15 @@ public:
 
 					if (pass == 0) {
 						if (q < *pos_q && *pos_q > q_cutoff) *pos_q = Max(q_cutoff, q);
-					}
-					else if (pass == 1 && q <= *pos_q) {
-						for (i = 0; i < N; i++) if (quantity > pos_l[i]) {
+					} else if (pass == 1) {
+						if (q <= *pos_q) for (i = 0; i < N; i++) if (quantity > pos_l[i]) {
 							for (j = N - 1; j > i; j--) pos_l[j] = pos_l[j - 1];
 							pos_l[i] = quantity;
 							break;
 						}
-					}
-					else if (pass == 2 && q <= *pos_q && quantity >= pos_l[N - 1]) quant[index] += quantity, norm[index] += pr->norm;
-					else if (pass == 3) {
+					} else if (pass == 2) {
+						if (q <= *pos_q && quantity >= pos_l[N - 1]) quant[index] += pr->quantity, norm[index] += pr->norm;
+					} else if (pass == 3) {
 						if (stage == 1) pr->gene_quantity_u = quant[index], pr->gene_norm_u = norm[index];
 						else if (stage == 2) pr->gene_quantity = quant[index], pr->gene_norm = norm[index];
 						else pr->pg_quantity = quant[index], pr->pg_norm = norm[index];
@@ -3830,13 +3969,13 @@ public:
 		auto &prot = InferPGs ? protein_groups : protein_ids;
 
 		std::ofstream out(file_name, std::ofstream::out);
-		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << "\n"; return; }
+		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 		out << oh[outFile] << '\t' << oh[outPG] << '\t' << oh[outPID] << '\t' << oh[outPNames] << '\t' << oh[outGenes] << '\t'
-			<< oh[outPGQ] << '\t' << oh[outPGN] << '\t' << oh[outGQ] << '\t' << oh[outGN] << '\t' << oh[outGQP] << '\t' << oh[outGNP] << '\t' << oh[outModSeq] << '\t'
+			<< oh[outPGQ] << '\t' << oh[outPGN] << '\t' << oh[outGQ] << '\t' << oh[outGN] << '\t' << oh[outGQP] << '\t' << oh[outGNP] << '\t' << oh[outModSeq] << '\t' << oh[outStrSeq] << '\t'
 			<< oh[outPrId] << '\t' << oh[outCharge] << '\t' << oh[outQv] << '\t' << oh[outPQv] << '\t' << oh[outPPt] << '\t'
 			<< oh[outPrQ] << '\t' << oh[outPrN] << '\t'
 			<< oh[outRT] << '\t' << oh[outiRT] << '\t' << oh[outpRT] << '\t' << oh[outpiRT];
-		if (ExtendedReport) out << (fasta_files.size() ? "\tFirst.Protein.Description\t" : "\t") << "Lib.Q.Value\tEvidence\tCScore\tDecoy.Evidence\tDecoy.CScore\tFragment.Quant.Raw\tFragment.Quant.Corrected\tFragment.Correlations";
+		if (ExtendedReport) out << (fasta_files.size() ? "\tFirst.Protein.Description\t" : "\t") << "Lib.Q.Value\tMs1.Profile.Corr\tEvidence\tCScore\tDecoy.Evidence\tDecoy.CScore\tFragment.Quant.Raw\tFragment.Quant.Corrected\tFragment.Correlations";
 #if REPORT_SCORES
 		for (int i = 0; i < pN; i++) out << "\tScore." << i;
 		for (int i = 0; i < pN; i++) out << "\tDecoy.Score." << i;
@@ -3867,6 +4006,7 @@ public:
 					} else out << "\t\t";
 				} else out << "\t\t\t\t";
 				out << pep_name(entry->name).c_str() << '\t'
+					<< get_aas(entry->name).c_str() << '\t'
 					<< entry->name.c_str() << '\t'
 					<< entry->target.charge << '\t'
 					<< jt->second.pr.qvalue << '\t'
@@ -3885,6 +4025,7 @@ public:
 						else out << '\t';
 					}
 					out << entry->target.lib_qvalue << '\t'
+						<< jt->second.pr.ms1_corr << '\t'
 						<< jt->second.pr.evidence << '\t'
 						<< jt->second.pr.cscore << '\t'
 						<< jt->second.pr.decoy_evidence << '\t'
@@ -3906,11 +4047,11 @@ public:
 	}
 
 	void gene_report(const std::string &file_name) {
-		if (Verbose >= 1) Time(), std::cout << "Writing gene report\n";
-
 		int s = ms_files.size(), size = gene_groups.size() * s;
 		std::vector<float> gq(size), gn(size), gqu(size), gnu(size);
+		if (!size || !gg_index.size()) return;
 
+		if (Verbose >= 1) Time(), std::cout << "Writing gene report\n";
 		for (auto it = info.map.begin(); it != info.map.end(); it++) {
 			auto v = &(it->second);
 			auto entry = &(entries[it->first]);
@@ -3928,7 +4069,7 @@ public:
 		}
 
 		std::ofstream out(file_name, std::ofstream::out);
-		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << "\n"; return; }
+		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 		out << "File.Name\tGenes\tGene.Group.Quantity\tGene.Group.Normalised\tGene.Quantity.Unique\tGene.Normalised.Unique\n";
 
 		for (int i = 0; i < gene_groups.size(); i++) for (int j = 0; j < s; j++) {
@@ -3957,6 +4098,7 @@ public:
 			rs.fwhm_RT *= mul;
 			rs.pep_length *= mul;
 			rs.pep_charge *= mul;
+			rs.pep_mc *= mul;
 			rs.MS1_acc *= 1000000.0;
 			rs.MS1_acc_corrected *= 1000000.0;
 			rs.MS2_acc *= 1000000.0;
@@ -3964,20 +4106,31 @@ public:
 		}
 
 		std::ofstream out(file_name, std::ofstream::out);
-		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << "\n"; return; }
-		out << "File.Name\tPrecursors.Identified\tProteins.Identified\tTotal.Quantity\tFWHM.Scans\tFWHM.RT"
+		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
+		out << "File.Name\tPrecursors.Identified\tProteins.Identified\tTotal.Quantity\tMS1.Signal\tMS2.Signal\tFWHM.Scans\tFWHM.RT"
 			<< "\tMedian.Mass.Acc.MS1\tMedian.Mass.Acc.MS1.Corrected\tMedian.Mass.Acc.MS2\tMedian.Mass.Acc.MS2.Corrected\tMedian.RT.Prediction.Acc"
-			<< "\tAverage.Peptide.Length\tAverage.Peptide.Charge\n";
+			<< "\tAverage.Peptide.Length\tAverage.Peptide.Charge\tAverage.Missed.Tryptic.Cleavages\n";
 
 		for (int i = 0; i < info.RS.size(); i++) {
 			auto &rs = info.RS[i];
-			out << ms_files[i] << "\t" << rs.precursors << "\t" << rs.proteins << "\t" << rs.tot_quantity
+			out << ms_files[i] << "\t" << rs.precursors << "\t" << rs.proteins << "\t" << rs.tot_quantity << "\t" << rs.MS1_tot << "\t" << rs.MS2_tot
 				<< "\t" << rs.fwhm_scans << "\t" << rs.fwhm_RT << "\t" << rs.MS1_acc << "\t" << rs.MS1_acc_corrected
-				<< "\t" << rs.MS2_acc << "\t" << rs.MS2_acc_corrected << "\t" << rs.RT_acc << "\t" << rs.pep_length << "\t" << rs.pep_charge << "\n";
+				<< "\t" << rs.MS2_acc << "\t" << rs.MS2_acc_corrected << "\t" << rs.RT_acc << "\t" << rs.pep_length << "\t" << rs.pep_charge << "\t" << rs.pep_mc << "\n";
 		}
 		out.close();
 
 		if (Verbose >= 1) Time(), std::cout << "Stats report saved to " << file_name << "\n";
+	}
+
+	void tic_report(const std::string &file_name) {
+		if (!SaveRunStats) return;
+
+		std::ofstream out(file_name, std::ofstream::out);
+		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
+		for (int i = 0; i < TIC_n; i++) out << (((float)i) / (float)TIC_n) << "\t"; out << "\n";
+		for (auto &rs : info.RS) { for (int i = 0; i < TIC_n; i++) out << rs.TIC[i] << "\t"; out << "\n"; }
+		out.close();
+		if (Verbose >= 1) Time(), std::cout << "TICs saved to " << file_name << "\n";
 	}
 
 #if (HASH > 0)
@@ -4405,7 +4558,7 @@ public:
 		float best_corr_sum = 0.0, total_corr_sum = 0.0;
 
 		std::vector<Fragment> quant;
-		float RT, cscore, quantity, qvalue = 1.0, protein_qvalue = 0.0, best_fr_mz, q1_shift = 0.0;
+		float RT, evidence, ms1_corr, cscore, quantity, qvalue = 1.0, protein_qvalue = 0.0, best_fr_mz, q1_shift = 0.0;
 		int apex, peak_width, best_peak, nn_index, nn_inc;
 		int peak_pos, best_fragment;
 		float mass_delta = 0.0, mass_delta_mz = 0.0, mass_delta_ms1 = 0.0;
@@ -4559,12 +4712,6 @@ public:
 				ms2 = &(run->MS2[pr->thread_id][0]);
 				for (i = 0; i < l * m; i++) ms2[i] = 0.0;
 
-				if (TightQuant) {
-					run->MS2_tight_one[pr->thread_id].resize(l * m);
-					ms2_tight_one = &(run->MS2_tight_one[pr->thread_id][0]);
-					for (i = 0; i < l * m; i++) ms2_tight_one[i] = 0.0;
-				}
-
 				k = center, i = (*scan_index)[k];
 				rt = run->scan_RT[i];
 
@@ -4594,7 +4741,6 @@ public:
 						float query_mz = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[fr].mz, run->scan_RT[i]);
 						ms2[l * fr + ind] = run->ms2h[i].level<true>(query_mz, run->MassAccuracy, &peak_mz);
 						if (ms2[l * fr + ind] < MinPeakHeight) ms2[l * fr + ind] = 0.0;
-						else if (TightQuant) ms2_tight_one[l * fr + ind] = run->ms2h[i].level<false>(query_mz, run->MassAccuracy * TightMassAccRatioOne);
 
 						if (k == center && info->size() && fr == (*info)[0].best_fragment && (!pr->pep->no_cal || !MassCalFilter)) {
 							(*info)[0].mass_delta = ms2[l * fr + ind] >= MinPeakHeight ? (peak_mz - (*fragments)[fr].mz) : 0.0;
@@ -4766,10 +4912,12 @@ public:
 
 			noninline void peaks() {
 				if (!m) return;
-				int i, k, fr, pos, next, best_fr = -1, l = scan_index->size(), best_n = 0, n_peaks = 0, p = Min(m, TopF);
-				double max, best = -INF, s, total_corr_sum;
+				int i, j, k, fr, added, pos, next, best_fr, next_fr, l = scan_index->size(), best_n = 0, n_peaks = 0, p = Min(m, TopF);
+				float max, best = -INF, s;
+				double total_corr_sum;
 				double * corr_matrix = (double*)alloca(p * p * sizeof(double));
-				float * elution = (float*)alloca(W * sizeof(float));
+				float * elution = (float*)alloca(W * sizeof(float)), *score = (float*)alloca(p * sizeof(float));
+				int * ind = (int*)alloca(p * sizeof(int));
 
 				run->PeakList[pr->thread_id].resize(l);
 				run->BestFrList[pr->thread_id].resize(l);
@@ -4778,52 +4926,89 @@ public:
 				int * best_fr_list = &(run->BestFrList[pr->thread_id][0]);
 				float * corr_sum_list = &(run->CorrSumList[pr->thread_id][0]);
 
-				for (k = S, total_corr_sum = 0.0; k < l - S; k++) {
-					for (fr = 0; fr < p; fr++) if (ms2[fr * l + k]) break;
-					if (fr >= p) continue;
+				if (p >= 2) for (k = S, total_corr_sum = 0.0; k < l - S; k++) {
+					best_fr = next_fr = -1;
+					for (fr = i = j = 0; fr < p; fr++) {
+						bool flag = false;
+						if (ms2[fr * l + k] >= MinPeakHeight) i++, flag = true;
+						else if (ms2[fr * l + k - 1] >= MinPeakHeight || ms2[fr * l + k + 1] >= MinPeakHeight) flag = true;
+						if (flag) {
+							if (!j) best_fr = fr;
+							else if (j == 1) next_fr = fr;
+							j++;
+						}
+					}
+					if (i == 0 || j < 2) continue;
 
-					best_fr = -1;
-					get_corr_matrix(corr_matrix, &(ms2[k - S]), p, l, W);
-					for (fr = 0, max = E; fr < p; fr++) {
-						s = 0.0;
-						for (next = 0; next < p; next++) if (next != fr) s += corr_matrix[fr * p + next];
-						if (s > max) max = s, best_fr = fr;
+					for (fr = 0; fr < p; fr++) score[fr] = -1.0, ind[fr] = -1;
+					if (j == 2) {
+						max = score[0] = score[1] = corr(&(ms2[best_fr * l + k - S]), &(ms2[next_fr * l + k - S]), W);
+						if (max <= E) continue;
+						double s1 = sum(&(ms2[best_fr * l + k - S]), W);
+						double s2 = sum(&(ms2[next_fr * l + k - S]), W);
+						if (s2 > s1) ind[1] = best_fr, ind[0] = best_fr = next_fr;
+						else ind[0] = best_fr, ind[1] = next_fr;
+					} else {
+						best_fr = -1;
+						get_corr_matrix(corr_matrix, &(ms2[k - S]), p, l, W);
+						for (fr = added = 0, max = E; fr < p; fr++) {
+							s = 0.0;
+							for (next = 0; next < p; next++) if (next != fr) s += corr_matrix[fr * p + next];
+							if (s > E) {
+								added++;
+								if (s > max) max = s, best_fr = fr;
+								for (int f = 0; f < p; f++) {
+									if (ind[f] < 0) { ind[f] = fr; score[f] = s; break; }
+									if (s > score[f]) {
+										for (int g = added - 1; g > f; g--) ind[g] = ind[g - 1], score[g] = score[g - 1];
+										ind[f] = fr; score[f] = s; break;
+									}
+								}
+							}
+						}
 					}
 
-					if (best_fr < 0) continue;
-					if (MS1PeakSelection && run->ms1h.size()) max += corr(&(ms2[best_fr * l + k - S]), &(ms1[k - S]), W);
-					if (max < MinCorrScore) continue;
+					for (next = 0; next < p; next++) {
+						best_fr = ind[next], max = score[next];
+						if (best_fr < 0 || max <= E) break;
 
-					// smooth the curve
-					smooth(elution, &(ms2[best_fr * l + k - S]), W);
+						if (MS1PeakSelection && run->ms1h.size()) max += corr(&(ms2[best_fr * l + k - S]), &(ms1[k - S]), W);
+						if (max < MinCorrScore) continue;
 
-					// check if k is at the apex
-					bool skip_flag = false;
-					double curr_evidence = elution[S];
-					for (pos = S - Max(S / 3, 1); pos <= S + Max(S / 3, 1); pos++) if (elution[pos] > curr_evidence) {
-						skip_flag = true;
+						// smooth the curve
+						smooth(elution, &(ms2[best_fr * l + k - S]), W);
+						if (elution[S] < MinPeakHeight) continue;
+
+						// check if k is at the apex
+						bool skip_flag = false;
+						double curr_evidence = elution[S];
+						for (pos = S - Max(S / 3, 1); pos <= S + Max(S / 3, 1); pos++) if (elution[pos] > curr_evidence) {
+							skip_flag = true;
+							break;
+						}
+						if (skip_flag) continue;
+
+						double max_evidence = curr_evidence;
+						for (pos = k - S + 1; pos <= k + S - 1; pos++) {
+							int ind = pos - k + S;
+							double evidence = elution[ind];
+							if (evidence > max_evidence) max_evidence = evidence;
+						}
+						if (curr_evidence < max_evidence * PeakApexEvidence) continue;
+
+						if (run->full_spectrum && ForceQ1Apex) {
+							float query_mz = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[best_fr].mz, run->scan_RT[(*scan_index)[k]]);
+							if (run->ms2h[(*scan_index)[k] - 1].level<false>(query_mz, run->MassAccuracy) <= ms2[best_fr * l + k]
+								&& run->ms2h[(*scan_index)[k] + 1].level<false>(query_mz, run->MassAccuracy) <= ms2[best_fr * l + k]) {
+							} else continue;
+						}
+
+						total_corr_sum += max;
+						peak_list[n_peaks] = k, best_fr_list[n_peaks] = best_fr, corr_sum_list[n_peaks] = max;
+						if (max > best) best = max, best_n = n_peaks;
+						n_peaks++;
 						break;
 					}
-					if (skip_flag) continue;
-					double max_evidence = curr_evidence;
-					for (pos = k - S + 1; pos <= k + S - 1; pos++) {
-						int ind = pos - k + S;
-						double evidence = elution[ind];
-						if (evidence > max_evidence) max_evidence = evidence;
-					}
-					if (curr_evidence < max_evidence * PeakApexEvidence) continue;
-
-					if (run->full_spectrum && ForceQ1Apex) {
-						float query_mz = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[best_fr].mz, run->scan_RT[(*scan_index)[k]]);
-						if (run->ms2h[(*scan_index)[k] - 1].level<false>(query_mz, run->MassAccuracy) <= ms2[best_fr * l + k]
-							&& run->ms2h[(*scan_index)[k] + 1].level<false>(query_mz, run->MassAccuracy) <= ms2[best_fr * l + k]) {}
-						else continue;
-					}
-
-					total_corr_sum += max;
-					peak_list[n_peaks] = k, best_fr_list[n_peaks] = best_fr, corr_sum_list[n_peaks] = max;
-					if (max > best) best = max, best_n = n_peaks;
-					n_peaks++;
 				}
 				if (n_peaks == 0) return;
 
@@ -5119,124 +5304,112 @@ public:
 				if (!pep->fragments.size()) le.generate();
 			}
 
-			int fr, pos, k = peak, best_fr = info[0].best_fragment;
+			int fr, pos, k = peak, best_fr = info[0].best_fragment, start, stop, vpos, width;
             double w, r, e;
 
 			Searcher searcher(this);
-			if (!stats_only) info[0].quant.resize(pep->fragments.size());
+			int p = Min(TopF, searcher.m);
+			if (!stats_only) info[0].quant.resize(p);
+			float scaled[TopF];
 
-			int low = Max(0, k - Max(1, S / 2));
-			int high = Min(searcher.scan_index->size() - 1, k + Max(1, S / 2));
+			int R = (QuantMode == 1 ? Max(1, S / 2) : Max(1, S));
+			int low = Max(0, k - R);
+			int high = Min(searcher.scan_index->size() - 1, k + R);
 			int len = high - low + 1;
 			float *elution = (float*)alloca(len * sizeof(float));
-			float *signal = (float*)alloca(len * sizeof(float));
-			float **curves = (float**)alloca(searcher.m * sizeof(float*));
 
 			searcher.quant_chromatogram(low, high + 1);
-			for (pos = 0; pos < len; pos++) signal[pos] = searcher.ms2[best_fr * len + pos];
-			smooth(&(elution[0]), &(signal[0]), len);
-
-			for (pos = 0, w = 0.0; pos < len; pos++) w += Sqr(elution[pos]);
-			assert(w > E);
-
-			if (TightQuant && searcher.ms2_tight_one[best_fr * len + k - low] > elution[k - low] * 0.5) {
-				float cfr_tight = cfr_tight = corr(&(elution[0]), &(searcher.ms2_tight_one[best_fr * len]), len);
-				if (cfr_tight >= 0.95) {
-					for (pos = 0; pos < len; pos++) signal[pos] = searcher.ms2_tight_one[best_fr * len + pos];
-					smooth(&(elution[0]), &(signal[0]), len);
-				}
-			}
+			smooth(&(elution[0]), &(searcher.ms2[best_fr * len]), len);
 
 			e = elution[k - low] * 0.5;
 			for (pos = info[0].peak_width = 0; pos < len; pos++) if (elution[pos] >= e)
 				info[0].peak_width++;
+			float boundary = elution[k - low] / PeakBoundary;
+			start = 0, stop = len - 1;
+			if (QuantMode == 0) {
+				float valley;
+				start = k - low - 1;
+				for (start = vpos = k - low - 1, valley = elution[k - low]; start > 0; start--) {
+					if (elution[start] < valley) valley = elution[start], vpos = start;
+					else if (valley < elution[k - low] / 3.0 && valley < elution[start] / 2.0) { start = vpos;  break; }
+					if (Max(searcher.ms2[best_fr * len + start], searcher.ms2[best_fr * len + start + 1]) < boundary) break;
+				}
+				stop = k - low + 1;
+				for (stop = vpos = k - low + 1, valley = elution[k - low]; stop < high - low; stop++) {
+					if (elution[stop] < valley) valley = elution[stop], vpos = stop;
+					else if (valley < elution[k - low] / 3.0 && valley < elution[stop] / 2.0) { stop = vpos;  break; }
+					if (Max(searcher.ms2[best_fr * len + stop], searcher.ms2[best_fr * len + stop - 1]) < boundary) break;
+				}
+			}
+			width = stop - start + 1;
 #if Q1
 			float bmz = run->predicted_mz(&(run->MassCorrection[0]), info[0].best_fr_mz, info[0].RT);
 			info[0].q1_shift = run->q1_delta(info[0].apex, pep->mz, bmz, QSL[qL - 1]);
 #endif
 			if (stats_only) return;
 
-			for (fr = 0; fr < info[0].quant.size(); fr++) {
+			for (fr = 0; fr < p; fr++) {
+				info[0].quant[fr].index = (*searcher.fri)[fr];
 				info[0].quant[fr].corr = 0.0;
 				for (int q = 0; q < qN; q++) info[0].quant[fr].quantity[q] = 0.0;
+				scaled[fr] = 0.0;
 			}
-			for (fr = 0; fr < searcher.m; fr++) {
-				if (!TightMassAcc || !TightQuant) info[0].quant[(*searcher.fri)[fr]].corr = corr(&(elution[0]), &(searcher.ms2[fr * len]), len), curves[fr] = &(searcher.ms2[fr * len]);
+			for (pos = k - low - 1, w = 0.0; pos <= k - low + 1; pos++) w += Sqr(elution[pos]);
+			assert(w > E);
+
+			for (fr = 0; fr < p; fr++) {
+				info[0].quant[fr].corr = corr(&(elution[start]), &(searcher.ms2[fr * len + start]), width);
+				info[0].quant[fr].quantity[qTotal] = sum(&(searcher.ms2[fr * len + start]), width);
+				if (NoIfsRemoval) info[0].quant[fr].quantity[qFiltered] = info[0].quant[fr].quantity[qTotal];
 				else {
-					float cfr = corr(&(elution[0]), &(searcher.ms2[fr * len]), len), cfr_tight = corr(&(elution[0]), &(searcher.ms2_tight_one[fr * len]), len);
-					if (cfr > cfr_tight) curves[fr] = &(searcher.ms2[fr * len]), info[0].quant[(*searcher.fri)[fr]].corr = cfr;
-					else curves[fr] = &(searcher.ms2_tight_one[fr * len]), info[0].quant[(*searcher.fri)[fr]].corr = cfr_tight;
+					for (pos = k - low - 1; pos <= k - low + 1; pos++)
+						scaled[fr] += searcher.ms2[fr * len + pos] * Sqr(elution[pos]);
+					scaled[fr] /= w;
 				}
-
-				info[0].quant[(*searcher.fri)[fr]].quantity[qTotal] = sum(curves[fr], len);
-				for (pos = 0, info[0].quant[(*searcher.fri)[fr]].quantity[qScaled] = 0.0; pos < len; pos++)
-					info[0].quant[(*searcher.fri)[fr]].quantity[qScaled] += (*(curves[fr] + pos)) * Sqr(elution[pos]);
-				info[0].quant[(*searcher.fri)[fr]].quantity[qScaled] /= w;
 			}
 
-			bool track = false;
-			if (TrackedPrecursors.size() && filter && std::find(TrackedPrecursors.begin(), TrackedPrecursors.end(), run->lib->entries[pep->index].name) != TrackedPrecursors.end()) track = true;
-			if (track) {
-				std::cout << "\n[Precursor " << run->lib->entries[pep->index].name << "]\n";
-				std::cout << "RT: ";
-				for (pos = 0; pos < len; pos++) {
-					int si = (*searcher.scan_index)[low + pos];
-					std::cout << run->scan_RT[si] << ",";
+			if (!NoIfsRemoval) {
+				assert(best_fr < p);
+				assert(scaled[best_fr] > E);
+
+				info[0].quant[best_fr].quantity[qFiltered] = info[0].quant[best_fr].quantity[qTotal];
+				for (fr = 0; fr < p; fr++) {
+					if (fr == best_fr) continue;
+					r = scaled[fr] / scaled[best_fr];
+					if (info[0].quant[fr].corr < 0.8) {
+						r = Min(r, searcher.ms2[fr * len + k - low] / Max(E, searcher.ms2[best_fr * len + k - low]));
+
+						double radj = r;
+						e = elution[k - low] * 0.5;
+						for (pos = k - low - 1; pos >= 0; pos--) {
+							if (elution[pos] < e) break;
+							else radj = Min(radj, searcher.ms2[fr * len + pos] / Max(E, searcher.ms2[best_fr * len + pos]));
+						}
+						for (pos = k - low + 1; pos < len; pos++) {
+							if (elution[pos] < e) break;
+							else radj = Min(radj, searcher.ms2[fr * len + pos] / Max(E, searcher.ms2[best_fr * len + pos]));
+						}
+
+						r = Max(r * 0.5, Min(r, radj));
+					}
+					for (pos = start; pos <= stop; pos++) info[0].quant[fr].quantity[qFiltered] += Min(searcher.ms2[fr * len + pos], FilterFactor * r * elution[pos]);
 				}
-				std::cout << "\n";
 			}
-
-			assert(info[0].quant[(*searcher.fri)[best_fr]].quantity[qScaled] > E);
-			for (fr = 0, info[0].quantity = 0.0; fr < searcher.m; fr++) {
-				r = info[0].quant[(*searcher.fri)[fr]].quantity[qScaled] / info[0].quant[(*searcher.fri)[best_fr]].quantity[qScaled];
-				if (info[0].quant[(*searcher.fri)[fr]].corr < QuantRatioCorrThreshold) {
-					r = Min(r, searcher.ms2[fr * len + k - low] / Max(E, searcher.ms2[best_fr * len + k - low]));
-
-					double radj = r;
-					for (pos = k - low - 1; pos >= 0; pos--) {
-						if (elution[pos] < e) break;
-						else radj = Min(radj, searcher.ms2[fr * len + pos] / Max(E, searcher.ms2[best_fr * len + pos]));
-					}
-					for (pos = k - low + 1; pos < len; pos++) {
-						if (elution[pos] < e) break;
-						else radj = Min(radj, searcher.ms2[fr * len + pos] / Max(E, searcher.ms2[best_fr * len + pos]));
-					}
-
-					r = Max(r * 0.5, Min(r, radj));
-				}
-				if (!track) {
-					for (pos = 0, info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered] = 0.0; pos < len; pos++)
-						info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered] += Min((*(curves[fr] + pos)), FilterFactor * r * elution[pos]);
-				} else { // tracked
-					std::cout << "[Fragment " << pep->fragments[(*searcher.fri)[fr]].mz << ":\n\t";
-					std::cout << "raw: ";
-					for (pos = 0; pos < len; pos++) std::cout << *(curves[fr] + pos) << ",";
-					std::cout << "\n\tfiltered: ";
-					for (pos = 0, info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered] = 0.0; pos < len; pos++) {
-						double fv = Min((*(curves[fr] + pos)), FilterFactor * r * elution[pos]);
-						info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered] += fv;
-						std::cout << fv << ",";
-					}
-					std::cout << "]\n";
-				}
-				if (fr < TopF) info[0].quantity += info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered];
-			}
-			if (NoIfsRemoval) for (fr = 0, info[0].quantity = 0.0; fr < searcher.m; fr++)
-				info[0].quantity += (info[0].quant[(*searcher.fri)[fr]].quantity[qFiltered] = info[0].quant[(*searcher.fri)[fr]].quantity[qTotal]);
+			for (fr = 0, info[0].quantity = 0.0; fr < p; fr++) info[0].quantity += info[0].quant[fr].quantity[qFiltered];
 
 #if ELUTION_PROFILE
 			searcher.get_ms1_elution_profile(ms1_elution_profile, info[0].RT);
 #endif
 
-			if (info[0].qvalue <= 0.01 && (e = signal[k - low] * 0.5) >= MinPeakHeight) { // for run stats
+			if (info[0].qvalue <= 0.01 && (e = searcher.ms2[best_fr * len + k - low] * 0.5) >= MinPeakHeight) { // for run stats
 				double fwhm_sc = 0.0, fwhm_rt = 0.0;
 				int flag;
 				for (pos = k, flag = 0; pos < high; pos++) {
 					int i = pos - low;
 					double mul, rtd = run->scan_RT[(*searcher.scan_index)[pos + 1]] - run->scan_RT[(*searcher.scan_index)[pos]];
-					if (signal[i + 1] >= e) mul = 1.0;
+					if (searcher.ms2[best_fr * len + i + 1] >= e) mul = 1.0;
 					else {
-						mul = (signal[i] - e) / Max(E, signal[i] - signal[i + 1]);
+						mul = (searcher.ms2[best_fr * len + i] - e) / Max(E, searcher.ms2[best_fr * len + i] - searcher.ms2[best_fr * len + i + 1]);
 						flag = 1;
 					}
 					fwhm_sc += mul, fwhm_rt += rtd * mul;
@@ -5245,9 +5418,9 @@ public:
 				for (pos = k, flag = 0; pos > low; pos--) {
 					int i = pos - low;
 					double mul, rtd = run->scan_RT[(*searcher.scan_index)[pos]] - run->scan_RT[(*searcher.scan_index)[pos - 1]];
-					if (signal[i - 1] >= e) mul = 1.0;
+					if (searcher.ms2[best_fr * len + i - 1] >= e) mul = 1.0;
 					else {
-						mul = (signal[i] - e) / Max(E, signal[i] - signal[i - 1]);
+						mul = (searcher.ms2[best_fr * len + i] - e) / Max(E, searcher.ms2[best_fr * len + i] - searcher.ms2[best_fr * len + i - 1]);
 						flag = 1;
 					}
 					fwhm_sc += mul, fwhm_rt += rtd * mul;
@@ -5260,13 +5433,14 @@ public:
 
 				run->RS.pep_length += pep->length;
 				run->RS.pep_charge += pep->charge;
+				run->RS.pep_mc += missed_KR_cleavages(run->lib->entries[pep->index].name);
 
 				run->RS.cnt_valid++;
 			}
         }
 
 		noninline void intensities(int apex, std::vector<Ion> &gen) { // get fragment intensities
-			int i, fr, cnt, low, high;
+			int i, j, fr, cnt, low, high;
 			double u, max, mz = pep->mz;
 
 			std::vector<Product>().swap(pep->fragments);
@@ -5297,18 +5471,27 @@ public:
 			float best_height = elution[S - low];
 
 			Peak * new_fr = (Peak*)alloca(gen.size() * sizeof(Peak));
+			float * actual_mz = (float*)alloca(gen.size() * sizeof(float)), *err_mz = (float*)alloca(gen.size() * sizeof(float));;
 			for (fr = cnt = 0, max = 0.0; fr < gen.size(); fr++) {
-				float fmz = gen[fr].mz;
+				float fmz = gen[fr].mz, amz = 0.0;
 				if (fmz < MinFrMz || fmz > MaxFrMz) continue;
 				if (fmz <= run->tandem_min || fmz >= run->tandem_max) continue;
 				float query_mz = run->predicted_mz(&(run->MassCorrection[0]), fmz, run->scan_RT[apex]);
-				for (i = 0; i < l; i++) x[i] = run->ms2h[(*scan_index)[low + i]].level<false>(query_mz, run->MassAccuracy * 1.0);
+				x[S] = run->ms2h[apex].level<true>(query_mz, run->MassAccuracy, &amz);
+				for (i = 0; i < l; i++) if (i != S) x[i] = run->ms2h[(*scan_index)[low + i]].level<false>(query_mz, run->MassAccuracy);
 				u = x[S - low];
 				if (u >= best_height * MinRelFrHeight && u >= MinGenFrInt) {
 					float c = corr(x, elution, l);
 					if (gen[fr].type == type_b) c -= FrCorrBSeriesPenalty;
 					if (c >= MinGenFrCorr && (c >= MinRareFrCorr || ((gen[fr].charge == 1 || pep->charge >= 3) && gen[fr].loss == loss_none))) {
+						bool skip = false;
+						for (j = 0; j < cnt; j++) if (Abs(amz - actual_mz[j]) < E) {
+							skip = true;
+							if (Abs(amz - query_mz) < err_mz[j]) new_fr[j].mz = fmz, err_mz[j] = Abs(amz - query_mz);
+						}
+						if (skip) continue;
 						new_fr[cnt].mz = fmz, new_fr[cnt].height = u;
+						actual_mz[cnt] = amz, err_mz[cnt] = Abs(amz - query_mz);
 						if (u > max) max = u;
 						cnt++;
 					}
@@ -5349,6 +5532,8 @@ public:
 				info[0].peak_pos = info[0].peaks[info[0].best_peak].peak;
 				info[0].RT = run->scan_RT[info[0].apex];
 				for (k = 0; k < pN; k++) info[0].scores[k] = info[0].scoring[info[0].best_peak * pN + k];
+				info[0].evidence = info[0].scores[pTimeCorr];
+				info[0].ms1_corr = info[0].scores[pMs1TimeCorr];
 				flags |= fFound;
 				if (!(flags & fDecoy) && run->curr_iter == CalibrationIter && (InferWindow || Calibrate))
 					quantify(info[0].peaks[info[0].best_peak].peak, true);
@@ -5398,7 +5583,7 @@ public:
 
 	void write(char * file_name) {
 		std::ofstream out(file_name, std::ofstream::binary);
-		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << "\n"; return; }
+		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 
 		int size = -2; // second version of the .dia file format
 		out.write((char*)&size, sizeof(int));
@@ -5504,6 +5689,7 @@ public:
 		int i, cycle = 0;
 		long long tot_peaks = 0;
 		n_scans = ms2h.size();
+
 		if (ExportWindows) {
 			if (Verbose >= 1) Time(), std::cout << "Exporting window acquisition scheme\n";
 			std::ofstream out(name + std::string(".txt"), std::ofstream::out);
@@ -5511,6 +5697,7 @@ public:
 			for (i = 0; i < Min(n_scans, MaxCycleLength); i++) out << ms2h[i].window_low << "\t" << ms2h[i].window_high << "\n";
 			out.close();
 		}
+
 		scan_cycle.resize(n_scans); if (n_scans) scan_cycle[0] = 0;
 		for (i = 1; i < n_scans; i++) { // handle overlapping windows
 			if (!ForceNormalSWATH && !ForceScanningSWATH) if (!scanning && ms2h[i].window_high > ms2h[i - 1].window_high + E && Abs(ms2h[i].window_low - ms2h[i - 1].window_high) < E && ms2h[i].RT - ms2h[i - 1].RT < (1.0 / (60.0 * 70.0)))
@@ -5523,9 +5710,11 @@ public:
 			else scan_cycle[i] = ++cycle;
 		}
 		for (cycle_length = 0; cycle_length < scan_cycle.size(); cycle_length++) if (scan_cycle[cycle_length]) break;
+
 		if (ForceNormalSWATH) scanning = false;
 		if (ForceScanningSWATH) scanning = true;
 		if (Verbose >= 1 && scanning && !Convert) Time(), std::cout << "Analysing as Scanning SWATH run\n";
+
 		scan_RT.resize(n_scans);
 		double t_min = INF, t_max = -INF;
 		for (i = 0; i < n_scans; i++) {
@@ -5538,6 +5727,7 @@ public:
 					t_max = ms2h[i].peaks[ms2h[i].size() - 1].mz;
 			}
 		}
+
 		if (MS2Range) {
 			if (t_min < t_max) tandem_min = t_min, tandem_max = t_max;
 			if (Verbose >= 3) Time(), std::cout << "Detected MS/MS range: " << tandem_min << " - " << tandem_max << "\n";
@@ -5854,21 +6044,28 @@ public:
 
 	void remove_rubbish() {
 		double smin = INF, smin_g = INF;
+		int cnt = 0, tot = 0;
 		for (auto &e : entries)
 			if (e.target.flags & fFound)
 				if (e.target.info[0].qvalue > RubbishFilter)
-					e.target.flags &= ~fFound;
+					e.target.flags &= ~fFound, tot++;
 				else {
 					if (GuideLibrary && !lib->entries[e.target.pep->index].from_fasta) {
 						if (e.target.info[0].cscore < smin_g) smin_g = e.target.info[0].cscore;
 					} else if (e.target.info[0].cscore < smin) smin = e.target.info[0].cscore;
+					cnt++;
 				}
-		for (auto &e : entries)
-			if (e.decoy.flags & fFound) {
-				if (GuideLibrary && !lib->entries[e.decoy.pep->index].from_fasta) {
-					if (e.decoy.info[0].cscore < smin_g) e.decoy.flags &= ~fFound;
-				} else if (e.decoy.info[0].cscore < smin) e.decoy.flags &= ~fFound;
-			}
+		
+		tot += cnt;
+		if (cnt >= MinNonRubbish && tot > MinRubbishFactor * cnt) {
+			if (Verbose >= 1) Time(), std::cout << "Removing low confidence identifications\n";
+			for (auto &e : entries)
+				if (e.decoy.flags & fFound) {
+					if (GuideLibrary && !lib->entries[e.decoy.pep->index].from_fasta) {
+						if (e.decoy.info[0].cscore < smin_g) e.decoy.flags &= ~fFound;
+					} else if (e.decoy.info[0].cscore < smin) e.decoy.flags &= ~fFound;
+				}
+		}
 	}
 
 	void map_ids() {
@@ -7116,9 +7313,9 @@ public:
 		update_classifier(true, false, true, true, processed_batches + 1, Batches);
 		update(false, false, false, false, false);
 
+		remove_rubbish();
 		if (IDsInterference) {
 			if (Verbose >= 1) Time(), std::cout << "Removing interferences\n";
-			if (FastaSearch) remove_rubbish();
 			quantify_all(false);
 			for (int ir = 0; ir < IDsInterference; ir++) {
 				map_ids();
@@ -7161,6 +7358,20 @@ public:
 			out << "Peptide\tQuantity\n";
 			for (auto &it : pep) out << it.first << "\t" << it.second << "\n";
 			out.close();
+		}
+
+		for (i = 0; i < ms1h.size(); i++) {
+			float sum = 0; for (auto j = 0; j < ms1h[i].n; j++) sum += ms1h[i].peaks[j].height;
+			RS.MS1_tot += sum;
+		}
+		if (ms2h.size()) {
+			float RT_min = ms2h[0].RT, RT_max = ms2h[ms2h.size() - 1].RT;
+			for (i = 0; i < ms2h.size(); i++) {
+				int bin = Max(0, Min(TIC_n - 1, floor(((ms2h[i].RT - RT_min) / Max(E, RT_max - RT_min)) * (float)TIC_n)));
+				float sum = 0; for (auto j = 0; j < ms2h[i].n; j++) sum += ms2h[i].peaks[j].height;
+				RS.TIC[bin] += sum;
+				RS.MS2_tot += sum;
+			}
 		}
 
 		QuantEntry qe;
@@ -7208,17 +7419,18 @@ public:
 			qe.pr.protein_qvalue = it->target.info[0].protein_qvalue;
 			qe.pr.RT = scan_RT[it->target.info[0].apex];
 			qe.pr.predicted_iRT = calc_spline(iRT_coeff, iRT_points, qe.pr.RT);
-			qe.pr.evidence = it->target.info[0].scores[0];
+			qe.pr.evidence = it->target.info[0].evidence;
+			qe.pr.ms1_corr = it->target.info[0].ms1_corr;
 			qe.pr.cscore = it->target.info[0].cscore;
-			qe.pr.decoy_evidence = (it->decoy.flags & fFound) ? it->decoy.info[0].scores[0] : 0.0;
+			qe.pr.decoy_evidence = (it->decoy.flags & fFound) ? it->decoy.info[0].evidence : 0.0;
 			qe.pr.decoy_cscore = (it->decoy.flags & fFound) ? it->decoy.info[0].cscore : -INF;
 			if (qe.pr.decoy_found) qe.pr.decoy_qvalue = it->decoy.info[0].qvalue;
 			else qe.pr.decoy_qvalue = 1.0;
 			qe.pr.profile_qvalue = 1.0;
 
-			qe.fr_n = Min(it->target.info[0].quant.size(), auxF);
+			qe.fr_n = it->target.info[0].quant.size();
 			for (i = 0; i < qe.fr_n; i++) qe.fr[i] = it->target.info[0].quant[i];
-			if (qe.fr_n < auxF) memset(&(qe.fr[qe.fr_n]), 0, (auxF - qe.fr_n) * sizeof(Fragment));
+			if (qe.fr_n < TopF) memset(&(qe.fr[qe.fr_n]), 0, (TopF - qe.fr_n) * sizeof(Fragment));
 #if REPORT_SCORES
 			for (i = 0; i < pN; i++) qe.pr.scores[i] = it->target.info[0].scores[i];
 			if (qe.pr.decoy_found) { for (i = 0; i < pN; i++) qe.pr.decoy_scores[i] = it->decoy.info[0].scores[i]; } else for (i = 0; i < pN; i++) qe.pr.decoy_scores[i] = 0.0;
@@ -7244,7 +7456,7 @@ public:
 					out = std::ofstream(out_quant = location_to_file_name(name) + std::string(".quant"), std::ofstream::binary);
 				}
 			}
-			if (out.fail()) std::cout << "ERROR: cannot save the .quant file to " << out_quant << '\n';
+			if (out.fail()) std::cout << "ERROR: cannot save the .quant file to " << out_quant << ". Check if the destination folder is write-protected or the file is in use\n";
 			else {
 				quant.write(out);
 				long long fsize = out.tellp();
@@ -7275,9 +7487,9 @@ public:
 		if (IndividualReports) {
 			lib->info.load(lib, quant);
 			lib->info.quantify();
-			lib->quantify_proteins(3, ProteinQuantQvalue);
+			lib->quantify_proteins(TopN, ProteinQuantQvalue);
 			lib->report(ms_files[run_index] + std::string(".tsv"));
-			if (lib->genes.size()) lib->report(ms_files[run_index] + std::string(".genes.tsv"));
+			if (lib->genes.size()) lib->gene_report(ms_files[run_index] + std::string(".genes.tsv"));
 		}
     }
 
@@ -7366,7 +7578,7 @@ int analyse_unit_test(int threads) {
 	run.load("D:/Raw/USP/20181113_normalswath_4.wiff.dia");
 	run.init();
 
-	ms1_rt.resize(run.ms1h.size()), ms1_peak_n.resize(run.ms2h.size());
+	ms1_rt.resize(run.ms1h.size()), ms1_peak_n.resize(run.ms1h.size());
 	ms2_rt.resize(run.ms2h.size()), ms2_low.resize(run.ms2h.size()), ms2_high.resize(run.ms2h.size()), ms2_peak_n.resize(run.ms2h.size());
 
 	for (int i = 0; i < run.ms1h.size(); i++) ms1_rt[i] = run.ms1h[i].RT, ms1_peak_n[i] = run.ms1h[i].n;
@@ -7376,9 +7588,9 @@ int analyse_unit_test(int threads) {
 	auto result = analyse(&(lib_bytes[0]), lib_bytes.size(), threads, 20.0 / 1000000.0, 20.0 / 1000000.0, 8, 0.01, run.ms1h.size(), &(ms1_rt[0]), &(ms1_peak_n[0]), (float*)(run.ms1h[0].peaks),
 		run.ms2h.size(), &(ms2_rt[0]), &(ms2_low[0]), &(ms2_high[0]), &(ms2_peak_n[0]), (float*)(run.ms2h[0].peaks));
 
-	std::cout << result.size() << " precursors at 1% FDR:\n";
-	std::cout << "Precursor.Index.In.Library\tPrecursor.RT\tPrecursor.iRT\tPrecursor.Quantity\tPrecursor.QValue\n";
-	for (auto &qe : result) std::cout << qe.pr.index << '\t' << qe.pr.RT << '\t' << qe.pr.iRT << '\t' << qe.pr.quantity << '\t' << qe.pr.qvalue << '\n';
+	//std::cout << result.size() << " precursors at 1% FDR:\n";
+	//std::cout << "Precursor.Index.In.Library\tPrecursor.RT\tPrecursor.iRT\tPrecursor.Quantity\tPrecursor.QValue\n";
+	//for (auto &qe : result) std::cout << qe.pr.index << '\t' << qe.pr.RT << '\t' << qe.pr.iRT << '\t' << qe.pr.quantity << '\t' << qe.pr.qvalue << '\n';
 	return result.size();
 }
 #endif
@@ -7421,6 +7633,14 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
+	if (ExportProsit && !FastaSearch && fasta_files.size() && !lib_file.size()) {
+		Fasta fasta;
+		Library lib;
+		if (Verbose >= 1) Time(), std::cout << "Preparing Prosit input from the FASTA database provided\n";
+		if (!fasta.load(fasta_files, fasta_filter_files)) Throw("Cannot load FASTA");
+		lib.load(fasta);
+	}
+
 	Fasta fasta;
 	if (FastaSearch && fasta_files.size()) {
 		if (learn_lib_file.size() && !ReportOnly) learn_from_library(learn_lib_file);
@@ -7440,10 +7660,29 @@ int main(int argc, char *argv[]) {
 			if (learn_lib_file.size()) for (auto &e : lib.entries) e.target.sRT = (InSilicoRTPrediction ? predict_irt(e.name) : default_iRT);
 		}
 		lib.load(fasta);
-	} else if (!lib.load(&(lib_file[0]))) Throw("Cannot load spectral library");
-	if (!FastaSearch && fasta_files.size()) fasta.load_proteins(fasta_files);
-	if (fasta_files.size()) annotate_library(lib, fasta);
-	if (FastaSearch && fasta_files.size()) fasta.free();
+	} else {
+		if (!lib_file.size()) return 0;
+		if (!lib.load(&(lib_file[0]))) Throw("Cannot load spectral library");
+		if (ExportProsit && !fasta_files.size()) {
+			if (Verbose >= 1) Time(), std::cout << "Preparing Prosit input from the spectral library provided\n";
+			lib.export_prosit();
+		}
+	}
+	if (!FastaSearch && fasta_files.size()) {
+		if (lib.protein_ids.size() > 1) fasta.load_proteins(fasta_files);
+		else if (!fasta.load(fasta_files, fasta_filter_files)) Throw("Cannot load FASTA");
+	}
+	if (fasta_files.size()) {
+		if (lib.protein_ids.size() > 1 || FastaSearch) {
+			if (Verbose >= 1 && !FastaSearch) Time(), std::cout << "Annotating library proteins with information from the FASTA database\n";
+			annotate_library(lib, fasta);
+		} else {
+			if (Verbose >= 1) Time(), std::cout << "No protein information found in the library. Annotating library precursors with information from the FASTA database\n";
+			lib.load_protein_annotations(fasta);
+			annotate_library(lib, fasta);
+		}
+		fasta.free();
+	}
 	if (GuideLibrary && FastaSearch && nnIter >= iN)
 		ReportProteinQValue = 1.0, Time(),
 		std::cout << "WARNING: protein q-values cannot be calculated without NNs when a guide library is used for FASTA search, protein q-value filter reset to 1.0\n";
@@ -7477,9 +7716,9 @@ int main(int argc, char *argv[]) {
 					Q.read(in, lib.entries.size());
 					lib.info.load(&(lib), Q);
 					lib.info.quantify();
-					lib.quantify_proteins(3, ProteinQuantQvalue);
+					lib.quantify_proteins(TopN, ProteinQuantQvalue);
 					lib.report((*it) + std::string(".tsv"));
-					if (lib.genes.size()) lib.report((*it) + std::string(".genes.tsv"));
+					if (lib.genes.size()) lib.gene_report((*it) + std::string(".genes.tsv"));
 				}
 				in.close();
 				continue;
@@ -7560,9 +7799,9 @@ quant_only:
 						Q.read(in, lib.entries.size());
 						lib.info.load(&(lib), Q);
 						lib.info.quantify();
-						lib.quantify_proteins(3, ProteinQuantQvalue);
+						lib.quantify_proteins(TopN, ProteinQuantQvalue);
 						lib.report((*it) + std::string(".tsv"));
-						if (lib.genes.size()) lib.report((*it) + std::string(".genes.tsv"));
+						if (lib.genes.size()) lib.gene_report((*it) + std::string(".genes.tsv"));
 					}
 					in.close();
 					continue;
@@ -7674,7 +7913,7 @@ gen_spec_lib:
 	if (QuantInMem) lib.info.load(&(lib), ms_files, &quants);
 	else lib.info.load(&(lib), ms_files);
 	lib.info.quantify();
-	lib.quantify_proteins(3, ProteinQuantQvalue);
+	lib.quantify_proteins(TopN, ProteinQuantQvalue);
 	if (out_file.size()) lib.report(out_file), lib.stats_report(remove_extension(out_file) + std::string(".stats.tsv"));
 	if (out_gene_file.size()) lib.gene_report(out_gene_file);
 

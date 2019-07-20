@@ -15,6 +15,12 @@
     {
         "Entry"
         {
+        "MsmKey" = "8:_07861776677A485788E4005B8319510F"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
         "MsmKey" = "8:_0E843FB9ADA383719B59F5D139A75FCC"
         "OwnerKey" = "8:_22D80C1E0C0A9F353D39BAB6AD488DB6"
         "MsmSig" = "8:_UNDEFINED"
@@ -160,6 +166,18 @@
         "Entry"
         {
         "MsmKey" = "8:_4CB3B63DF79F4A45AA19DCA5F268A920"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_58822F4CE5824BBD9E557DBCE41C3E0C"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_5D176785FA8A46049BBE02268F0C05A8"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
         }
@@ -370,6 +388,12 @@
         "Entry"
         {
         "MsmKey" = "8:_CBE2713F7171452B91B2ED8EE77C0D41"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_D9828108773E4D38B42A184FDD0501C6"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
         }
@@ -728,6 +752,26 @@
         }
         "File"
         {
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_07861776677A485788E4005B8319510F"
+            {
+            "SourcePath" = "8:..\\plotter_to_exe.bat"
+            "TargetName" = "8:plotter_to_exe.bat"
+            "Tag" = "8:"
+            "Folder" = "8:_BCDFE9154E09420399E22924252B2196"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
             "{9F6F8455-1EF1-4B85-886A-4223BCC8E7F7}:_0E843FB9ADA383719B59F5D139A75FCC"
             {
             "AssemblyRegister" = "3:1"
@@ -980,6 +1024,46 @@
             {
             "SourcePath" = "8:..\\LICENSE.txt"
             "TargetName" = "8:LICENSE.txt"
+            "Tag" = "8:"
+            "Folder" = "8:_BCDFE9154E09420399E22924252B2196"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_58822F4CE5824BBD9E557DBCE41C3E0C"
+            {
+            "SourcePath" = "8:..\\DIA-NN-Plotter.ipynb"
+            "TargetName" = "8:DIA-NN-Plotter.ipynb"
+            "Tag" = "8:"
+            "Folder" = "8:_BCDFE9154E09420399E22924252B2196"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_5D176785FA8A46049BBE02268F0C05A8"
+            {
+            "SourcePath" = "8:..\\DIA-NN-Plotter.py"
+            "TargetName" = "8:DIA-NN-Plotter.py"
             "Tag" = "8:"
             "Folder" = "8:_BCDFE9154E09420399E22924252B2196"
             "Condition" = "8:"
@@ -1377,6 +1461,26 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_D9828108773E4D38B42A184FDD0501C6"
+            {
+            "SourcePath" = "8:..\\dia-nn-plotter.exe"
+            "TargetName" = "8:dia-nn-plotter.exe"
+            "Tag" = "8:"
+            "Folder" = "8:_BCDFE9154E09420399E22924252B2196"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
             "{9F6F8455-1EF1-4B85-886A-4223BCC8E7F7}:_DAB02682260D8FC246BB4BB4C7113C6C"
             {
             "AssemblyRegister" = "3:1"
@@ -1578,7 +1682,7 @@
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:DIA-NN"
         "ProductCode" = "8:{A9CA01F8-7301-43C6-8C87-595D5C91EB28}"
-        "PackageCode" = "8:{778CF6F9-0439-4046-BDAE-7EE3FD85A760}"
+        "PackageCode" = "8:{5C5A6951-2B62-4EE8-8FD1-6B36A9840241}"
         "UpgradeCode" = "8:{A7E5FE6E-3FC2-4ACA-A627-F97C20D14DBD}"
         "AspNetVersion" = "8:2.0.50727.0"
         "RestartWWWService" = "11:FALSE"
