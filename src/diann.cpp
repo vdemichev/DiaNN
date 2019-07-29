@@ -313,12 +313,12 @@ bool ExtendedReport = true;
 bool RemoveQuant = false;
 bool QuantInMem = false;
 
-#define Q1 TRUE
-#define AAS FALSE
-#define LOGSC FALSE
-#define REPORT_SCORES FALSE
+#define Q1 true
+#define AAS false
+#define LOGSC false
+#define REPORT_SCORES false
 #define EXTERNAL 1
-#define ELUTION_PROFILE FALSE
+#define ELUTION_PROFILE false
 const int ElutionProfileRadius = 10;
 
 enum {
@@ -435,9 +435,6 @@ std::vector<std::pair<std::string, float> > Modifications = {
 	std::pair<std::string, float>("UniMod:269", (float)10.027228)
 };
 
-std::vector<std::string> UnknownMods;
-int MaxCycleShift = 200;
-
 inline char to_lower(char c) { return c + 32; }
 
 void init_unimod() {
@@ -448,7 +445,7 @@ void init_unimod() {
 	UniModIndex.resize(mods.size());
 	for (int i = 0; i < mods.size(); i++) {
 		UniMod[i].first = UniModIndex[i].first = mods[i].first;
-		if (!std::memcmp(&(mods[i].first[0]), "UniMod", 6)) UniMod[i].second = mods[i].first;
+		if (!std::memcmp(&(mods[i].first[0]), "UniMod", 6)) UniMod[i].second = mods[i].first, indices.insert(UniModIndex[i].second = i);
 		else {
 			double min = INF;
 			int min_index = 0;
@@ -457,10 +454,15 @@ void init_unimod() {
 				double delta = Abs(((double)mods[i].second) - (double)mods[j].second);
 				if (delta < min) min = delta, min_index = j;
 			}
-			if (min > 0.00001 && Verbose >= 1) std::cout << "WARNING: potentially incorrect UniMod modification match for " << mods[i].first << ": " << min << "\n";
-			UniMod[i].second = mods[min_index].first;
+			if (min > 0.00001) {
+				if (Verbose >= 1) std::cout << "Cannot find a UniMod modification match for " << mods[i].first << ": " << min << " minimal mass discrepancy; using the original modificaiton name\n";
+				UniMod[i].second = UniMod[i].first;
+				indices.insert(UniModIndex[i].second = i);
+			} else {
+				UniMod[i].second = mods[min_index].first;
+				indices.insert(UniModIndex[i].second = min_index);
+			}
 		}
-		indices.insert(UniModIndex[i].second = std::stoi(&(UniMod[i].second[7])));
 	}
 	UniModIndices.insert(UniModIndices.begin(), indices.begin(), indices.end());
 }
@@ -1586,7 +1588,6 @@ void arguments(int argc, char *argv[]) {
 				std::cout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " at " << aas << " will be considered as variable\n";
 			}
 		}
-		else if (!memcmp(&(args[start]), "unknown-mod ", 12)) UnknownMods.push_back(trim(args.substr(start + 12, end - start - 12)));
 		else if (!memcmp(&(args[start]), "ref-cal ", 8)) RefCal = true, std::cout << "Reference peptides will be used for calibration\n";
 		else if (!memcmp(&(args[start]), "gen-ref ", 8)) GenRef = true, gen_ref_file = trim(args.substr(start + 8, end - start - 8)),
 			std::cout << "A library of reference peptides will be generated\n";
@@ -1802,14 +1803,6 @@ void arguments(int argc, char *argv[]) {
 			VarMods.resize(31);
 			std::cout << "WARNING: only the first 31 variable modifications specified will be searched for\n";
 		}
-	}
-
-	if (UnknownMods.size()) {
-		std::sort(UnknownMods.begin(), UnknownMods.end());
-		std::cout << "DIA-NN will look for unknown modification on peptides: ";
-		for (auto &u : UnknownMods) std::cout << u << ' ';
-		for (int cs = 1; cs <= MaxCycleShift; cs++) Modifications.push_back(std::pair<std::string, float>("UniMod:10000" + std::to_string(cs), 0.0));
-		std::cout << '\n';
 	}
 
 	nnIter = Min(Max(Max(RTWindowIter, CalibrationIter), nnIter), iN);
@@ -2038,6 +2031,14 @@ start:
 
 bool ProfileSpectrumWarning = false;
 
+struct FI {
+	float value;
+	int index;
+
+	friend bool inline operator < (const FI& left, const FI& right) { return left.value < right.value; }
+	friend bool inline operator > (const FI& left, const FI& right) { return left.value > right.value; }
+};
+
 struct Scan {
 	double RT = 0.0, window_low = 0.0, window_high = 0.0;
 	int n = 0, type = 0;
@@ -2100,6 +2101,49 @@ struct Scan {
 		return res;
 	}
 #endif
+
+	void bin_peaks(FI * binned, int bins_per_Da) {
+		int i;
+		FI * fi = NULL;
+		float bpd = (float)bins_per_Da, bpdi = 1.0 / bpd, max = -INF;
+
+		if (!n) return;
+		for (i = 0; i < n; i++) {
+			auto &p = peaks[i];
+			if (p.mz >= max) {
+				int bin = floor(p.mz * bpd);
+				max = bpdi * float(bin + 1);
+				fi = binned + bin;
+			}
+			if (p.height > fi->value) fi->value = p.height, fi->index = i;
+		}
+	}
+
+	void bin_peaks(std::vector<FI>& binned, int bins_per_Da) {
+		if (!n) return;
+		binned.resize(floor(peaks[n - 1].mz * (float)bins_per_Da) + 1);
+		bin_peaks(&(binned[0]), bins_per_Da);
+	}
+
+	void top_peaks(Peak * top, int N, std::vector<Peak>& temp) {
+		if (N >= n) {
+			N = n;
+			memcpy(top, peaks, N * sizeof(Peak));
+			return;
+		}
+
+		temp.resize(n);
+		memcpy(&(temp[0]), peaks, n * sizeof(Peak));
+		std::sort(temp.begin(), temp.end(), [&](const Peak &left, const Peak &right) { return left.height > right.height; });
+		temp.resize(N);
+		std::sort(temp.begin(), temp.end());
+		memcpy(top, &(temp[0]), N * sizeof(Peak));
+	}
+
+	void top_peaks(std::vector<Peak> &top, int N, std::vector<Peak>& temp) {
+		top.resize(N);
+		top_peaks(&(top[0]), N, temp);
+	}
 };
 
 inline int mass_bin(float mz, double acc) { return floor(log(mz) / acc); }
@@ -2470,7 +2514,7 @@ struct Elution {
 
 class Peptide {
 public:
-	int index = 0, charge = 0, length = 0, no_cal = 0, cycle_shift = 0;
+	int index = 0, charge = 0, length = 0, no_cal = 0;
 	float mz = 0.0, iRT = 0.0, sRT = 0.0, lib_qvalue = 0.0;
 	std::vector<Product> fragments;
 
@@ -2905,7 +2949,6 @@ public:
 			int i;
 
 			auto seq = get_sequence(name, &target.no_cal);
-			if (target.cycle_shift) target.no_cal = 1;
 			decoy = target;
 			if (seq.size() < 2) return; // will trigger assertion for unannotated charge in Search(), so should not actually happen
 
@@ -2946,7 +2989,6 @@ public:
 			int i;
 
 			auto seq = get_sequence(name, &target.no_cal);
-			if (target.cycle_shift) target.no_cal = 1;
 			if (!seq.size()) return;
 
 			float gen_acc = 0.0;
@@ -3480,20 +3522,6 @@ public:
 				int charge = std::stoi(words[colInd[libCharge]]);
 				id = to_canonical(words[colInd[libPr]], charge);
 				if (id != prev_id || !prev_id.length()) {
-					if (prev_id.length() && UnknownMods.size()) {
-						auto peps = to_canonical(prev_id);
-						auto aas = get_aas(prev_id);
-						if (std::find(UnknownMods.begin(), UnknownMods.end(), aas) != UnknownMods.end()) {
-							auto uins = ins;
-							for (int cs = 1; cs <= MaxCycleShift; cs++) {
-								auto uid = peps + "(UniMod:10000" + std::to_string(cs) + ")" + std::to_string(uins->second.target.charge);
-								uins = map.insert(std::pair<std::string, Entry>(uid, ins->second)).first;
-								uins->second.name = uins->first;
-								uins->second.target.cycle_shift = ins->second.decoy.cycle_shift = cs;
-							}
-						}
-					}
-
 					ins = map.insert(std::pair<std::string, Entry>(id, e)).first;
 					prev_id = id;
 					ins->second.name = ins->first;
@@ -3715,7 +3743,7 @@ public:
 						fr_type = ions[fr].type;
 						fr_loss = ions[fr].loss;
 						fr_num = ions[fr].index;
-						if (ExportRecFragOnly) fr_mz = ions[fr].mz;
+						if (ExportRecFragOnly && !dc) fr_mz = ions[fr].mz;
 					} else { // unrecognised
 						fr_type = fr_loss = fr_num = 0;
 						if (ExportRecFragOnly) continue;
@@ -4549,11 +4577,77 @@ public:
 	}
 #endif
 
+	void ms1_features(std::vector<std::vector<Peak> > &features, int N = 500, float accuracy = 12.0 / 1000000.0) {
+		std::vector<Peak> top(N * ms1h.size()), temp;
+		memset(&(top[0]), 0, top.size() * sizeof(Peak));
+		int S;
+		if (WindowRadius) S = WindowRadius;
+		else if (PeakWidth > E) S = Max(1, int(ScanScale * PeakWidth));
+		else S = Max(1, ms1h.size() / ScanFactor); 
+		int W = 2 * S + 1;
+		std::vector<float> ch(W * N), elution(W);
+		std::vector<int> ind(W, 0);
+
+		features.resize(ms1h.size());
+		int i, j, pos, jj, jjN, k, l, SN = S * N, iN;
+		for (i = 0; i < ms1h.size(); i++) ms1h[i].top_peaks(&(top[i * N]), N, temp);
+		for (i = S; i < ms1h.size() - S; i++) {
+			iN = i * N;
+			for (j = 0; j < W; j++) ind[j] = 0;
+			memset(&(ch[0]), 0, ch.size() * sizeof(float));
+			for (k = 0; k < N; k++) {
+				float mz = top[iN + k].mz, margin = mz * accuracy, low = mz - margin, high = mz + margin;
+				ch[SN + k] = top[iN + k].height;
+				for (j = 0; j < W; j++) {
+					jj = i - S + j, jjN = jj * N;
+					for (l = ind[j]; l < N; l++) {
+						if (top[jjN + l].mz <= low) continue;
+						if (top[jjN + l].mz >= high) break;
+						if (top[jjN + l].height > ch[j * N + k]) ch[j * N + k] = top[jjN + l].height;
+					}
+					ind[j] = l;
+				}
+			}
+
+			for (k = 0; k < N; k++) {
+				elution[0] = (2.0 / 3.0) * ch[0 + k] + (1.0 / 3.0) * ch[N + k];
+				elution[W - 1] = (2.0 / 3.0) * ch[(W - 1) * N + k] + (1.0 / 3.0) * ch[(W - 2) * N + k];
+				for (j = 1; j < W - 1; j++) elution[j] = 0.5 * ch[j * N + k] + 0.25 * (ch[(j  -1) * N + k] + ch[(j + 1) * N + k]);
+
+				bool skip_flag = false, inc_flag = false;
+				float curr_evidence = elution[S];
+				for (pos = S - Max(S / 3, 1); pos <= S + Max(S / 3, 1); pos++) if (elution[pos] > curr_evidence) {
+					skip_flag = true;
+					break;
+				}
+				if (skip_flag) continue;
+
+				float max_evidence = curr_evidence, margin = curr_evidence / 3.0;
+				for (pos = k - S + 1; pos <= k + S - 1; pos++) {
+					int ind = pos - k + S;
+					float evidence = elution[ind];
+					if (evidence > max_evidence) max_evidence = evidence;
+					if (evidence < margin) inc_flag = true;
+				}
+				if (!inc_flag) continue;
+				if (curr_evidence < max_evidence * PeakApexEvidence) continue;
+
+				features[i].push_back(top[iN + k]);
+			}
+		}
+	}
+
+	void feature_spectra(std::vector<Scan> &spectra, std::vector<std::vector<Peak> > &features, int N = 100, 
+		float accuracy = 20.0 / 1000000.0, int min_fragments = 4, float corr_threshold = 0.8) {
+
+	}
+
 	class Search {
 	public:
 		std::vector<Elution> peaks;
 		std::vector<float> scoring;
 		float scores[pN];
+		float nn_sc[2];
 
 		float best_corr_sum = 0.0, total_corr_sum = 0.0;
 
@@ -4598,9 +4692,9 @@ public:
 
 			auto scan_index = &(run->ScanIndex[thread_id]);
 			auto chrom_index = &(run->ChromIndex[thread_id]);
-			for (i = 0, k = 0; i < n - pep->cycle_shift; i++) if (run->ms2h[i].has(qmz)) k++;
+			for (i = 0, k = 0; i < n; i++) if (run->ms2h[i].has(qmz)) k++;
 			scan_index->resize(k);
-			for (i = 0, k = 0; i < n - pep->cycle_shift; i++) if (run->ms2h[i].has(qmz)) (*scan_index)[k++] = i + pep->cycle_shift;
+			for (i = 0, k = 0; i < n; i++) if (run->ms2h[i].has(qmz)) (*scan_index)[k++] = i;
 
 			if (!QuantOnly) {
 				if (WindowRadius) S = WindowRadius;
@@ -4853,7 +4947,7 @@ public:
 								float hmz = mz + (C13delta / (double)pr->pep->charge) + run->Q1Correction[0] + run->Q1Correction[1] * mz;
 								query_mz = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[fr].mz + C13delta / (double)(*fragments)[fr].charge, run->scan_RT[i]);
 								int hi = -1;
-								if (run->ms2h[i].has(hmz) || pr->pep->cycle_shift) hi = i;
+								if (run->ms2h[i].has(hmz)) hi = i;
 								if (i < run->ms2h.size() - 1 && hi < 0) if (run->ms2h[i + 1].has(hmz)) hi = i + 1;
 								if (i > 0 && hi < 0) if (run->ms2h[i - 1].has(hmz)) hi = i - 1;
 								if (hi >= 0) ms2_H[l * fr + ind] = run->ms2h[hi].level<false>(query_mz, run->MassAccuracy);
@@ -5158,17 +5252,15 @@ public:
 					sc[pResCorrNorm] = sc[pResCorr] / (double)(m - TopF);
 				}
 
-				if (!pr->pep->cycle_shift) {
-					sc[pNFCorr] = corr(elution, &(nf[k - S]), W);
-					sc[pMs1TimeCorr] += corr(elution, &(ms1[k - S]), W);
-					sc[pMs1TightOne] += corr(elution, &(ms1[k - S + l]), W);
-					sc[pMs1TightTwo] += corr(elution, &(ms1[k - S + 2 * l]), W);
-					if (UseIsotopes) for (int isotope = 1; isotope < 3; isotope++) {
-						int ii = isotope * 3;
-						sc[pMs1Iso] += corr(elution, &(ms1[k - S + ii * l]), W);
-						sc[pMs1IsoOne] += corr(elution, &(ms1[k - S + (ii + 1) * l]), W);
-						sc[pMs1IsoTwo] += corr(elution, &(ms1[k - S + (ii + 2) * l]), W);
-					}
+				sc[pNFCorr] = corr(elution, &(nf[k - S]), W);
+				sc[pMs1TimeCorr] += corr(elution, &(ms1[k - S]), W);
+				sc[pMs1TightOne] += corr(elution, &(ms1[k - S + l]), W);
+				sc[pMs1TightTwo] += corr(elution, &(ms1[k - S + 2 * l]), W);
+				if (UseIsotopes) for (int isotope = 1; isotope < 3; isotope++) {
+					int ii = isotope * 3;
+					sc[pMs1Iso] += corr(elution, &(ms1[k - S + ii * l]), W);
+					sc[pMs1IsoOne] += corr(elution, &(ms1[k - S + (ii + 1) * l]), W);
+					sc[pMs1IsoTwo] += corr(elution, &(ms1[k - S + (ii + 2) * l]), W);
 				}
 
 				// signals
@@ -5297,12 +5389,12 @@ public:
 		noninline void quantify(int peak, bool stats_only = false, bool filter = false) {
 			assert(peak >= 0);
 			if (!(flags & fFound)) return;
-			build_index();
 			if (!stats_only) {
 				if (filter && info[0].qvalue > QFilter) return;
 				auto &le = run->lib->entries[pep->index];
 				if (!pep->fragments.size()) le.generate();
 			}
+			build_index();
 
 			int fr, pos, k = peak, best_fr = info[0].best_fragment, start, stop, vpos, width;
             double w, r, e;
@@ -5453,11 +5545,11 @@ public:
 			float qmz = mz, dmz = run->Q1Correction[0] + run->Q1Correction[1] * mz;
 			if (Abs(dmz) < Min(Abs(run->tandem_max - mz), Abs(mz - run->tandem_min)) * 0.5) qmz += dmz;
 			for (high = S, i = apex + 1; i < run->ms2h.size(); i++) {
-				if (run->ms2h[Max(0, i - pep->cycle_shift)].has(qmz)) (*scan_index)[++high] = i;
+				if (run->ms2h[i].has(qmz)) (*scan_index)[++high] = i;
 				if (high >= 2 * S) break;
 			}
 			for (low = S, i = apex - 1; i >= 0; i--) {
-				if (run->ms2h[Max(0, i - pep->cycle_shift)].has(qmz)) (*scan_index)[--low] = i;
+				if (run->ms2h[i].has(qmz)) (*scan_index)[--low] = i;
 				if (low <= 0) break;
 			}
 
@@ -5902,7 +5994,6 @@ public:
 		Target entry;
 		std::vector<bool> has(lib->entries.size());
 		for (auto it = lib->entries.begin(); it != lib->entries.end(); it++, pos++) {
-			if (it->target.cycle_shift >= cycle_length) continue;
 			double mz = it->target.mz;
 			int max = Min(ms2h.size(), MaxCycleLength);
 			for (i = 0; i < max; i++)
@@ -6144,12 +6235,12 @@ public:
 				float qmz = es.pep->mz + Q1Correction[0] + Q1Correction[1] * es.pep->mz, delta = C13delta / (double)es.pep->charge;
 				for (j = Max(0, i - MaxIfsSpan); j < ms2h.size() && j <= i + MaxIfsSpan; j++) {
 					if (j == i || Sgn(ms2h[j].window_low - ms2h[i].window_low) != Sgn(j - i)) continue;
-					if (!es.pep->cycle_shift) if ((scanning && Abs(j - i) <= MaxQ1Bins + 1) || ms2h[j].has(qmz, QuadrupoleError) || (UseIsotopes &&
+					if ((scanning && Abs(j - i) <= MaxQ1Bins + 1) || ms2h[j].has(qmz, QuadrupoleError) || (UseIsotopes &&
 						(ms2h[j].has(qmz + delta, QuadrupoleError) || ms2h[j].has(qmz + 2.0 * delta, QuadrupoleError)
 							|| ms2h[j].has(qmz + 3.0 * delta, QuadrupoleError) || ms2h[j].has(qmz + 4.0 * delta, QuadrupoleError)))) remove_ifs(j, -1, es);
 				}
 
-				if (StrictIntRemoval && !es.pep->cycle_shift) {
+				if (StrictIntRemoval) {
 					for (j = i + 1, cnt = 0; j < ms2h.size(); j++) if (ms2h[j].has(es.pep->mz)) {
 						remove_ifs(j, -1, es);
 						if ((++cnt) >= es.S / 4) break;
@@ -7144,6 +7235,9 @@ public:
 
 	void process(std::vector<QuantEntry> * result = NULL, float q_filtering = 0.01) {
 		int i, ids = 0, best_ids = 0, best1, best50, cal_batch = 0;
+
+		std::vector<std::vector<Peak> > features;
+		ms1_features(features, 100, 12.0 / 1000000.0);
 
 		if (QuantOnly) goto report;
 

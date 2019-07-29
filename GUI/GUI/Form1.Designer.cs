@@ -280,9 +280,9 @@
             this.UseQuantCheck.AutoSize = true;
             this.UseQuantCheck.Location = new System.Drawing.Point(6, 20);
             this.UseQuantCheck.Name = "UseQuantCheck";
-            this.UseQuantCheck.Size = new System.Drawing.Size(208, 17);
+            this.UseQuantCheck.Size = new System.Drawing.Size(211, 17);
             this.UseQuantCheck.TabIndex = 26;
-            this.UseQuantCheck.Text = "Use existing.quant files when available";
+            this.UseQuantCheck.Text = "Use existing .quant files when available";
             this.toolTip1.SetToolTip(this.UseQuantCheck, "Instead of processing the data anew, DIA-NN will use the information from existin" +
         "g .quant files matching the names of the data files");
             this.UseQuantCheck.UseVisualStyleBackColor = true;

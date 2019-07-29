@@ -297,13 +297,14 @@ namespace GUI
                         stats_file = "\"" + report + ".stats.tsv\"";
                         report_file = "\"" + S.out_s + "\"";
                         pdf_file = "\"" + report + ".pdf\"";
-                    } else stats_file = report_file = pdf_file = "";
+                    }
+                    else stats_file = report_file = pdf_file = "";
 
                     if (!System.IO.Directory.Exists(S.temp_folder_s)) TempFolderBox.Text = S.temp_folder_s = "";
                     else process.StartInfo.Arguments += " --temp \"" + S.temp_folder_s + "\"";
                     if (S.out_lib_s != "") {
                         process.StartInfo.Arguments += " --out-lib \"" + S.out_lib_s + "\"";
-                        if (!S.use_lib_free_b) process.StartInfo.Arguments += " --gen-spec-lib";
+                        process.StartInfo.Arguments += " --gen-spec-lib";
                     }
                     if (S.prosit_b) process.StartInfo.Arguments += " --prosit"; 
 
@@ -345,7 +346,6 @@ namespace GUI
                             }
                         }
                     }
-                    else if (S.use_lib_free_b) process.StartInfo.Arguments += " --gen-spec-lib";
 
                     if ((int)S.scan_i > 0) process.StartInfo.Arguments += " --window " + S.scan_i.ToString();
                     if ((double)S.mass_acc_d > 0.0) process.StartInfo.Arguments += " --mass-acc " + S.mass_acc_d.ToString();
