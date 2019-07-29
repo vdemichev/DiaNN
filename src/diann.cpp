@@ -7236,9 +7236,6 @@ public:
 	void process(std::vector<QuantEntry> * result = NULL, float q_filtering = 0.01) {
 		int i, ids = 0, best_ids = 0, best1, best50, cal_batch = 0;
 
-		std::vector<std::vector<Peak> > features;
-		ms1_features(features, 100, 12.0 / 1000000.0);
-
 		if (QuantOnly) goto report;
 
 		recalibrate = (Calibrate && !mz_calibrated);
