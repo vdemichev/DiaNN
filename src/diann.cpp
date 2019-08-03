@@ -5650,7 +5650,7 @@ public:
 #if (HASH > 0)
 		unsigned int hash() {
 			unsigned int res = 0;
-			if (info.size()) res ^= info[0].hash();
+			if (flags & fFound) if (info.size()) res ^= info[0].hash();
 			return res;
 		}
 #endif
@@ -6186,24 +6186,26 @@ public:
 			float masses[TopF];
 			for (fr = 0; fr < TopF; fr++) masses[fr] = 0.0;
 			for (fr = 0, tot_corr = ifs_corr = 0.0; fr < Min(TopF, en.info[0].quant.size()); fr++) tot_corr += en.info[0].quant[fr].corr;
-			for (int l = 0; l < Min(TopF, en.pep->fragments.size()); l++) {
+			for (int l = 0; l < Min(TopF, en.info[0].quant.size()); l++) {
+				int li = en.info[0].quant[l].index;
 				if (masses[l] > E) nmz = masses[l];
-				else nmz = en.pep->fragments[l].mz;
-				for (int k = 0; k < Min(TopF, es.pep->fragments.size()); k++) {
-					smz = es.pep->fragments[k].mz;
+				else nmz = en.pep->fragments[li].mz;
+				for (int k = 0; k < Min(TopF, es.info[0].quant.size()); k++) {
+					int ki = es.info[0].quant[k].index;
+					smz = es.pep->fragments[ki].mz;
 					error = smz * 2.0 * MassAccuracy;
 					if (nmz < smz - error) continue;
 					if (nmz > C13delta + smz + error) continue;
 					smz = 0.0;
-					if (Abs(nmz - es.pep->fragments[k].mz) < error)
-						ms2h[i].level<true>(predicted_mz(&(MassCorrection[0]), es.pep->fragments[k].mz, es.info[0].RT), MassAccuracy, &smz);
+					if (Abs(nmz - es.pep->fragments[ki].mz) < error)
+						ms2h[i].level<true>(predicted_mz(&(MassCorrection[0]), es.pep->fragments[ki].mz, es.info[0].RT), MassAccuracy, &smz);
 					else {
 						if (!UseIsotopes) continue;
-						if (Abs(nmz - es.pep->fragments[k].mz - C13delta / (double)es.pep->fragments[k].charge) >= error) continue;
-						ms2h[i].level<true>(predicted_mz(&(MassCorrection[0]), es.pep->fragments[k].mz + C13delta / (double)es.pep->fragments[k].charge, es.info[0].RT), MassAccuracy, &smz);
+						if (Abs(nmz - es.pep->fragments[ki].mz - C13delta / (double)es.pep->fragments[ki].charge) >= error) continue;
+						ms2h[i].level<true>(predicted_mz(&(MassCorrection[0]), es.pep->fragments[ki].mz + C13delta / (double)es.pep->fragments[ki].charge, es.info[0].RT), MassAccuracy, &smz);
 					}
 					if (masses[l] <= E) {
-						ms2h[i].level<true>(predicted_mz(&(MassCorrection[0]), en.pep->fragments[l].mz, en.info[0].RT), MassAccuracy, &nmz);
+						ms2h[i].level<true>(predicted_mz(&(MassCorrection[0]), en.pep->fragments[li].mz, en.info[0].RT), MassAccuracy, &nmz);
 						masses[l] = nmz;
 					}
 					if (Abs(smz - nmz) < E && smz > E && nmz > E) {
@@ -7601,7 +7603,7 @@ public:
 	unsigned int raw_hash() {
 		unsigned int res = 0;
 		for (int i = 0; i < ms2h.size(); i++) res ^= ms2h[i].hash();
-		for (int i = 0; i < ms1h.size(); i++) res ^= ms2h[i].hash();
+		for (int i = 0; i < ms1h.size(); i++) res ^= ms1h[i].hash();
 		return res;
 	}
 

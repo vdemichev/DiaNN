@@ -16,18 +16,18 @@ typedef enum LOSS_FUNCTION_ {
 // convenience struct for easier parameter filling
 class NN {
 public:
-    Network* network;
-    DataSet* data;
-    DataSet* classes;
-    LOSS_FUNCTION lossFunction;
-    size_t batchSize;
-    float learningRate;
-    float searchTime;
-    float regularizationStrength;
-    float B1, B2;
-    int maxIters;
-    int shuffle;
-    int verbose;
+    Network* network = NULL;
+    DataSet* data = NULL;
+    DataSet* classes = NULL;
+    LOSS_FUNCTION lossFunction = CROSS_ENTROPY_LOSS;
+    size_t batchSize = 1;
+    float learningRate = 0.003;
+    float searchTime = 0;
+    float regularizationStrength = 0.000000001;
+    float B1 = 0.9, B2 = 0.999;
+    int maxIters = 1;
+    int shuffle = 1;
+    int verbose = 0;
 
 	int id; // for bagging
 	std::minstd_rand random;
