@@ -3196,7 +3196,6 @@ public:
 			std::vector<std::pair<float, int> > fr_score(1000), fr_ordered(1000);
 			for (auto it = map.begin(); it != map.end(); it++) {
 				auto v = &(it->second);
-				m = lib->entries[it->first].target.fragments.size();
 
 				fr_score.clear();
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) if (jt->second.pr.qvalue <= MaxQuantQvalue) {
@@ -3212,7 +3211,7 @@ public:
 				fr_ordered.resize(fr_score.size());
 				fr_ordered.assign(fr_score.begin(), fr_score.end());
 				std::sort(fr_ordered.begin(), fr_ordered.end());
-				double margin = fr_ordered[Max(0, m - 3)].first - E;
+				double margin = fr_ordered[Max(0, fr_ordered.size() - 3)].first - E;
 				if (NoFragmentSelectionForQuant) margin = -INF;
 
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {

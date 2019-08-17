@@ -258,6 +258,8 @@ namespace GUI
             if (external || save_cfg) opts = S.add_s.Substring(1);
             else opts = S.add_s;
 
+            pdf_file = "";
+
             process = new Process();
             process.StartInfo.FileName = S.diann_s;
             process.StartInfo.CreateNoWindow = true;
