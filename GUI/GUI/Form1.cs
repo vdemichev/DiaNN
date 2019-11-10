@@ -292,7 +292,7 @@ namespace GUI
                     process.StartInfo.Arguments += " --out \"" + S.out_s + "\"";
                     var report = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(S.out_s), System.IO.Path.GetFileNameWithoutExtension(S.out_s));
                     process.StartInfo.Arguments += " --out-gene \"" + report + ".genes.tsv\"";
-                    process.StartInfo.Arguments += " --qvalue " + Convert.ToString(0.01 * (double)S.prec_fdr_d);
+                    process.StartInfo.Arguments += " --qvalue " + Convert.ToString(0.01 * (double)S.prec_fdr_d, new System.Globalization.CultureInfo("en-US"));
 
                     if (S.pdf_rep_b)
                     {
@@ -315,16 +315,17 @@ namespace GUI
                         List<string> fastaFiles = new List<string>(S.fasta_s.Split(new[] { '\n' }));
                         foreach (var file in fastaFiles)
                             if (file.Length >= 2) process.StartInfo.Arguments += " --fasta \"" + file + "\"";
+                        if (S.learn_lib_s != "") process.StartInfo.Arguments += " --learn-lib \"" + S.learn_lib_s + "\"";
                         if (S.use_lib_free_b)
                         {
                             process.StartInfo.Arguments += " --fasta-search";
-                            if (S.learn_lib_s != "") process.StartInfo.Arguments += " --learn-lib \"" + S.learn_lib_s + "\"";
 
                             process.StartInfo.Arguments += " --min-fr-mz " + S.fr_min_i.ToString();
                             process.StartInfo.Arguments += " --max-fr-mz " + S.fr_max_i.ToString();
 
                             if (S.opt_training_b) process.StartInfo.Arguments += " --min-fr-corr 0.9 --min-gen-fr 2";
                         }
+                        if (S.met_exc_b) process.StartInfo.Arguments += " --met-excision";
                         if (S.use_lib_free_b || S.prosit_b)
                         {
                             if (S.protease_i == 0) process.StartInfo.Arguments += " --cut-after KR";
@@ -340,12 +341,17 @@ namespace GUI
                             process.StartInfo.Arguments += " --max-pr-mz " + S.pr_max_i.ToString();
 
                             if (S.carbamet_b || S.prosit_b) process.StartInfo.Arguments += " --unimod4";
-                            if (S.met_exc_b) process.StartInfo.Arguments += " --met-excision";
                             if (S.varmod_i >= 1)
                             {
                                 process.StartInfo.Arguments += " --var-mods " + S.varmod_i.ToString();
                                 if (S.oxid_b) process.StartInfo.Arguments += " --unimod35";
                             }
+                        } else
+                        {
+                            if (S.protease_i == 1) process.StartInfo.Arguments += " --cut-after KR --no-cut-before P";
+                            if (S.protease_i == 2) process.StartInfo.Arguments += " --cut-after K";
+                            if (S.protease_i == 3) process.StartInfo.Arguments += " --cut-after K --no-cut-before P";
+                            if (S.protease_i == 4) process.StartInfo.Arguments += " --cut-after FYWL --no-cut-before P";
                         }
                     }
 
@@ -367,7 +373,8 @@ namespace GUI
                         process.StartInfo.Arguments += " --pg-level " + S.grouping_i.ToString();
                         if (S.grouping_i == 2) process.StartInfo.Arguments += " --species-genes";
                     }
-                    if (S.quant_i == 1) process.StartInfo.Arguments += " --peak-center";
+                    if (S.quant_i >= 2) process.StartInfo.Arguments += " --peak-center";
+                    if ((S.quant_i & 1) != 0) process.StartInfo.Arguments += " --no-ifs-removal";
                 }
 
                 process.StartInfo.Arguments += " " + opts;

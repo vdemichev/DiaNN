@@ -435,6 +435,7 @@
             // 
             // EnzymeCombo
             // 
+            this.EnzymeCombo.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.EnzymeCombo.FormattingEnabled = true;
             this.EnzymeCombo.Items.AddRange(new object[] {
             "Trypsin/P",
@@ -491,6 +492,7 @@
             // 
             // PGBox
             // 
+            this.PGBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.PGBox.FormattingEnabled = true;
             this.PGBox.Items.AddRange(new object[] {
             "isoform IDs",
@@ -651,10 +653,13 @@
             // 
             // QuantBox
             // 
+            this.QuantBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.QuantBox.FormattingEnabled = true;
             this.QuantBox.Items.AddRange(new object[] {
-            "any LC",
-            "robust LC"});
+            "any LC (high accuracy)",
+            "any LC (high precision)",
+            "robust LC (high accuracy)",
+            "robust LC (high precision)"});
             this.QuantBox.Location = new System.Drawing.Point(131, 186);
             this.QuantBox.Name = "QuantBox";
             this.QuantBox.Size = new System.Drawing.Size(154, 21);

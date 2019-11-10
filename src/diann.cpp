@@ -77,7 +77,7 @@ Uncomment "#define _NO_THERMORAW" in RAWReader.cpp, MSReader.cpp and MSReader.h 
 char * wiff_load_func = "?diann_wiff_load@@YAPEAXPEAD_NH@Z";
 #endif
 
-#define Throw(x) { std::cout << __FILE__ << ": " << __LINE__ << ": " << x << "\n"; exit(-1); }
+#define Throw(x) { std::cout << "ERROR: " << __FILE__ << ": " << __LINE__ << ": " << x << "\n"; exit(-1); }
 #define Warning(x) { if (Verbose >= 1) std::cout << "WARNING: " << x << "\n"; }
 
 #define Min(x, y) ((x) < (y) ? (x) : (y))
@@ -116,6 +116,7 @@ int QuantMode = 0; // 0 - full peak integration, 1 - fixed window
 double PeakBoundary = 5.0;
 bool NoIfsRemoval = false;
 bool NoFragmentSelectionForQuant = false;
+bool QuantFitProfiles = false;
 
 bool BatchMode = true;
 int MinBatch = 2000;
@@ -125,9 +126,6 @@ int Batches = 1;
 const int MaxLibSize = 1000000;
 
 bool RTProfiling = false;
-
-bool TestDataset = false;
-double TestDatasetSize = 0.25;
 
 int ScanFactor = 150;
 int WindowRadius = 0;
@@ -210,11 +208,15 @@ double ProteinQuantQvalue = 0.01;
 double ProteinIDQvalue = 0.01;
 double PeakApexEvidence = 0.99; // force peak apexes to be close to the detection evidence maxima
 double MinCorrScore = 0.5;
+double MinMs1Corr = -INF;
 double MaxCorrDiff = 2.0;
 bool LibFreeAllPeaks = false;
 bool ForceMs1 = false;
 bool MS1PeakSelection = true;
 int TopN = 1;
+
+bool TranslatePeaks = false; // translate peaks between precursors belonging to the same elution group
+bool ExcludeSharedFragments = true; // exclude from quantification fragments that are shared between light and heavy labelled peptides
 
 int MinMassDeltaCal = 20;
 int MinMassDeltaCalRef = 8;
@@ -258,10 +260,10 @@ bool ExportProsit = false;
 
 enum {
 	loss_none, loss_H2O, loss_NH3, loss_CO,
-	loss_N
+	loss_N, loss_other
 };
 
-const double Loss[loss_N] = { 0.0, 18.011113035, 17.026548, 27.994915 };
+const double Loss[loss_other + 1] = { 0.0, 18.011113035, 17.026548, 27.994915, 0.0, 0.0 };
 
 int MaxRecCharge = 19;
 int MaxRecLoss = loss_N;
@@ -324,24 +326,29 @@ const int ElutionProfileRadius = 10;
 enum {
 	libPr, libCharge, libPrMz,
 	libiRT, libFrMz, libFrI,
-	libPID, libPN, libGenes, libPT,
-	libIsDecoy, libFrCharge, libQ, libCols
+	libPID, libPN, libGenes, libPT, libIsDecoy, 
+	libFrCharge, libFrType, libFrNumber, libFrLoss,
+	libQ, libEG, libCols
 };
 
 std::vector<std::string> library_headers = {
-	" ModifiedPeptide FullUniModPeptideName \"FullUniModPeptideName\" modification_sequence ",
+	" ModifiedPeptide LabeledSequence FullUniModPeptideName \"FullUniModPeptideName\" modification_sequence ",
 	" PrecursorCharge Charge \"PrecursorCharge\" prec_z ",
 	" PrecursorMz \"PrecursorMz\" Q1 ",
 	" iRT iRT RetentionTime NormalizedRetentionTime Tr_recalibrated \"Tr_recalibrated\" RT_detected ",
 	" FragmentMz ProductMz \"ProductMz\" Q3 ",
-	" RelativeIntensity RelativeFragmentIntesity LibraryIntensity \"LibraryIntensity\" relative_intensity ",
-	" UniProtIds UniprotID \"UniprotID\" uniprot_id ",
+	" RelativeIntensity RelativeFragmentIntensity RelativeFragmentIonIntensity LibraryIntensity \"LibraryIntensity\" relative_intensity ",
+	" UniprotId UniProtIds UniprotID \"UniprotID\" uniprot_id ",
 	" Protein Name Protein.Name ProteinName \"ProteinName\" ",
 	" Genes Gene Genes \"Genes\" ",
 	" IsProteotypic Is.Proteotypic Proteotypic ",
 	" Decoy decoy \"Decoy\" \"decoy\" ",
-	" FragmentCharge \"FragmentCharge\" ",
+	" FragmentCharge frg_z \"FragmentCharge\" ",
+	" FragmentType frg_type \"FragmentType\" ",
+	" FragmentNumber frg_nr FragmentSeriesNumber \"FragmentSeriesNumber\" ",
+	" FragmentLossType \"FragmentLossType\" ",
 	" Q.Value QValue Qvalue qvalue \"Q.Value\" \"QValue\" \"Qvalue\" \"qvalue\" ",
+	" ElutionGroup ModifiedSequence ",
 };
 
 const double proton = 1.007825035;
@@ -352,87 +359,93 @@ std::vector<std::pair<std::string, std::string> > UniMod;
 std::vector<std::pair<std::string, int> > UniModIndex;
 std::vector<int> UniModIndices;
 
-struct PTM {
+struct MOD {
 	std::string name;
 	std::string aas;
-	float mass;
+	float mass = 0.0;
+	int label = 0;
 
-	void init(const std::string &_name, const std::string &_aas, float _mass) { name = _name, aas = _aas, mass = _mass; }
+	MOD() {};
+	MOD(const std::string &_name, float _mass, int _label = 0) { name = _name, mass = _mass; label = _label; }
+	void init(const std::string &_name, const std::string &_aas, float _mass, int _label = 0) { name = _name, aas = _aas, mass = _mass; label = _label;  }
+	friend bool operator < (const MOD &left, const MOD &right) { return left.name < right.name || (left.name == right.name && left.mass < right.mass); }
 };
-std::vector<PTM> FixedMods, VarMods;
+std::vector<MOD> FixedMods, VarMods;
 
-std::vector<std::pair<std::string, float> > Modifications = {
-	std::pair<std::string, float>("UniMod:4", (float)57.021464),
-	std::pair<std::string, float>("Carbamidomethyl (C)", (float)57.021464),
-	std::pair<std::string, float>("CAM", (float)57.021464),
-	std::pair<std::string, float>("+57", (float)57.021464),
-	std::pair<std::string, float>("+57.0", (float)57.021464),
-	std::pair<std::string, float>("UniMod:26", (float)39.994915),
-	std::pair<std::string, float>("PCm", (float)39.994915),
-	std::pair<std::string, float>("UniMod:5", (float)43.005814),
-	std::pair<std::string, float>("UniMod:5", (float)43.005814),
-	std::pair<std::string, float>("Carbamylation (KR)", (float)43.005814),
-	std::pair<std::string, float>("+43", (float)43.005814),
-	std::pair<std::string, float>("+43.0", (float)43.005814),
-	std::pair<std::string, float>("CRM", (float)43.005814),
-	std::pair<std::string, float>("UniMod:7", (float)0.984016),
-	std::pair<std::string, float>("Deamidation (NQ)", (float)0.984016),
-	std::pair<std::string, float>("Dea", (float)0.984016),
-	std::pair<std::string, float>("+1", (float)0.984016),
-	std::pair<std::string, float>("+1.0", (float)0.984016),
-	std::pair<std::string, float>("UniMod:35", (float)15.994915),
-	std::pair<std::string, float>("Oxidation (M)", (float)15.994915),
-	std::pair<std::string, float>("+16", (float)15.994915),
-	std::pair<std::string, float>("+16.0", (float)15.994915),
-	std::pair<std::string, float>("Oxi", (float)15.994915),
-	std::pair<std::string, float>("UniMod:1", (float)42.010565),
-	std::pair<std::string, float>("Acetyl (Protein N-term)", (float)42.010565),
-	std::pair<std::string, float>("+42", (float)42.010565),
-	std::pair<std::string, float>("+42.0", (float)42.010565),
-	std::pair<std::string, float>("UniMod:255", (float)28.0313),
-	std::pair<std::string, float>("AAR", (float)28.0313),
-	std::pair<std::string, float>("UniMod:254", (float)26.01565),
-	std::pair<std::string, float>("AAS", (float)26.01565),
-	std::pair<std::string, float>("UniMod:122", (float)27.994915),
-	std::pair<std::string, float>("Frm", (float)27.994915),
-	std::pair<std::string, float>("UniMod:1301", (float)128.094963),
-	std::pair<std::string, float>("+1K", (float)128.094963),
-	std::pair<std::string, float>("UniMod:1288", (float)156.101111),
-	std::pair<std::string, float>("+1R", (float)156.101111),
-	std::pair<std::string, float>("UniMod:27", (float)-18.010565),
-	std::pair<std::string, float>("PGE", (float)-18.010565),
-	std::pair<std::string, float>("UniMod:28", (float)-17.026549),
-	std::pair<std::string, float>("PGQ", (float)-17.026549),
-	std::pair<std::string, float>("UniMod:526", (float)-48.003371),
-	std::pair<std::string, float>("DTM", (float)-48.003371),
-	std::pair<std::string, float>("UniMod:325", (float)31.989829),
-	std::pair<std::string, float>("2Ox", (float)31.989829),
-	std::pair<std::string, float>("UniMod:342", (float)15.010899),
-	std::pair<std::string, float>("Amn", (float)15.010899),
-	std::pair<std::string, float>("UniMod:1290", (float)114.042927),
-	std::pair<std::string, float>("2CM", (float)114.042927),
-	std::pair<std::string, float>("UniMod:359", (float)13.979265),
-	std::pair<std::string, float>("PGP", (float)13.979265),
-	std::pair<std::string, float>("UniMod:30", (float)21.981943),
-	std::pair<std::string, float>("NaX", (float)21.981943),
-	std::pair<std::string, float>("UniMod:401", (float)-2.015650),
-	std::pair<std::string, float>("-2H", (float)-2.015650),
-	std::pair<std::string, float>("UniMod:528", (float)14.999666),
-	std::pair<std::string, float>("MDe", (float)14.999666),
-	std::pair<std::string, float>("UniMod:385", (float)-17.026549),
-	std::pair<std::string, float>("dAm", (float)-17.026549),
-	std::pair<std::string, float>("UniMod:23", (float)-18.010565),
-	std::pair<std::string, float>("Dhy", (float)-18.010565),
-	std::pair<std::string, float>("UniMod:129", (float)125.896648),
-	std::pair<std::string, float>("Iod", (float)125.896648),
-	std::pair<std::string, float>("Phosphorylation (ST)", (float)79.966331),
-	std::pair<std::string, float>("UniMod:21", (float)79.966331),
-	std::pair<std::string, float>("+80", (float)79.966331),
-	std::pair<std::string, float>("+80.0", (float)79.966331),
-	std::pair<std::string, float>("UniMod:259", (float)8.014199),
-	std::pair<std::string, float>("UniMod:267", (float)10.008269),
-	std::pair<std::string, float>("UniMod:268", (float)6.013809),
-	std::pair<std::string, float>("UniMod:269", (float)10.027228)
+std::vector<MOD> Modifications = {
+	MOD("UniMod:4", (float)57.021464),
+	MOD("Carbamidomethyl (C)", (float)57.021464),
+	MOD("CAM", (float)57.021464),
+	MOD("+57", (float)57.021464),
+	MOD("+57.0", (float)57.021464),
+	MOD("UniMod:26", (float)39.994915),
+	MOD("PCm", (float)39.994915),
+	MOD("UniMod:5", (float)43.005814),
+	MOD("UniMod:5", (float)43.005814),
+	MOD("Carbamylation (KR)", (float)43.005814),
+	MOD("+43", (float)43.005814),
+	MOD("+43.0", (float)43.005814),
+	MOD("CRM", (float)43.005814),
+	MOD("UniMod:7", (float)0.984016),
+	MOD("Deamidation (NQ)", (float)0.984016),
+	MOD("Dea", (float)0.984016),
+	MOD("+1", (float)0.984016),
+	MOD("+1.0", (float)0.984016),
+	MOD("UniMod:35", (float)15.994915),
+	MOD("Oxidation (M)", (float)15.994915),
+	MOD("+16", (float)15.994915),
+	MOD("+16.0", (float)15.994915),
+	MOD("Oxi", (float)15.994915),
+	MOD("UniMod:1", (float)42.010565),
+	MOD("Acetyl (Protein N-term)", (float)42.010565),
+	MOD("+42", (float)42.010565),
+	MOD("+42.0", (float)42.010565),
+	MOD("UniMod:255", (float)28.0313),
+	MOD("AAR", (float)28.0313),
+	MOD("UniMod:254", (float)26.01565),
+	MOD("AAS", (float)26.01565),
+	MOD("UniMod:122", (float)27.994915),
+	MOD("Frm", (float)27.994915),
+	MOD("UniMod:1301", (float)128.094963),
+	MOD("+1K", (float)128.094963),
+	MOD("UniMod:1288", (float)156.101111),
+	MOD("+1R", (float)156.101111),
+	MOD("UniMod:27", (float)-18.010565),
+	MOD("PGE", (float)-18.010565),
+	MOD("UniMod:28", (float)-17.026549),
+	MOD("PGQ", (float)-17.026549),
+	MOD("UniMod:526", (float)-48.003371),
+	MOD("DTM", (float)-48.003371),
+	MOD("UniMod:325", (float)31.989829),
+	MOD("2Ox", (float)31.989829),
+	MOD("UniMod:342", (float)15.010899),
+	MOD("Amn", (float)15.010899),
+	MOD("UniMod:1290", (float)114.042927),
+	MOD("2CM", (float)114.042927),
+	MOD("UniMod:359", (float)13.979265),
+	MOD("PGP", (float)13.979265),
+	MOD("UniMod:30", (float)21.981943),
+	MOD("NaX", (float)21.981943),
+	MOD("UniMod:401", (float)-2.015650),
+	MOD("-2H", (float)-2.015650),
+	MOD("UniMod:528", (float)14.999666),
+	MOD("MDe", (float)14.999666),
+	MOD("UniMod:385", (float)-17.026549),
+	MOD("dAm", (float)-17.026549),
+	MOD("UniMod:23", (float)-18.010565),
+	MOD("Dhy", (float)-18.010565),
+	MOD("UniMod:129", (float)125.896648),
+	MOD("Iod", (float)125.896648),
+	MOD("Phosphorylation (ST)", (float)79.966331),
+	MOD("UniMod:21", (float)79.966331),
+	MOD("+80", (float)79.966331),
+	MOD("+80.0", (float)79.966331),
+	MOD("UniMod:259", (float)8.014199, 1),
+	MOD("Lys8", (float)8.014199, 1),
+	MOD("UniMod:267", (float)10.008269, 1),
+	MOD("Arg10", (float)10.008269, 1),
+	MOD("UniMod:268", (float)6.013809, 1),
+	MOD("UniMod:269", (float)10.027228, 1)
 };
 
 inline char to_lower(char c) { return c + 32; }
@@ -444,22 +457,22 @@ void init_unimod() {
 	UniMod.resize(mods.size());
 	UniModIndex.resize(mods.size());
 	for (int i = 0; i < mods.size(); i++) {
-		UniMod[i].first = UniModIndex[i].first = mods[i].first;
-		if (!std::memcmp(&(mods[i].first[0]), "UniMod", 6)) UniMod[i].second = mods[i].first, indices.insert(UniModIndex[i].second = i);
+		UniMod[i].first = UniModIndex[i].first = mods[i].name;
+		if (!std::memcmp(&(mods[i].name[0]), "UniMod", 6)) UniMod[i].second = mods[i].name, indices.insert(UniModIndex[i].second = i);
 		else {
 			double min = INF;
 			int min_index = 0;
 			for (int j = 0; j < mods.size(); j++) if (j != i) {
-				if (std::memcmp(&(mods[j].first[0]), "UniMod", 6)) continue;
-				double delta = Abs(((double)mods[i].second) - (double)mods[j].second);
+				if (std::memcmp(&(mods[j].name[0]), "UniMod", 6)) continue;
+				double delta = Abs(((double)mods[i].mass) - (double)mods[j].mass);
 				if (delta < min) min = delta, min_index = j;
 			}
 			if (min > 0.00001) {
-				if (Verbose >= 1) std::cout << "Cannot find a UniMod modification match for " << mods[i].first << ": " << min << " minimal mass discrepancy; using the original modificaiton name\n";
+				if (Verbose >= 1) std::cout << "Cannot find a UniMod modification match for " << mods[i].name << ": " << min << " minimal mass discrepancy; using the original modificaiton name\n";
 				UniMod[i].second = UniMod[i].first;
 				indices.insert(UniModIndex[i].second = i);
 			} else {
-				UniMod[i].second = mods[min_index].first;
+				UniMod[i].second = mods[min_index].name;
 				indices.insert(UniModIndex[i].second = min_index);
 			}
 		}
@@ -493,7 +506,7 @@ std::vector<std::string> MSFormatsExt = { ".dia", ".mzml", ".raw" };
 
 enum {
 	outFile, outPG, outPID, outPNames, outGenes, outPGQ, outPGN, outGQ, outGN, outGQP, outGNP, outModSeq, outStrSeq,
-	outPrId, outCharge, outQv, outPQv, outPPt, outPrQ, outPrN,
+	outPrId, outCharge, outQv, outPQv, outPPt, outPrQ, outPrN, outPrLR,
 	outRT, outiRT, outpRT, outpiRT,
 	outCols
 };
@@ -519,6 +532,7 @@ std::vector<std::string> oh = { // output headers
 	"Proteotypic",
 	"Precursor.Quantity",
 	"Precursor.Normalised",
+	"Label.Ratio",
 	"RT",
 	"iRT",
 	"Predicted.RT",
@@ -625,7 +639,6 @@ public:
 bool SaveRunStats = true;
 
 std::vector<std::vector<float*> > training, training_classes;
-std::vector<float*> test, test_classes;
 std::vector<int> nn_mod, nn_shift, nn_scale, nn_cnt;
 int nn_mod_n = 4, nn_scale_min = 7, nn_scale_max = 13;
 float target_nn[2] = { 1.0, 0.0 };
@@ -692,6 +705,7 @@ std::string get_file_name(const std::string &file) {
 	return res;
 }
 
+inline double logp(double x) { return (x >= E) ? log(x) : log(E); }
 template <class T> inline double sum(T * x, int n) {
 	double ex = 0.0;
 	for (int i = 0; i < n; i++) ex += x[i];
@@ -1113,13 +1127,21 @@ class Product {
 public:
 	float mz;
 	float height;
-	int charge;
+	char charge, type = 0, index, loss;
 
 	Product() {}
 	Product(float _mz, float _height, int _charge) {
 		mz = _mz;
 		height = _height;
 		charge = _charge;
+	}
+	Product(float _mz, float _height, int _charge, int _type, int _index, int _loss) {
+		mz = _mz;
+		height = _height;
+		charge = _charge;
+		type = _type;
+		index = _index;
+		loss = _loss;
 	}
 	void init(float _mz, float _height, int _charge) {
 		mz = _mz;
@@ -1128,6 +1150,7 @@ public:
 	}
 	friend inline bool operator < (const Product &left, const Product &right) { return left.mz < right.mz; }
 
+	inline int ion_code() { return (((*((int*)&type)) * 20 + *((int*)&charge)) * loss_N + *((int*)&loss)) * 100 + *((int*)&index) + 1; }
 #if (HASH > 0)
 	unsigned int hash() { return hashS(mz) ^ hashS(height); }
 #endif
@@ -1235,12 +1258,25 @@ inline int aa_rt_nterm_scaled(char aa, int shift) { return aa_pointsterm(AAs[19]
 inline int aa_pointsterm_scaled(char aa, int shift) { return aa_rt_nterm_scaled(AAs[19], RTTermDScaled - 1) + 1 + Min(shift, RTTermDScaled - 1) * 20 + AA_index[aa]; }
 inline int mod_rt_index(int mod) { return aa_pointsterm_scaled(AAs[19], RTTermDScaled - 1) + 1 + unimod_index_number(mod); }
 inline int mod_rt_index(const std::string &mod) { return mod_rt_index(unimod_index(mod)); }
-inline int in_silico_rt_size() { return mod_rt_index(UniModIndices[UniModIndices.size() - 1]) + 1; }
+inline int in_silico_rt_size() { return UniModIndices.size() ? (mod_rt_index(UniModIndices[UniModIndices.size() - 1]) + 1) : (aa_pointsterm_scaled(AAs[19], RTTermDScaled - 1) + 1); }
 
 void init_prediction() {
 	yDelta.resize(y_delta_size(), 0.0);
 	yLoss.resize(y_loss_size(), 0.0);
 	InSilicoRT.resize(in_silico_rt_size(), 0.0);
+}
+
+inline int closing_bracket(const std::string &name, char symbol, int pos) {
+	int end, par;
+	char close = (symbol == '(' ? ')' : ']');
+	for (end = pos + 1, par = 1; end < name.size(); end++) {
+		char s = name[end];
+		if (s == close) {
+			par--;
+			if (!par) break;
+		} else if (s == symbol) par++;
+	}
+	return end;
 }
 
 inline int peptide_length(const std::string &name) {
@@ -1249,8 +1285,7 @@ inline int peptide_length(const std::string &name) {
 		char symbol = name[i];
 		if (symbol < 'A' || symbol > 'Z') {
 			if (symbol != '(' && symbol != '[') continue;
-			int end = name.find(symbol == '(' ? ")" : "]", i + 1);
-			i = end;
+			i = closing_bracket(name, symbol, i);
 			continue;
 		}
 		n++;
@@ -1259,13 +1294,12 @@ inline int peptide_length(const std::string &name) {
 }
 
 inline int missed_KR_cleavages(const std::string &name) {
-	int i, n = 0, last = 0;
+	int i, n = 0, last = 0, par, end;
 	for (i = 0; i < name.size() - 1; i++) {
 		char symbol = name[i];
 		if (symbol < 'A' || symbol > 'Z') {
 			if (symbol != '(' && symbol != '[') continue;
-			int end = name.find(symbol == '(' ? ")" : "]", i + 1);
-			i = end;
+			i = closing_bracket(name, symbol, i);
 			continue;
 		}
 		if (symbol == 'K' || symbol == 'R') n++, last = 1;
@@ -1275,18 +1309,34 @@ inline int missed_KR_cleavages(const std::string &name) {
 }
 
 std::string get_aas(const std::string &name) {
-	int i;
+	int i, end, par;
 	std::string result;
 
 	for (i = 0; i < name.size(); i++) {
 		char symbol = name[i];
 		if (symbol < 'A' || symbol > 'Z') {
 			if (symbol != '(' && symbol != '[') continue;
-			int end = name.find(symbol == '(' ? ")" : "]", i + 1);
-			i = end;
+			i = closing_bracket(name, symbol, i);
 			continue;
 		}
 		result.push_back(symbol);
+	}
+	return result;
+}
+
+std::vector<bool> get_mod_state(const std::string &name, int length) {
+	int i, j;
+	std::vector<bool> result(length, false);
+
+	for (i = j = 0; i < name.size(); i++) {
+		char symbol = name[i];
+		if (symbol < 'A' || symbol > 'Z') {
+			if (symbol != '(' && symbol != '[') continue;
+			result[j] = true;
+			i = closing_bracket(name, symbol, i);
+			continue;
+		}
+		j++;
 	}
 	return result;
 }
@@ -1303,18 +1353,18 @@ std::vector<double> get_sequence(const std::string &name, int * no_cal = NULL) {
 			if (symbol != '(' && symbol != '[') continue;
 			i++;
 
-			int end = name.find(symbol == '(' ? ")" : "]", i);
-			if (end == std::string::npos) Throw(std::string("incorrect peptide name format: ") + name);
+			int end = closing_bracket(name, symbol, i);
+			if (end >= name.size()) Throw(std::string("incorrect peptide name format: ") + name);
 
 			std::string mod = name.substr(i, end - i);
-			for (j = 0; j < Modifications.size(); j++) if (Modifications[j].first == mod) {
-				if (!result.size()) add += Modifications[j].second;
-				else result[result.size() - 1] += Modifications[j].second;
-				if (no_cal != NULL && Modifications[j].second < 4.5 && Modifications[j].second > 0.0 && Abs(Modifications[j].second - (double)floor(Modifications[j].second + 0.5)) < 0.1) *no_cal = 1;
+			for (j = 0; j < Modifications.size(); j++) if (Modifications[j].name == mod) {
+				if (!result.size()) add += Modifications[j].mass;
+				else result[result.size() - 1] += Modifications[j].mass;
+				if (no_cal != NULL && Modifications[j].mass < 4.5 && Modifications[j].mass > 0.0 && Abs(Modifications[j].mass - (double)floor(Modifications[j].mass + 0.5)) < 0.1) *no_cal = 1;
 				break;
 			}
 			if (j == Modifications.size())
-				Throw(std::string("unknown modification: ") + name);
+				Throw(std::string("unknown modification: ") + mod);
 			i = end;
 			continue;
 		}
@@ -1335,7 +1385,7 @@ std::string to_canonical(const std::string &name) {
 			if (symbol != '(' && symbol != '[') continue;
 			i++;
 
-			int end = name.find(symbol == '(' ? ")" : "]", i);
+			int end = closing_bracket(name, symbol, i);
 			if (end == std::string::npos) Throw(std::string("incorrect peptide name format: ") + name);
 
 			std::string mod = name.substr(i, end - i);
@@ -1352,6 +1402,32 @@ std::string to_canonical(const std::string &name) {
 }
 inline std::string to_canonical(const std::string &name, int charge) { return to_canonical(name) + std::to_string(charge); }
 
+std::string to_eg(const std::string &name) {
+	int i, j;
+	std::string result;
+
+	for (i = 0; i < name.size(); i++) {
+		char symbol = name[i];
+		if (symbol < 'A' || symbol > 'Z') {
+			if (symbol != '(' && symbol != '[') continue;
+			i++;
+
+			int end = closing_bracket(name, symbol, i);
+			if (end == std::string::npos) Throw(std::string("incorrect peptide name format: ") + name);
+
+			std::string mod = name.substr(i, end - i);
+			for (j = 0; j < Modifications.size(); j++) if (Modifications[j].name == mod) {
+				if (!Modifications[j].label) result += std::string("(") + UniMod[j].second + std::string(")");
+				break;
+			}
+			if (j == Modifications.size()) result += std::string("(") + mod + std::string(")"); // no warning here
+			i = end;
+			continue;
+		} else result.push_back(symbol);
+	}
+	return result;
+}
+
 std::string to_prosit(const std::string &name) {
 	int i, j;
 	std::string result;
@@ -1362,7 +1438,7 @@ std::string to_prosit(const std::string &name) {
 			if (symbol != '(' && symbol != '[') continue;
 			i++;
 
-			int end = name.find(symbol == '(' ? ")" : "]", i);
+			int end = closing_bracket(name, symbol, i);
 			if (end == std::string::npos) Throw(std::string("incorrect peptide name format: ") + name);
 
 			if (i + 9 < name.size()) if (!memcmp(&(name[i]), "UniMod:35", 9)) result += "(ox)"; // methionine oxidation
@@ -1391,7 +1467,7 @@ void count_rt_aas(std::vector<double> &count, const std::string &name) {
 			if (symbol != '(' && symbol != '[') continue;
 			i++;
 
-			int end = name.find(symbol == '(' ? ")" : "]", i);
+			int end = closing_bracket(name, symbol, i);
 			if (end == std::string::npos) Throw(std::string("incorrect peptide name format: ") + name);
 			count[mod_rt_index(name.substr(i, end - i))]++;
 			i = end;
@@ -1415,7 +1491,7 @@ double predict_irt(const std::string &name) {
 			if (symbol != '(' && symbol != '[') continue;
 			i++;
 
-			int end = name.find(symbol == '(' ? ")" : "]", i);
+			int end = closing_bracket(name, symbol, i);
 			if (end == std::string::npos) Throw(std::string("incorrect peptide name format: ") + name);
 			iRT += InSilicoRT[mod_rt_index(name.substr(i, end - i))];
 			i = end;
@@ -1431,12 +1507,14 @@ double predict_irt(const std::string &name) {
 }
 
 void arguments(int argc, char *argv[]) {
-	int i, start, next, end;
+	int i, start, next, end, cleared_mods = false;
 	std::string prefix, ext;
 	std::vector<std::string> files;
 
 	for (i = 0; i < argc; i++) args += argv[i] + std::string(" ");
 	args = std::regex_replace(args, std::regex("\n|\r"), " ");
+	if (args.find("--clear-mods") != std::string::npos) Modifications.clear(), cleared_mods = true,
+		std::cout << "Modification names specified in the spectral library will be used for annotating output. Only suitable for library-based analysis.\n";
 	start = args.find("--", 0);
 	while (start != std::string::npos) {
 		start += 2;
@@ -1460,6 +1538,7 @@ void arguments(int argc, char *argv[]) {
 			}
 			else std::cout << "WARNING: failed to open cfg file\n";
 		}
+		else if (!memcmp(&(args[start]), "clear-mods ", 11)) {}
 		else if (!memcmp(&(args[start]), "threads ", 8)) Threads = std::stoi(args.substr(start + 8, std::string::npos)), std::cout << "Thread number set to " << Threads << "\n";
 		else if (!memcmp(&(args[start]), "fasta-search ", 13)) FastaSearch = true, std::cout << "Library-free search enabled\n";
 		else if (!memcmp(&(args[start]), "pg-level ", 9)) PGLevelSet = PGLevel = std::stoi(args.substr(start + 9, std::string::npos)),
@@ -1555,34 +1634,44 @@ void arguments(int argc, char *argv[]) {
 			}
 		}
 		else if (!memcmp(&(args[start]), "mod ", 4)) {
-			std::string name, mass;
+			int label = 0;
+			std::string name, mass, l;
 			std::stringstream list(trim(args.substr(start + 4, end - start - 4)));
 			if (!std::getline(list, name, ',')) std::cout << "WARNING: no modification name, modification ignored\n";
 			else if (!std::getline(list, mass, ',')) std::cout << "WARNING: no modification mass, modification ignored\n";
-			else Modifications.push_back(std::pair<std::string, float>(name, (float)std::stod(mass)));
-			std::cout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " added to the list of recognised modifications for spectral library-based search\n";
+			else {
+				if (std::getline(list, l, ',')) if (l.find("label") != std::string::npos) label = 1;
+				Modifications.push_back(MOD(name, (float)std::stod(mass), label));
+			}
+			std::cout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " added to the list of recognised modifications for spectral library-based search";
+			if (label) std::cout << " (as label)\n";
+			else std::cout << "\n";
 		}
 		else if (!memcmp(&(args[start]), "fixed-mod ", 10)) {
-			std::string name, mass, aas;
+			int label = 0;
+			std::string name, mass, aas, l;
 			std::stringstream list(trim(args.substr(start + 10, end - start - 10)));
 			if (!std::getline(list, name, ',')) std::cout << "WARNING: no modification name, modification ignored\n";
 			else if (!std::getline(list, mass, ',')) std::cout << "WARNING: no modification mass, modification ignored\n";
 			else if (!std::getline(list, aas, ',')) std::cout << "WARNING: no amino acids to be modified, modification ignored\n";
 			else {
-				Modifications.push_back(std::pair<std::string, float>(name, (float)std::stod(mass)));
+				if (std::getline(list, l, ',')) if (l.size()) if (l.find("label") != std::string::npos) label = 1;
+				Modifications.push_back(MOD(name, (float)std::stod(mass), label));
 				FixedMods.resize(FixedMods.size() + 1);
 				FixedMods[FixedMods.size() - 1].init(name, aas, (float)std::stod(mass));
 				std::cout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " at " << aas << " will be considered as fixed\n";
 			}
 		}
 		else if (!memcmp(&(args[start]), "var-mod ", 8)) {
-			std::string name, mass, aas;
+			int label = 0;
+			std::string name, mass, aas, l;
 			std::stringstream list(trim(args.substr(start + 8, end - start - 8)));
 			if (!std::getline(list, name, ',')) std::cout << "WARNING: no modification name, modification ignored\n";
 			else if (!std::getline(list, mass, ',')) std::cout << "WARNING: no modification mass, modification ignored\n";
 			else if (!std::getline(list, aas, ',')) std::cout << "WARNING: no amino acids to be modified, modification ignored\n";
 			else {
-				Modifications.push_back(std::pair<std::string, float>(name, (float)std::stod(mass)));
+				if (std::getline(list, l, ',')) if (l.size()) if (l.find("label") != std::string::npos) label = 1;
+				Modifications.push_back(MOD(name, (float)std::stod(mass), label));
 				VarMods.resize(VarMods.size() + 1);
 				VarMods[VarMods.size() - 1].init(name, aas, (float)std::stod(mass));
 				std::cout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " at " << aas << " will be considered as variable\n";
@@ -1672,9 +1761,6 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "rt-profiling ", 13)) RTProfiling = true, std::cout << "RT profiling enabled\n";
 		else if (!memcmp(&(args[start]), "prefix ", 7)) prefix = trim(args.substr(start + 7, end - start - 7)); // prefix added to input file names
 		else if (!memcmp(&(args[start]), "ext ", 4)) ext = trim(args.substr(start + 4, end - start - 4)); // extension added to input file names
-		else if (!memcmp(&(args[start]), "test-dataset ", 13)) TestDataset = true, std::cout << "Library will be split into training and test datasets for neural network training\n";
-		else if (!memcmp(&(args[start]), "test-proportion ", 16)) TestDatasetSize = std::stod(args.substr(start + 16, std::string::npos)),
-			std::cout << "The " << TestDatasetSize << " fraction of the precursors will be used as the test dataset\n";
 		else if (!memcmp(&(args[start]), "lc-all-scores ", 14)) LCAllScores = true, std::cout << "All scores will be used by the linear classifier (not recommended)\n";
 		else if (!memcmp(&(args[start]), "peak-center ", 12)) QuantMode = 1, std::cout << "Fixed-width center of each elution peak will be used for quantification\n";
 		else if (!memcmp(&(args[start]), "peak-boundary ", 14)) PeakBoundary = std::stod(args.substr(start + 14, std::string::npos)),
@@ -1683,6 +1769,8 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Standardisation scale set to " << StandardisationScale << "\n";
 		else if (!memcmp(&(args[start]), "no-ifs-removal ", 15)) NoIfsRemoval = true, std::cout << "Interference removal from fragment elution curves disabled\n";
 		else if (!memcmp(&(args[start]), "no-fr-selection ", 16)) NoFragmentSelectionForQuant = true, std::cout << "Cross-run selection of fragments for quantification disabled (not recommended)\n";
+		else if (!memcmp(&(args[start]), "no-fr-exclusion ", 16)) ExcludeSharedFragments = false, std::cout << "Exclusion of fragments shared between heavy and light labelled peptides from quantification disabled\n";
+		else if (!memcmp(&(args[start]), "peak-translation ", 17)) TranslatePeaks = true, std::cout << "Translation of retention times between peptides within the same elution group enabled\n";
 		else if (!memcmp(&(args[start]), "no-standardisation ", 19)) Standardise = false, std::cout << "Scores will not be standardised for neural network training\n";
 		else if (!memcmp(&(args[start]), "standardisation-scale ", 22)) StandardisationScale = std::stod(args.substr(start + 22, std::string::npos)),
 			std::cout << "Standardisation scale set to " << StandardisationScale << "\n";
@@ -1708,6 +1796,8 @@ void arguments(int argc, char *argv[]) {
 			std::cout << "Fragmentation spectrum generator accuracy set to " << GeneratorAccuracy << "\n";
 		else if (!memcmp(&(args[start]), "min-corr ", 9)) MinCorrScore = Min(std::stod(args.substr(start + 9, std::string::npos)), -1.1 + (double)TopF),
 			std::cout << "Only peaks with correlation sum exceeding " << MinCorrScore << " will be considered\n";
+		else if (!memcmp(&(args[start]), "min-ms1-corr ", 13)) MinMs1Corr = Min(std::stod(args.substr(start + 13, std::string::npos)), 0.99),
+			std::cout << "Only peaks with MS1 profile correlation exceeding " << MinMs1Corr << " will be considered\n";
 		else if (!memcmp(&(args[start]), "corr-diff ", 10)) MaxCorrDiff = Max(std::stod(args.substr(start + 10, std::string::npos)), E),
 			std::cout << "Peaks with correlation sum below " << MaxCorrDiff << " from maximum will not be considered\n";
 		else if (!memcmp(&(args[start]), "peak-apex ", 10)) PeakApexEvidence = Min(std::stod(args.substr(start + 10, std::string::npos)), 0.99),
@@ -1819,6 +1909,10 @@ void arguments(int argc, char *argv[]) {
 
 	if (!fasta_files.size()) PGLevel = 0;
 	if (fasta_files.size() && FastaSearch) {
+		if (ExcludeSharedFragments) {
+			std::cout << "Exclusion of fragments shared between heavy and light peptides from quantification is not supported in library-free mode - disabled\n";
+			ExcludeSharedFragments = false;
+		}
 		if (!LibFreeAllPeaks) { // reduce memory usage
 			MinCorrScore = Max(MinCorrScore, 1.0);
 			MaxCorrDiff = Min(MaxCorrDiff, 1.0);
@@ -1891,12 +1985,12 @@ template<class F> void read_strings(F &in, std::vector<std::string> &strs) {
 }
 
 enum {
-	type_b, type_y,
+	type_unknown, type_b, type_y,
 	type_N
 };
 
-char char_from_type[2] = { 'b', 'y' };
-std::string name_from_loss[4] = { std::string("noloss"), std::string("H2O"), std::string("NH3"), std::string("CO") };
+char char_from_type[type_N] = { '?', 'b', 'y' };
+std::string name_from_loss[loss_other + 1] = { std::string("noloss"), std::string("H2O"), std::string("NH3"), std::string("CO"), std::string("unknown"), std::string("unknown") };
 
 class Ion {
 public:
@@ -1912,7 +2006,7 @@ public:
 		mz = _mz;
 	}
 
-	void init(Ion &other) {
+	template<class T> void init(T &other) {
 		type = other.type;
 		index = other.index;
 		loss = other.loss;
@@ -1959,20 +2053,22 @@ std::vector<Ion> generate_all_fragments(const std::vector<double> &sequence, int
 
 double max_gen_acc = 0.0;
 Lock gen_acc_lock;
-std::vector<Ion> recognise_fragments(const std::vector<double> &sequence, const std::vector<Product> &fragments, float &gen_acc, bool full_spectrum = false, int max_charge = 19, int loss_cap = loss_N) {
+std::vector<Ion> recognise_fragments(const std::vector<double> &sequence, const std::vector<Product> &fragments, float &gen_acc, int pr_charge, bool full_spectrum = false, int max_charge = 19, int loss_cap = loss_N) {
 	int i, j, cnt, tot, charge, loss, index;
 	std::vector<Ion> result(fragments.size());
 	std::vector<Ion> v;
-	double delta, min;
+	double delta, min, s = sum(&(sequence[0]), sequence.size());
 	gen_acc = GeneratorAccuracy;
 
 anew:
-	cnt = tot = index = charge = 0;
+	cnt = tot = index = 0, charge = 1;
 	loss = loss_none;
 	for (i = 0; i < result.size(); i++) result[i].charge = 0;
 
 start:
 	v = generate_fragments(sequence, charge, loss, &cnt);
+	if (charge == 1) v.push_back(Ion(type_y, sequence.size(), loss, pr_charge, (s + OH + (1.0 + double(pr_charge)) * proton - Loss[loss]) / double(pr_charge))); // non-fragmented
+
 	for (i = 0; i < fragments.size(); i++) {
 		if (result[i].charge) continue;
 		double margin = fragments[i].mz * gen_acc;
@@ -2009,13 +2105,29 @@ stop:
 	return result;
 }
 
-std::vector<Ion> generate_fragments(const std::vector<double> &sequence, const std::vector<Ion> &pattern) {
+std::vector<Ion> recognise_fragments(const std::string &name, const std::vector<Product> &fragments, float &gen_acc, int pr_charge, bool full_spectrum = false, int max_charge = 19, int loss_cap = loss_N) {
+	int i;
+	if (fragments.size()) if (fragments[0].type > type_unknown) {
+		std::vector<Ion> result(fragments.size());
+		for (i = 0; i < result.size(); i++) 
+			if (fragments[i].type > type_unknown) result[i].init(fragments[i]); else break;
+		if (i == result.size()) return result;
+	}
+	auto sequence = get_sequence(name);
+	return recognise_fragments(sequence, fragments, gen_acc, pr_charge, full_spectrum, max_charge, loss_cap);
+}
+
+
+std::vector<Ion> generate_fragments(const std::vector<double> &sequence, const std::vector<Ion> &pattern, int pr_charge) {
 	int i, j, charge = 1, loss = loss_none, cnt = 0, tot = 0;
+	double s = sum(&(sequence[0]), sequence.size());
 	std::vector<Ion> result(pattern.size());
 	std::vector<Ion> v;
 
 start:
 	v = generate_fragments(sequence, charge, loss, &cnt); i = 0;
+	if (charge == 1) v.push_back(Ion(type_y, sequence.size(), loss, pr_charge, (s + OH + (1.0 + double(pr_charge)) * proton - Loss[loss]) / double(pr_charge))); // non-fragmented
+
 	for (auto pos = pattern.begin(); pos != pattern.end(); pos++, i++) {
 		for (j = 0; j < v.size(); j++) if (v[j] == *pos) {
 			result[i].init(v[j]); tot++;
@@ -2092,6 +2204,38 @@ struct Scan {
 	template <bool get_mz> inline double level(float mz, float accuracy, float * peak_mz = NULL) {
 		int low = 0, high = size();
 		return level<get_mz>(low, high, mz, accuracy, peak_mz);
+	}
+
+	inline double level(float mz, float accuracy, float ref_height) { // finds peak with height closest to the ref_height
+		int i, low = 0, high = size();
+		float v, s, delta, u, margin, min, max;
+		margin = mz * accuracy;
+		min = mz - margin, max = mz + margin;
+		if (!size()) return 0.0;
+
+		while (high > low) {
+			int middle = (high + low) >> 1;
+			v = peaks[middle].mz;
+			if (v < max) {
+				if (v > min) {
+					s = peaks[middle].height;
+					delta = Abs(s - ref_height);
+					for (i = middle + 1; i < high && peaks[i].mz < max; i++) if ((u = Abs(peaks[i].height - ref_height)) < delta) {
+						s = peaks[i].height;
+						delta = u;
+					}
+					if (i < high) high = i;
+					for (i = middle - 1; i >= low && peaks[i].mz > min; i--) if ((u = Abs(peaks[i].height - ref_height)) < delta) {
+						s = peaks[i].height;
+						delta = u;
+					}
+					if (i >= low) low = i + 1;
+					return s;
+				}
+				low = middle + 1;
+			} else high = middle;
+		}
+		return 0.0;
 	}
 
 #if (HASH > 0)
@@ -2297,7 +2441,7 @@ public:
 	int run_index;
 	mutable bool decoy_found;
 	mutable int apex, peak, best_fragment, peak_width;
-	mutable float RT, iRT, predicted_RT, predicted_iRT, best_fr_mz, profile_qvalue, qvalue, decoy_qvalue, protein_qvalue, quantity, level, norm;
+	mutable float RT, iRT, predicted_RT, predicted_iRT, best_fr_mz, profile_qvalue, qvalue, decoy_qvalue, protein_qvalue, quantity, ratio, level, norm;
 	mutable float pg_quantity, pg_norm, gene_quantity, gene_norm, gene_quantity_u, gene_norm_u;
 	mutable float evidence, decoy_evidence, ms1_corr, cscore, decoy_cscore;
 #if REPORT_SCORES
@@ -2361,10 +2505,12 @@ public:
 		out.write((char*)&lib_size, sizeof(int));
 		out.write((char*)(&RS), sizeof(RunStats));
 		out.write((char*)weights, pN * sizeof(double));
+		out.write((char*)guide_weights, pN * sizeof(double));
 		out.write((char*)&tandem_min, sizeof(double));
 		out.write((char*)&tandem_max, sizeof(double));
 		out.write((char*)&MassAccuracy, sizeof(double));
 		out.write((char*)&MassAccuracyMs1, sizeof(double));
+		out.write((char*)Q1Correction, 2 * sizeof(double));
 		write_vector(out, MassCorrection);
 		write_vector(out, MassCorrectionMs1);
 		write_vector(out, MassCalSplit);
@@ -2396,10 +2542,12 @@ public:
 		}
 		in.read((char*)(&RS), sizeof(RunStats));
 		in.read((char*)weights, pN * sizeof(double));
+		in.read((char*)guide_weights, pN * sizeof(double));
 		in.read((char*)&tandem_min, sizeof(double));
 		in.read((char*)&tandem_max, sizeof(double));
 		in.read((char*)&MassAccuracy, sizeof(double));
 		in.read((char*)&MassAccuracyMs1, sizeof(double));
+		in.read((char*)Q1Correction, 2 * sizeof(double));
 		read_vector(in, MassCorrection);
 		read_vector(in, MassCorrectionMs1);
 		read_vector(in, MassCalSplit);
@@ -2592,7 +2740,8 @@ bool name_included(const std::string &names, const std::string &name) {
 class Fasta {
 public:
 	std::string name;
-	std::vector<std::string> peptides;
+	std::vector<std::string> peptides, sequences, ids;
+	std::vector<std::pair<string, vector<int> > > dict;
 
 	std::vector<FastaEntry> entries;
 	std::vector<Isoform> proteins;
@@ -2684,7 +2833,8 @@ public:
 		std::set<FastaEntry> unique;
 		std::set<std::string> protein_ids, filter_peptides;
 		std::vector<std::string> filters;
-		std::vector<int> cuts;
+		std::vector<int> cuts, vec(1);
+		std::map<std::string, std::vector<int> > dic;
 		std::string line, sequence, peptide, id, name, gene, description, next_id, next_name, next_gene;
 		bool swissprot;
 
@@ -2727,6 +2877,7 @@ public:
 
 					cuts.clear();
 					cuts.push_back(-1);
+					vec[0] = sequences.size();
 					for (int i = 0; i < sequence.length(); i++) {
 						char aa = sequence[i];
 						if (aa >= 'A' && aa <= 'Z') {
@@ -2740,7 +2891,13 @@ public:
 							}
 							if (cut) cuts.push_back(i);
 						}
+						if (i < sequence.length() - 4) {
+							auto ins = dic.insert(std::pair<std::string, std::vector<int> >(sequence.substr(i, 5), vec));
+							if (!ins.second) ins.first->second.push_back(vec[0]);
+						}
 					}
+					sequences.push_back(sequence);
+					ids.push_back(id);
 
 					int max_miss = MissedCleavages;
 					if (max_miss >= cuts.size()) max_miss = cuts.size() - 1;
@@ -2781,6 +2938,7 @@ public:
 			}
 			in.close();
 		}
+		dict.insert(dict.begin(), dic.begin(), dic.end()); dic.clear();
 		entries.insert(entries.begin(), unique.begin(), unique.end());
 
 		std::vector<int> ind(MaxVarMods), type(MaxVarMods), mod, mod_cnt;
@@ -2913,7 +3071,12 @@ public:
 	std::vector<std::string> genes;
 	int skipped = 0;
 	double iRT_min = 0.0, iRT_max = 0.0;
-	bool gen_decoys = true, gen_charges = true, infer_proteotypicity = true, from_speclib = false;
+	bool fragment_info = false, gen_decoys = true, gen_charges = true, infer_proteotypicity = true, from_speclib = false;
+
+	std::map<std::string, int> eg;
+	std::vector<int> elution_groups; // same length as entries, indices of the elution groups
+	std::vector<int> co_elution;
+	std::vector<std::pair<int, int> > co_elution_index;
 
 	class Entry {
 	public:
@@ -2948,39 +3111,64 @@ public:
 		inline void generate_decoy() {
 			int i;
 
-			auto seq = get_sequence(name, &target.no_cal);
 			decoy = target;
-			if (seq.size() < 2) return; // will trigger assertion for unannotated charge in Search(), so should not actually happen
+			auto aas = get_aas(name);
+			int m = aas.size() - 2;
+			if (m < 0) return;
 
+			bool recognise = false;
 			float gen_acc = 0.0;
-			auto pattern = recognise_fragments(seq, target.fragments, gen_acc, false, MaxRecCharge, MaxRecLoss);
-			if (lib->gen_charges) for (i = 0; i < pattern.size(); i++) target.fragments[i].charge = pattern[i].charge;
-
-			if (gen_acc > GeneratorAccuracy + E && ForceFragRec) {
-				decoy.fragments.clear();
-				lib->skipped++;
-				return;
+			std::vector<Ion> pattern;
+			for (auto &f : decoy.fragments) if (f.type <= type_unknown || f.charge <= 0) {
+				recognise = true;
+				break;
 			}
-			int m = seq.size() - 2;
+			if (recognise || ReverseDecoys) {
+				pattern = recognise_fragments(name, target.fragments, gen_acc, target.charge, false, MaxRecCharge, MaxRecLoss);
+				for (i = 0; i < pattern.size(); i++) {
+					if (lib->gen_charges) target.fragments[i].charge = pattern[i].charge;
+					target.fragments[i].type = pattern[i].type;
+					target.fragments[i].loss = pattern[i].loss;
+					target.fragments[i].index = pattern[i].index;
+				}
+				if (gen_acc > GeneratorAccuracy + E && ForceFragRec) {
+					decoy.fragments.clear();
+					lib->skipped++;
+					return;
+				}
+			}
 
 			if (!ReverseDecoys) {
-				auto aas = get_aas(name);
-				seq[1] = AA[MutateAAto[AA_index[aas[1]]]];
-				seq[m] = AA[MutateAAto[AA_index[aas[m]]]];
+				int pos;
+				float N_shift, C_shift;
+				auto mod_state = get_mod_state(name, aas.length());
 
-				auto dfr = generate_fragments(seq, pattern);
-				for (i = 0; i < dfr.size(); i++) {
-					decoy.fragments[i].mz = dfr[i].mz;
-					if (lib->gen_charges) decoy.fragments[i].charge = pattern[i].charge;
+				if (!mod_state[1]) pos = 1;
+				else if (!mod_state[Min(2, m + 1)]) pos = Min(2, m + 1);
+				else if (!mod_state[0]) pos = 0;
+				else pos = 1;
+				N_shift = AA[MutateAAto[AA_index[aas[pos]]]] - AA[aas[pos]];
+
+				if (!mod_state[m]) pos = m;
+				else if (!mod_state[Max(0, m - 1)]) pos = Max(0, m - 1);
+				else if (!mod_state[m + 1]) pos = m + 1;
+				else pos = m;
+				C_shift = AA[MutateAAto[AA_index[aas[pos]]]] - AA[aas[pos]];
+				
+				for (i = 0; i < decoy.fragments.size(); i++) {
+					double c = (double)Max(decoy.fragments[i].charge, 1);
+					if (decoy.fragments[i].type == type_y) decoy.fragments[i].mz += C_shift / c;
+					else decoy.fragments[i].mz += N_shift / c;
 				}
 			} else {
+				auto seq = get_sequence(name);
 				auto inv_seq = seq;
 
 				for (i = 1; i < seq.size() - 1; i++) inv_seq[i] = seq[seq.size() - i - 1];
 				for (i = 0; i < seq.size(); i++) if (Abs(inv_seq[i] - seq[i]) > 1200.0 * GeneratorAccuracy) break;
 				if (i == seq.size()) inv_seq[1] += 12.0, inv_seq[seq.size() - 2] -= 12.0;
 
-				auto dfr = generate_fragments(inv_seq, pattern);
+				auto dfr = generate_fragments(inv_seq, pattern, target.charge);
 				for (i = 0; i < dfr.size(); i++) decoy.fragments[i].mz = dfr[i].mz;
 			}
 		}
@@ -2992,7 +3180,7 @@ public:
 			if (!seq.size()) return;
 
 			float gen_acc = 0.0;
-			auto pattern = recognise_fragments(seq, target.fragments, gen_acc, false, MaxRecCharge, MaxRecLoss);
+			auto pattern = recognise_fragments(seq, target.fragments, gen_acc, target.charge, false, MaxRecCharge, MaxRecLoss);
 			for (i = 0; i < pattern.size(); i++) {
 				target.fragments[i].charge = pattern[i].charge;
 				if (i < decoy.fragments.size()) decoy.fragments[i].charge = pattern[i].charge;
@@ -3033,6 +3221,9 @@ public:
 					else if (gen[i].loss == loss_H2O) target.fragments[cnt].height = scores[gen[i].index] * H2O_scores[gen[i].index];
 					else target.fragments[cnt].height = scores[gen[i].index] * NH3_scores[gen[i].index];
 					target.fragments[cnt].charge = gen[i].charge;
+					target.fragments[cnt].type = gen[i].type;
+					target.fragments[cnt].index = gen[i].index;
+					target.fragments[cnt].loss = gen[i].loss;
 					if (gen[i].loss == loss_none) cnt_noloss++;
 					cnt++;
 				}
@@ -3094,6 +3285,7 @@ public:
 		out.write((char*)&iRT_min, sizeof(double));
 		out.write((char*)&iRT_max, sizeof(double));
 		write_array(out, entries);
+		write_vector(out, elution_groups);
 	}
 
 	template<class F> void read(F &in) {
@@ -3114,6 +3306,22 @@ public:
 		in.read((char*)&iRT_max, sizeof(double));
 		read_array(in, entries);
 		for (auto &e : entries) e.lib = this;
+		if (in.peek() != char_traits<char>::eof()) read_vector(in, elution_groups);
+	}
+
+	void generate_spectra() {
+		for (int i = 0; i < entries.size(); i++)
+			if (entries[i].lock.set()) entries[i].generate();
+	}
+	
+	void generate_all() {
+		int i;
+		if (Threads > 1) {
+			std::vector<std::thread> threads;
+			for (i = 0; i < Threads; i++) threads.push_back(std::thread(&Library::generate_spectra, this));
+			for (i = 0; i < Threads; i++) threads[i].join();
+		} else generate_spectra();
+		for (i = 0; i < entries.size(); i++) entries[i].lock.free();
 	}
 
 	class Info {
@@ -3190,10 +3398,11 @@ public:
 		}
 
 		void quantify() {
-			int i, j, m, k;
+			int i, j, k, m, pos;
 
 			if (Verbose >= 1) Time(), std::cout << "Quantifying peptides\n";
 			std::vector<std::pair<float, int> > fr_score(1000), fr_ordered(1000);
+			std::vector<bool> exclude(1024);
 			for (auto it = map.begin(); it != map.end(); it++) {
 				auto v = &(it->second);
 
@@ -3208,20 +3417,150 @@ public:
 				}
 				for (auto &s : fr_score) if (s.second) s.first /= (double)s.second;
 
+				if (ExcludeSharedFragments) { // exclude (from quantification) fragments shared by peptides in the same elution group
+					int pr_index = it->first;
+					int eg = lib->elution_groups[pr_index];
+					auto &ce = lib->co_elution_index[eg];
+					for (int pos = ce.first; pos < ce.first + ce.second; pos++) {
+						int next = lib->co_elution[pos];
+						if (next != pr_index && lib->entries[next].target.charge == lib->entries[pr_index].target.charge) { // difference only in the label
+							auto &lf = lib->entries[pr_index].target;
+							auto &ls = lib->entries[next].target;
+							for (i = 0; i < lf.fragments.size(); i++) {
+								double margin = GeneratorAccuracy * lf.fragments[i].mz;
+								bool flag = false;
+								for (j = 0; j < ls.fragments.size(); j++)
+									if (Abs(lf.fragments[i].mz - ls.fragments[j].mz) < margin) {
+										flag = true;
+										break;
+									}
+								if (flag) fr_score[i].first -= 2.0;
+							}
+						}
+					}
+				}
+
 				fr_ordered.resize(fr_score.size());
 				fr_ordered.assign(fr_score.begin(), fr_score.end());
 				std::sort(fr_ordered.begin(), fr_ordered.end());
-				double margin = fr_ordered[Max(0, fr_ordered.size() - 3)].first - E;
+				for (pos = fr_ordered.size() - 3; pos < fr_ordered.size() - 1; pos++) if (fr_ordered[pos].first > -1.0 + E) break;
+				double margin = fr_ordered[pos].first - E;
 				if (NoFragmentSelectionForQuant) margin = -INF;
 
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
-					for (i = 0, jt->second.pr.quantity = 0.0; i < jt->second.fr_n; i++) {
+					for (i = 0, jt->second.pr.quantity = jt->second.pr.ratio = 0.0; i < jt->second.fr_n; i++) {
 						int ind = jt->second.fr[i].index;
 						if (fr_score[ind].first >= margin) jt->second.pr.quantity += jt->second.fr[i].quantity[qFiltered];
 					}
 					jt->second.pr.norm = jt->second.pr.level = jt->second.pr.quantity;
 				}
 			}
+
+			if (TranslatePeaks) { // calculate ratios between labelled and unlabelled peptides; requires TranslatePeaks to ensure co-elution
+				for (auto it = map.begin(); it != map.end(); it++) {
+					auto v = &(it->second);
+
+					int pr_index = it->first;
+					if (lib->entries[pr_index].from_fasta) continue; // only spectral library entries
+
+					int eg = lib->elution_groups[pr_index];
+					auto &ce = lib->co_elution_index[eg];
+
+					exclude.clear();
+					if (ExcludeSharedFragments) { // exclude (from quantification) fragments shared by peptides in the same elution group
+						int pr_index = it->first;
+						int eg = lib->elution_groups[pr_index];
+						auto &ce = lib->co_elution_index[eg];
+						for (int pos = ce.first; pos < ce.first + ce.second; pos++) {
+							int next = lib->co_elution[pos];
+							if (next != pr_index && lib->entries[next].target.charge == lib->entries[pr_index].target.charge) { // difference only in the label
+								auto &lf = lib->entries[pr_index].target;
+								auto &ls = lib->entries[next].target;
+								for (i = 0; i < lf.fragments.size(); i++) {
+									double margin = GeneratorAccuracy * lf.fragments[i].mz;
+									bool flag = false;
+									for (j = 0; j < ls.fragments.size(); j++)
+										if (Abs(lf.fragments[i].mz - ls.fragments[j].mz) < margin) {
+											flag = true;
+											break;
+										}
+									if (flag) {
+										if (i >= exclude.size()) exclude.resize(i + 1, false);
+										exclude[i] = true;
+									}
+								}
+							}
+						}
+					}
+
+					const int fr_n = 3;
+					std::vector<float> fratio(fr_n);
+					for (int pos = ce.first; pos < ce.first + ce.second; pos++) {
+						int next = lib->co_elution[pos];
+						if (next != pr_index) if (lib->entries[next].target.charge == lib->entries[pr_index].target.charge) {
+							auto p = map.find(next);
+							if (p != map.end()) if (p->first == next) {
+								auto nv = &(p->second);
+								auto kt = (*nv).begin();
+								for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
+									for (; kt != (*nv).end(); kt++) if (kt->first >= jt->first) break;
+									if (kt->first == jt->first) {
+										fr_score.clear();
+										for (i = 0; i < jt->second.fr_n; i++) {
+											int ind = jt->second.fr[i].index;
+											if (ind >= fr_score.size()) fr_score.resize(ind + 1, std::pair<float, int>(0.0, 0));
+											fr_score[ind].first = jt->second.fr[i].corr, fr_score[ind].second = lib->entries[pr_index].target.fragments[ind].ion_code();
+										}
+										for (i = 0; i < kt->second.fr_n; i++) {
+											int ind = kt->second.fr[i].index;
+											if (ind >= fr_score.size()) fr_score.resize(ind + 1, std::pair<float, int>(0.0, 0));
+											if (fr_score[ind].second != lib->entries[next].target.fragments[ind].ion_code()) fr_score[i].first = -INF;
+											else if (kt->second.fr[i].corr < fr_score[ind].first) fr_score[ind].first = kt->second.fr[i].corr;
+										}
+										for (i = 0; i < fr_score.size(); i++) {
+											fr_score[i].second = i;
+											if (i < exclude.size()) if (exclude[i]) fr_score[i].first -= INF * 0.5;
+										}
+										std::sort(fr_score.begin(), fr_score.end());
+										if (fr_score.size()) if (fr_score[fr_score.size() - 1].first > E) {
+											int fcnt = 0;
+											float f1 = 0.0, f2 = 0.0, f1f[fr_n], f2f[fr_n];
+											for (i = 0; i < fr_n; i++) f1f[i] = f2f[i] = 0.0;
+											for (int ifr = fr_score.size() - 1; ifr >= 0 && ifr >= fr_score.size() - fr_n; ifr--) {
+												if (ifr < fr_score.size() - 1) if (fr_score[ifr].first < 0.8) break;
+												int fr = fr_score[ifr].second;
+												for (i = 0; i < jt->second.fr_n; i++) if (jt->second.fr[i].index == fr) {
+													f1f[fcnt] += jt->second.fr[i].quantity[qFiltered];
+													break;
+												}
+												for (i = 0; i < kt->second.fr_n; i++) if (kt->second.fr[i].index == fr) {
+													f2f[fcnt] += kt->second.fr[i].quantity[qFiltered];
+													break;
+												}
+												fcnt++;
+												if (fcnt >= fr_n) break;
+											}
+											fratio.resize(fr_n);
+											for (i = fcnt = 0; i < fr_n; i++) if (f1f[i] > E) fratio[fcnt++] = f2f[i] / f1f[i];
+											if (fcnt <= 2) {
+												for (i = 0; i < fr_n; i++) f1 += f1f[i], f2 += f2f[i];
+												if (f1 > E) jt->second.pr.ratio += (jt->second.pr.quantity * f2) / f1;
+											} else {
+												fratio.resize(fcnt); std::sort(fratio.begin(), fratio.end());
+												jt->second.pr.ratio += jt->second.pr.quantity * fratio[fcnt / 2];
+											}
+											continue;
+										}
+										jt->second.pr.ratio += kt->second.pr.quantity;
+									}
+								}
+							}
+						}
+					}
+					for (auto jt = (*v).begin(); jt != (*v).end(); jt++) jt->second.pr.ratio = (jt->second.pr.ratio > E ? (jt->second.pr.quantity / jt->second.pr.ratio) : -1.0);
+				}
+			}
+
 			if (ms_files.size() <= 1 || IndividualReports) return;
 
 			// simple normalisation by the total signal first
@@ -3373,7 +3712,6 @@ public:
 
 	void extract_proteins() {
 		std::set<Isoform> prot;
-		std::set<std::string> pn, gn;
 		std::string word;
 
 		for (auto &pg : protein_ids) {
@@ -3384,28 +3722,9 @@ public:
 			}
 		}
 
-		for (auto &pg : protein_ids) {
-			if (pg.names.size()) {
-				std::stringstream list(pg.names);
-				while (std::getline(list, word, ';')) pn.insert(fast_trim(word));
-			}
-			if (pg.genes.size()) {
-				std::stringstream list(pg.genes);
-				while (std::getline(list, word, ';')) gn.insert(fast_trim(word));
-			}
-		}
-
 		proteins.clear();
 		proteins.insert(proteins.begin(), prot.begin(), prot.end());
 		prot.clear();
-
-		names.clear();
-		names.insert(names.begin(), pn.begin(), pn.end());
-		pn.clear();
-
-		genes.clear();
-		genes.insert(genes.begin(), gn.begin(), gn.end());
-		gn.clear();
 
 		for (int i = 0; i < proteins.size(); i++) {
 			auto &p = proteins[i];
@@ -3421,12 +3740,30 @@ public:
 		}
 	}
 
+	void elution_group_index() {
+		int i, egt = 0, peg;
+		for (i = 0; i < elution_groups.size(); i++) if (elution_groups[i] > egt) egt = elution_groups[i]; egt++;
+		co_elution_index.resize(egt, std::pair<int, int>(0, 1));
+		std::set<std::pair<int, int> > ce;
+		for (i = 0; i < elution_groups.size(); i++) ce.insert(std::pair<int, int>(elution_groups[i], i));
+		co_elution.resize(ce.size()); i = peg = 0;
+		if (co_elution_index.size()) co_elution_index[0].second = 0;
+		for (auto it = ce.begin(); it != ce.end(); it++, i++) {
+			co_elution[i] = it->second;
+			if (it->first != peg) co_elution_index[it->first].first = i;
+			else co_elution_index[it->first].second++;
+			peg = it->first;
+		}
+		ce.clear();
+	}
+
 	bool load(const char * file_name) {
 		int colInd[libCols];
 
 		name = std::string(file_name);
 		if (Verbose >= 1) Time(), std::cout << "Loading spectral library " << name << "\n";
 
+		elution_groups.clear();
 		if (get_extension(name) == std::string(".speclib")) {
 			std::ifstream speclib(file_name, std::ifstream::binary);
 			if (speclib.fail()) {
@@ -3435,6 +3772,15 @@ public:
 			}
 			read(speclib);
 			speclib.close();
+
+			if (!elution_groups.size()) { // no elution groups have been added: old version of the .speclib format
+				for (auto &e : entries) {
+					auto &name = to_eg(e.name);
+					auto egp = eg.insert(std::pair<std::string, int>(name, eg.size()));
+					elution_groups.push_back(egp.first->second);
+				}
+			}
+
 			from_speclib = true;
 			if (PGLevel != PGLevelSet) {
 				if (PGLevelSet == 2 && genes.size() >= 2) PGLevel = 2;
@@ -3450,6 +3796,7 @@ public:
 			}
 
 			int i, cnt = 0;
+			bool ftw = false, flw = false;
 			std::map<std::string, Entry> map;
 			Entry e; e.lib = this;
 
@@ -3505,11 +3852,32 @@ public:
 						return false;
 					}
 					if (colInd[libPT] >= 0) infer_proteotypicity = false;
-					if (colInd[libFrCharge] >= 0) gen_charges = false;
+					if (colInd[libFrCharge] >= 0) {
+						gen_charges = false;
+						if (colInd[libFrType] >= 0 && colInd[libFrNumber] >= 0 && colInd[libFrLoss] >= 0) fragment_info = true;
+					}
 					continue;
 				}
 
 				Product p(std::stof(words[colInd[libFrMz]]), std::stof(words[colInd[libFrI]]), (!gen_charges ? std::stof(words[colInd[libFrCharge]]) : 1));
+				if (fragment_info) {
+					auto &wt = words[colInd[libFrType]];
+					if (wt.size()) {
+						if (wt[0] == 'y') p.type = type_y;
+						else if (wt[0] == 'b') p.type = type_b;
+						else if (!ftw) ftw = true, std::cout << "WARNING: unknown fragment type " << wt << "\n";
+					}
+					if (p.type > type_unknown) {
+						p.index = std::stoi(words[colInd[libFrNumber]]);
+						if (p.type != type_b) p.index = peptide_length(words[colInd[libPr]]) - p.index;
+						auto &wl = words[colInd[libFrLoss]];
+						if (wl == "noloss") p.loss = loss_none;
+						else if (wl == "H2O") p.loss = loss_H2O;
+						else if (wl == "NH3") p.loss = loss_NH3;
+						else if (wl == "CO") p.loss = loss_CO;
+						else p.loss = loss_other;
+					}
+				}
 
 				bool decoy_fragment = false;
 				if (colInd[libIsDecoy] >= 0) {
@@ -3524,6 +3892,10 @@ public:
 					ins = map.insert(std::pair<std::string, Entry>(id, e)).first;
 					prev_id = id;
 					ins->second.name = ins->first;
+
+					auto &eg_name = (colInd[libEG] >= 0 ? words[colInd[libEG]] : to_eg(words[colInd[libPr]]));
+					auto egp = eg.insert(std::pair<std::string, int>(eg_name, eg.size()));
+					elution_groups.push_back(egp.first->second);
 
 					auto prot_id = (colInd[libPID] >= 0 ? words[colInd[libPID]] : "");
 					ins->second.prot = prot.insert(PG(prot_id)).first;
@@ -3545,6 +3917,7 @@ public:
 			}
 			csv.close();
 
+			eg.clear();
 			entries.resize(map.size());
 			precursors.resize(map.size());
 			i = 0;
@@ -3568,10 +3941,14 @@ public:
 		int ps = proteins.size(), pis = protein_ids.size();
 		if (ps) if (!proteins[0].id.size()) ps--;
 		if (pis) if (!protein_ids[0].ids.size()) pis--;
+
+		if (!FastaSearch) eg.clear();
+		elution_group_index();
+
 		if (Verbose >= 1) Time(), std::cout << "Spectral library loaded: "
 			<< ps << " protein isoforms, "
 			<< pis << " protein groups and "
-			<< entries.size() << " precursors.\n";
+			<< entries.size() << " precursors in " << co_elution_index.size() << " elution groups.\n";
 
 		return true;
 	}
@@ -3586,7 +3963,7 @@ public:
 		out << "modified_sequence,collision_energy,precursor_charge\n";
 		std::set<std::pair<std::pair<std::string, int>, float> > prs;
 		for (auto &e : entries) prs.insert(std::pair<std::pair<std::string, int>, float>(std::pair<std::string, int>(to_prosit(e.name), e.target.charge), e.target.mz));
-		for (auto &s : prs) out << s.first.first << ",27," << s.first.second << '\n';
+		for (auto &s : prs) out << s.first.first << ",30," << s.first.second << '\n';
 		out.close();
 		if (Verbose >= 1) Time(), std::cout << "Prosit input saved to " << prosit_file << "\n";
 	}
@@ -3594,15 +3971,45 @@ public:
 	void load_protein_annotations(Fasta &fasta) {
 		std::set<PG> pid;
 		std::string s;
+		std::pair<std::string, std::vector<int> > key;
 		for (int i = 0; i < entries.size(); i++) {
 			bool prot_from_lib = false;
 			if (OverwriteLibraryPGs || entries[i].from_fasta) {
 				auto stripped = get_aas(entries[i].name);
-				auto pos = std::lower_bound(fasta.entries.begin(), fasta.entries.end(), FastaEntry(stripped, s, s, s));
-				if (pos != fasta.entries.end()) if (pos->stripped == stripped) { // checks needed when !entries[i].from_fasta
-					auto ins = pid.insert(PG(pos->ids));
-					ins.first->precursors.push_back(i);
-				} else prot_from_lib = true;
+				if (stripped.size() < 5) prot_from_lib = true;
+				else {
+					key.first = stripped.substr(0, 5);
+					auto pos = std::lower_bound(fasta.dict.begin(), fasta.dict.end(), key);
+					if (pos != fasta.dict.end()) if (pos->first == key.first) { // checks needed when !entries[i].from_fasta
+						std::string ids;
+						for (auto &seq : pos->second) {
+							auto &sequence = fasta.sequences[seq];
+							for (int shift = 0; shift <= sequence.size() - stripped.size(); shift++) {
+								int found = sequence.find(stripped, shift);
+								if (found != std::string::npos) {
+									bool l_cut = false, r_cut = false;
+									shift = found;
+									if (found == 0) l_cut = true;
+									else if (found == 1 && NMetExcision && (sequence[0] == 'M' || sequence[0] == 'X')) l_cut = true;
+									else if (CutAfter.find(sequence[found - 1]) != std::string::npos) l_cut = true;
+									if (l_cut) {
+										if (found >= sequence.size() - stripped.size()) r_cut = true;
+										else if (NoCutBefore.find(sequence[found + stripped.size()]) == std::string::npos) r_cut = true;
+									}
+									if (l_cut && r_cut) {
+										if (!ids.size()) ids = fasta.ids[seq];
+										else if (!name_included(ids, fasta.ids[seq])) ids += std::string(";") + fasta.ids[seq];
+										break;
+									}
+								} else break;
+							}
+						}
+						if (ids.size()) {
+							auto ins = pid.insert(PG(ids));
+							ins.first->precursors.push_back(i);
+						} else prot_from_lib = true;
+					} else prot_from_lib = true;
+				}
 			}
 			if (prot_from_lib || (!entries[i].from_fasta && !OverwriteLibraryPGs)) {
 				auto ins = pid.insert(PG(protein_ids[entries[i].pid_index].ids));
@@ -3654,11 +4061,17 @@ public:
 				if (cnt >= MinGenFrNum) {
 					e.name = to_canonical(pep, charge);
 					auto pos = std::lower_bound(precursors.begin(), precursors.end(), e.name);
-					if (pos == precursors.end() || *pos != e.name)
+					if (pos == precursors.end() || *pos != e.name) {
 						entries.push_back(e), i++;
+						auto &eg_name = to_eg(e.name);
+						auto egp = eg.insert(std::pair<std::string, int>(eg_name, eg.size()));
+						elution_groups.push_back(egp.first->second);
+					}
 				}
 			}
 		}
+		eg.clear();
+		elution_group_index();
 
 		load_protein_annotations(fasta);
 	}
@@ -3715,13 +4128,25 @@ public:
 				if (*pos != cnt) continue;
 			}
 			auto seq = get_aas(it.name);
-			auto masses = get_sequence(it.name);
 			float gen_acc = 0;
-			auto ions = recognise_fragments(masses, it.target.fragments, gen_acc, ExportRecFragOnly, MaxRecCharge, MaxRecLoss);
-			if (ExportRecFragOnly && !searched) {
-				int rec = 0;
-				for (int fr = 0; fr < ions.size(); fr++) if (ions[fr].charge) rec++;
-				if (rec < MinF) continue;
+
+			bool recognise = false;
+			std::vector<Ion> ions;
+			for (auto &f : it.target.fragments) if (f.type <= type_unknown || f.charge <= 0) {
+				recognise = true;
+				break;
+			}
+			if (recognise) {
+				ions = recognise_fragments(it.name, it.target.fragments, gen_acc, it.target.charge, ExportRecFragOnly, MaxRecCharge, MaxRecLoss);
+				if (ExportRecFragOnly && !searched) {
+					int rec = 0;
+					for (int fr = 0; fr < ions.size(); fr++) if (ions[fr].charge) rec++;
+					if (rec < MinF) continue;
+				}
+			} else {
+				auto &frs = it.target.fragments;
+				ions.resize(frs.size());
+				for (int i = 0; i < ions.size(); i++) ions[i].init(frs[i]);
 			}
 			auto &pep = it.target;
 			if (!pep.fragments.size()) {
@@ -3782,7 +4207,7 @@ public:
 						<< protein_ids[it.pid_index].ids.c_str() << '\t'
 						<< char_from_type[fr_type] << '\t'
 						<< fr_charge << '\t'
-						<< (fr_type == type_b ? fr_num : masses.size() - fr_num) << '\t'
+						<< (fr_type == type_b ? fr_num : seq.size() - fr_num) << '\t'
 						<< name_from_loss[fr_loss].c_str() << "\n";
 					fr_cnt++;
 				}
@@ -3814,11 +4239,15 @@ public:
 	}
 
 	void init(bool decoys) {
+		bool corrected_charge = false;
 		for (auto it = entries.begin(); it != entries.end(); it++) if (it->lock.set()) {
+			if (it->target.charge <= 0) it->target.charge = 2, corrected_charge = true;
 			if (gen_decoys && decoys) it->generate_decoy();
-			else if (UseIsotopes && gen_charges) it->annotate_charges();
+			if (it->decoy.charge <= 0 && decoys) it->decoy.charge = 2, corrected_charge = true;
+			else if (UseIsotopes && gen_charges && !it->from_fasta) it->annotate_charges();
 			it->init();
 		}
+		if (corrected_charge) std::cout << "WARNING: at least one library precursor had non-positive charge; corrected to charge = 2\n";
 	}
 
 	void initialise(bool decoys) {
@@ -3830,8 +4259,7 @@ public:
 			std::vector<std::thread> threads;
 			for (i = 0; i < Threads; i++) threads.push_back(std::thread(&Library::init, this, decoys));
 			for (i = 0; i < Threads; i++) threads[i].join();
-		}
-		else init(decoys);
+		} else init(decoys);
 
 		for (i = 0; i < entries.size(); i++) entries[i].lock.free();
 		if (skipped) std::cout << "WARNING: " << skipped
@@ -3910,7 +4338,10 @@ public:
 			for (auto it = protein_groups[i].precursors.begin(); it != protein_groups[i].precursors.end(); it++)
 				entries[*it].pg_index = i;
 
-		if (fasta_files.size()) annotate_pgs(protein_groups);
+		bool annotate = false;
+		if (names.size()) if (names[names.size() - 1] != "" && names[names.size() - 1] != " ") annotate = true;
+		if (genes.size()) if (genes[genes.size() - 1] != "" && genes[genes.size() - 1] != " ") annotate = true;
+		if (annotate) annotate_pgs(protein_groups);
 	}
 
 	void quantify_proteins(int N, double q_cutoff, int stage = 0) { // top N method for protein quantification
@@ -4000,7 +4431,7 @@ public:
 		out << oh[outFile] << '\t' << oh[outPG] << '\t' << oh[outPID] << '\t' << oh[outPNames] << '\t' << oh[outGenes] << '\t'
 			<< oh[outPGQ] << '\t' << oh[outPGN] << '\t' << oh[outGQ] << '\t' << oh[outGN] << '\t' << oh[outGQP] << '\t' << oh[outGNP] << '\t' << oh[outModSeq] << '\t' << oh[outStrSeq] << '\t'
 			<< oh[outPrId] << '\t' << oh[outCharge] << '\t' << oh[outQv] << '\t' << oh[outPQv] << '\t' << oh[outPPt] << '\t'
-			<< oh[outPrQ] << '\t' << oh[outPrN] << '\t'
+			<< oh[outPrQ] << '\t' << oh[outPrN] << '\t' << oh[outPrLR] << '\t'
 			<< oh[outRT] << '\t' << oh[outiRT] << '\t' << oh[outpRT] << '\t' << oh[outpiRT];
 		if (ExtendedReport) out << (fasta_files.size() ? "\tFirst.Protein.Description\t" : "\t") << "Lib.Q.Value\tMs1.Profile.Corr\tEvidence\tCScore\tDecoy.Evidence\tDecoy.CScore\tFragment.Quant.Raw\tFragment.Quant.Corrected\tFragment.Correlations";
 #if REPORT_SCORES
@@ -4017,6 +4448,7 @@ public:
 			for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
 				if (jt->second.pr.qvalue > ReportQValue) continue;
 				if (jt->second.pr.protein_qvalue > ReportProteinQValue) continue;
+
 				out << ms_files[jt->first].c_str() << '\t'
 					<< prot[pg].ids.c_str() << '\t'
 					<< protein_ids[entry->pid_index].ids.c_str() << '\t'
@@ -4040,8 +4472,12 @@ public:
 					<< jt->second.pr.protein_qvalue << '\t'
 					<< (int)entry->proteotypic << '\t'
 					<< jt->second.pr.quantity << '\t'
-					<< jt->second.pr.norm << '\t'
-					<< jt->second.pr.RT << '\t'
+					<< jt->second.pr.norm << '\t';
+				
+				if (jt->second.pr.ratio >= 0.0) out << jt->second.pr.ratio << '\t';
+				else out << "NA\t";
+
+				out << jt->second.pr.RT << '\t'
 					<< jt->second.pr.iRT << '\t'
 					<< jt->second.pr.predicted_RT << '\t'
 					<< jt->second.pr.predicted_iRT;
@@ -4191,6 +4627,109 @@ void train(int thread_id, std::vector<NN> * net) {
 		(*net)[i * Threads + thread_id].optimise();
 }
 
+void bagging_score(int thread_id, std::vector<NN> * net, int in, std::vector<float*> * input, std::vector<float> * nn_sc) {
+	int i, j, cnt, batch_size = 2000, bagging = net->size();
+	for (int n = 0; n * Threads + thread_id < bagging; n++) {
+		int ind = n * Threads + thread_id;
+
+		for (i = 0; i < input->size(); i += cnt) {
+			cnt = Min(batch_size, input->size() - i);
+			auto dataset = createDataSet(cnt, in, &((*input)[i]));
+			forwardPassDataSet((*net)[ind].network, dataset);
+			auto result = getOuput((*net)[ind].network);
+			for (j = 0; j < cnt; j++) (*nn_sc)[(i + j) * 2 * bagging + ind] = result->data[2 * j], (*nn_sc)[(i + j) * 2 * bagging + ind + 1] = result->data[2 * j + 1];
+			free(dataset);
+		}
+	}
+}
+
+class NNClassifier {
+public:
+	int in, hidden;
+	std::vector<NN> net;
+	std::vector<int> size;
+
+	NNClassifier(int bagging, int _in, int _hidden, std::vector<int> &_size, std::vector<std::vector<float*> > &data, std::vector<std::vector<float*> > &classes) {
+		int i;
+		in = _in, hidden = _hidden, size = _size;
+
+		int bg = Min(Min(size.size(), data.size()), classes.size());
+		if (!bg) {
+			std::cout << "ERROR: no data provided to the NNClassifier() constructor, aborting\n";
+			return;
+		}
+		if (bagging > bg) {
+			std::cout << "ERROR: bagging factor reduced to " << bg << " to match the data provided\n";
+			bagging = bg;
+		}
+
+		size_t* hiddenSize = (size_t*)alloca(hidden * sizeof(size_t));
+		Activation* hiddenActivation = (Activation*)alloca(hidden * sizeof(Activation));
+		for (i = 0; i < hidden; i++) {
+			hiddenSize[i] = (hidden - i) * 5;
+			hiddenActivation[i] = tanH;
+		}
+
+		net.resize(bagging);
+		for (i = 0; i < bagging; i++) {
+			int si = Min(i, size.size() - 1), di = Min(i, data.size() - 1), ci = Min(i, classes.size() - 1);
+			DataSet* trainingData = createDataSet(size[si], in, &(data[di][0]));
+			DataSet* trainingClasses = createDataSet(size[si], 2, &(classes[ci][0]));
+
+			net[i].network = createNetwork(in, hidden, hiddenSize, hiddenActivation, 2, softmax, net[i].random);
+			net[i].seed(i);
+			net[i].lossFunction = CROSS_ENTROPY_LOSS;
+			net[i].batchSize = Min(50, Max(1, size[si] / 100));
+			net[i].learningRate = nnLearning;
+			net[i].searchTime = 0;
+			net[i].regularizationStrength = Regularisation;
+			net[i].B1 = 0.9, net[i].B2 = 0.999;
+			net[i].shuffle = 1;
+			net[i].verbose = (Verbose >= 5);
+			net[i].data = trainingData;
+			net[i].classes = trainingClasses;
+		}
+	}
+
+	void run(int epochs) {
+		int i;
+		for (i = 0; i < net.size(); i++) net[i].maxIters = (size[Min(i, size.size() - 1)] * epochs) / net[i].batchSize;
+
+		if (net.size() > 1 && Threads > 1) {
+			std::vector<std::thread> thr;
+			for (i = 0; i < Threads; i++) thr.push_back(std::thread(train, i, &net));
+			for (i = 0; i < Threads; i++) thr[i].join();
+		} else train(0, &net);
+	}
+
+	void predict(std::vector<float*> &data, std::vector<float*> &prediction) {
+		int i, j, bagging = net.size();
+
+		std::vector<float> nn_sc(data.size() * bagging * 2, -1.0);
+		if (bagging > 1 && Threads > 1) {
+			std::vector<std::thread> thr;
+			for (i = 0; i < Threads; i++) thr.push_back(std::thread(&bagging_score, i, &net, in, &data, &nn_sc));
+			for (i = 0; i < Threads; i++) thr[i].join();
+		} else bagging_score(0, &net, in, &data, &nn_sc);
+
+		for (i = 0; i < data.size(); i++) {
+			float sc_one = 0.0, sc_two = 0.0;
+			int cnt = 0;
+			for (j = 0; j < bagging; j++) if (nn_sc[i * bagging * 2 + j] >= 0.0) sc_one += nn_sc[i * bagging * 2 + j], sc_two += nn_sc[i * bagging * 2 + j + 1], cnt++;
+			if (cnt) prediction[i][0] = sc_one / (double)cnt, prediction[i][1] = sc_two / (double)cnt;
+			else prediction[i][0] = prediction[i][1] = -1.0;
+		}
+	}
+
+	~NNClassifier() {
+		for (int i = 0; i < net.size(); i++) {
+			free(net[i].data);
+			free(net[i].classes);
+			destroyNetwork(net[i].network);
+		}
+	}
+};
+
 void learn_from_library(const std::string &file_name) {
 	int i, j, n, P_y = y_delta_size(), P_l = y_loss_size(), M = in_silico_rt_size(), pos_y = 0, pos_l = 0, pos_RT = 0;
 	Library lib;
@@ -4207,9 +4746,8 @@ void learn_from_library(const std::string &file_name) {
 	std::vector<double> count(M);
 	for (auto &e : lib.entries) {
 		auto aas = get_aas(e.name);
-		auto seq = get_sequence(e.name);
 		float gen_acc = 0;
-		auto frs = recognise_fragments(seq, e.target.fragments, gen_acc, true, 1, AddLosses ? (loss_NH3 + 1) : 1);
+		auto frs = recognise_fragments(e.name, e.target.fragments, gen_acc, e.target.charge, true, 1, AddLosses ? (loss_NH3 + 1) : 1);
 		if (gen_acc > GeneratorAccuracy + E) continue;
 
 		if (InSilicoRTPrediction) {
@@ -4221,7 +4759,7 @@ void learn_from_library(const std::string &file_name) {
 			pos_RT++;
 		}
 
-		y_index.resize(n = seq.size());
+		y_index.resize(n = aas.size());
 		for (i = 0; i < y_index.size(); i++) y_index[i] = -1;
 		for (i = 0; i < frs.size(); i++) if (frs[i].charge) {
 			auto &fr = frs[i];
@@ -4299,9 +4837,8 @@ void learn_from_library(const std::string &file_name) {
 #endif
 	for (auto &e : lib.entries) {
 		auto aas = get_aas(e.name);
-		auto seq = get_sequence(e.name);
 		float gen_acc = 0;
-		auto frs = recognise_fragments(seq, e.target.fragments, gen_acc, true, 1, 1);
+		auto frs = recognise_fragments(e.name, e.target.fragments, gen_acc, e.target.charge, true, 1, 1);
 		if (gen_acc > GeneratorAccuracy + E) continue;
 
 		if (InSilicoRTPrediction) {
@@ -4309,7 +4846,7 @@ void learn_from_library(const std::string &file_name) {
 			rt_d.push_back(Abs(nrt - e.target.iRT));
 		}
 
-		predicted_y.resize(n = seq.size());
+		predicted_y.resize(n = aas.size());
 		actual_y.resize(n);
 		for (int i = 0; i < n; i++) actual_y[i] = 0.0;
 
@@ -4324,7 +4861,7 @@ void learn_from_library(const std::string &file_name) {
 #if (HASH > 0)
 		learn_hash ^= hashA((int*)&(predicted_y[0]), 2 * (seq.size() - 1));
 #endif
-		double c = corr(&(predicted_y[1]), &(actual_y[1]), seq.size() - 1);
+		double c = corr(&(predicted_y[1]), &(actual_y[1]), aas.size() - 1);
 		r_y += c;
 		rm_y.push_back(c);
 		cnt++;
@@ -4348,6 +4885,7 @@ void learn_from_library(const std::string &file_name) {
 const int fFound = 1;
 const int fDecoy = 1 << 1;
 const int fInit = 1 << 2;
+const int fTranslated = 1 << 3;
 
 class Run {
 public:
@@ -4367,6 +4905,7 @@ public:
 	std::list<std::vector<Peak> > peak_lists;
 
 	std::vector<std::vector<int> > IDs;
+	std::vector<std::pair<int, float> > best_egs;
 
 	Library * lib;
 
@@ -4393,7 +4932,7 @@ public:
 
 	int Ids01, Ids1, Ids10, Ids50, IdsCal;
 
-	bool nn_trained = false, all_iters = false;
+	bool nn_trained = false, all_iters = false, nn_validated = false;
     int curr_iter, curr_batch, linear_classifier_ids1 = 0, linear_classifier_ids10 = 0;
     double iRT_cscore, iRT_ref_score, PeakWidth = 0.0, MassAccuracy = GlobalMassAccuracy, MassAccuracyMs1 = GlobalMassAccuracyMs1;
 	double MassAccOutlier = INF, MassAccMs1Outlier = INF;
@@ -4651,7 +5190,7 @@ public:
 		float best_corr_sum = 0.0, total_corr_sum = 0.0;
 
 		std::vector<Fragment> quant;
-		float RT, evidence, ms1_corr, cscore, quantity, qvalue = 1.0, protein_qvalue = 0.0, best_fr_mz, q1_shift = 0.0;
+		float RT, RT_start, RT_stop, evidence, ms1_corr, cscore, quantity, qvalue = 1.0, protein_qvalue = 0.0, best_fr_mz, q1_shift = 0.0;
 		int apex, peak_width, best_peak, nn_index, nn_inc;
 		int peak_pos, best_fragment;
 		float mass_delta = 0.0, mass_delta_mz = 0.0, mass_delta_ms1 = 0.0;
@@ -4745,9 +5284,10 @@ public:
 				m = fragments->size();
 			}
 
-			void chromatogram() { // extract full chromatograms for the top 6 fragments
+			void chromatogram(int from = 0, int to = 0) { // extract full chromatograms for the top 6 fragments
 				if (!m) return;
-				int i, k, fr, from = 0, to = (*scan_index).size(), l = to - from, ind, ms1_i = 1;
+				if (!to) to = (*scan_index).size();
+				int i, k, fr, l = to - from, ind, ms1_i = 1;
 				int get_ms1 = (MS1PeakSelection && (run->ms1h.size() != 0)), force_ms1 = (ForceMs1 && (run->ms1h.size() != 0)), use_ms1 = get_ms1 || force_ms1;
 
 				run->MS2[pr->thread_id].resize(l * m);
@@ -4848,9 +5388,10 @@ public:
 				}
 			}
 
-			void extra_chromatogram(bool full_spectrum) { // obtain extra information in the vicinity of the putative elution peaks
+			void extra_chromatogram(bool full_spectrum, int from = 0, int to = 0) { // obtain extra information in the vicinity of the putative elution peaks
 				if (!m || !pr->info.size()) return;
-				int i, k, fr, from = 0, to = (*scan_index).size(), l = to - from, pos, ind;
+				if (!to) to = scan_index->size();
+				int i, k, fr, l = to - from, pos, ind;
 				float ms1_left[9], ms1_right[9], rt, ms1_left_RT = 0.0, ms1_right_RT = 0.0;
 				for (i = 0; i < 9; i++) ms1_left[i] = ms1_right[i] = 0.0;
 				bool iso = full_spectrum, get_ms1 = true;
@@ -5003,14 +5544,16 @@ public:
 			}
 #endif
 
-			noninline void peaks() {
+			noninline void peaks(int from = 0, int to = 0, float bcs = -INF, float tcs = -INF) {
+				pr->info.clear();
 				if (!m) return;
-				int i, j, k, fr, added, pos, next, best_fr, next_fr, l = scan_index->size(), best_n = 0, n_peaks = 0, p = Min(m, TopF);
+				if (!to) to = scan_index->size();
+				int i, j, k, fr, added, pos, next, best_fr, next_fr, l = to - from, best_n = 0, n_peaks = 0, p = Min(m, TopF);
 				float max, best = -INF, s;
 				double total_corr_sum;
 				double * corr_matrix = (double*)alloca(p * p * sizeof(double));
 				float * elution = (float*)alloca(W * sizeof(float)), *score = (float*)alloca(p * sizeof(float));
-				int * ind = (int*)alloca(p * sizeof(int));
+				int * index = (int*)alloca(p * sizeof(int));
 
 				run->PeakList[pr->thread_id].resize(l);
 				run->BestFrList[pr->thread_id].resize(l);
@@ -5019,12 +5562,13 @@ public:
 				int * best_fr_list = &(run->BestFrList[pr->thread_id][0]);
 				float * corr_sum_list = &(run->CorrSumList[pr->thread_id][0]);
 
-				if (p >= 2) for (k = S, total_corr_sum = 0.0; k < l - S; k++) {
+				if (p >= 2) for (k = from + S, total_corr_sum = 0.0; k < to - S; k++) {
+					int ind = k - from;
 					best_fr = next_fr = -1;
 					for (fr = i = j = 0; fr < p; fr++) {
 						bool flag = false;
-						if (ms2[fr * l + k] >= MinPeakHeight) i++, flag = true;
-						else if (ms2[fr * l + k - 1] >= MinPeakHeight || ms2[fr * l + k + 1] >= MinPeakHeight) flag = true;
+						if (ms2[fr * l + ind] >= MinPeakHeight) i++, flag = true;
+						else if (ms2[fr * l + ind - 1] >= MinPeakHeight || ms2[fr * l + ind + 1] >= MinPeakHeight) flag = true;
 						if (flag) {
 							if (!j) best_fr = fr;
 							else if (j == 1) next_fr = fr;
@@ -5033,17 +5577,17 @@ public:
 					}
 					if (i == 0 || j < 2) continue;
 
-					for (fr = 0; fr < p; fr++) score[fr] = -1.0, ind[fr] = -1;
+					for (fr = 0; fr < p; fr++) score[fr] = -1.0, index[fr] = -1;
 					if (j == 2) {
-						max = score[0] = score[1] = corr(&(ms2[best_fr * l + k - S]), &(ms2[next_fr * l + k - S]), W);
+						max = score[0] = score[1] = corr(&(ms2[best_fr * l + ind - S]), &(ms2[next_fr * l + ind - S]), W);
 						if (max <= E) continue;
-						double s1 = sum(&(ms2[best_fr * l + k - S]), W);
-						double s2 = sum(&(ms2[next_fr * l + k - S]), W);
-						if (s2 > s1) ind[1] = best_fr, ind[0] = best_fr = next_fr;
-						else ind[0] = best_fr, ind[1] = next_fr;
+						double s1 = sum(&(ms2[best_fr * l + ind - S]), W);
+						double s2 = sum(&(ms2[next_fr * l + ind - S]), W);
+						if (s2 > s1) index[1] = best_fr, index[0] = best_fr = next_fr;
+						else index[0] = best_fr, index[1] = next_fr;
 					} else {
 						best_fr = -1;
-						get_corr_matrix(corr_matrix, &(ms2[k - S]), p, l, W);
+						get_corr_matrix(corr_matrix, &(ms2[ind - S]), p, l, W);
 						for (fr = added = 0, max = E; fr < p; fr++) {
 							s = 0.0;
 							for (next = 0; next < p; next++) if (next != fr) s += corr_matrix[fr * p + next];
@@ -5051,25 +5595,30 @@ public:
 								added++;
 								if (s > max) max = s, best_fr = fr;
 								for (int f = 0; f < p; f++) {
-									if (ind[f] < 0) { ind[f] = fr; score[f] = s; break; }
+									if (index[f] < 0) { index[f] = fr; score[f] = s; break; }
 									if (s > score[f]) {
-										for (int g = added - 1; g > f; g--) ind[g] = ind[g - 1], score[g] = score[g - 1];
-										ind[f] = fr; score[f] = s; break;
+										for (int g = added - 1; g > f; g--) index[g] = index[g - 1], score[g] = score[g - 1];
+										index[f] = fr; score[f] = s; break;
 									}
 								}
 							}
 						}
 					}
 
+					bool found = false;
 					for (next = 0; next < p; next++) {
-						best_fr = ind[next], max = score[next];
+						best_fr = index[next], max = score[next];
 						if (best_fr < 0 || max <= E) break;
 
-						if (MS1PeakSelection && run->ms1h.size()) max += corr(&(ms2[best_fr * l + k - S]), &(ms1[k - S]), W);
+						if (MS1PeakSelection && run->ms1h.size()) {
+							double ms1_corr = corr(&(ms2[best_fr * l + ind - S]), &(ms1[ind - S]), W);
+							if (ms1_corr < MinMs1Corr) continue;
+							max += ms1_corr;
+						}
 						if (max < MinCorrScore) continue;
 
 						// smooth the curve
-						smooth(elution, &(ms2[best_fr * l + k - S]), W);
+						smooth(elution, &(ms2[best_fr * l + ind - S]), W);
 						if (elution[S] < MinPeakHeight) continue;
 
 						// check if k is at the apex
@@ -5082,24 +5631,24 @@ public:
 						if (skip_flag) continue;
 
 						double max_evidence = curr_evidence;
-						for (pos = k - S + 1; pos <= k + S - 1; pos++) {
-							int ind = pos - k + S;
-							double evidence = elution[ind];
+						int R = S - 1;
+						for (pos = k - R; pos <= k + R; pos++) {
+							double evidence = elution[pos - k + S];
 							if (evidence > max_evidence) max_evidence = evidence;
 						}
 						if (curr_evidence < max_evidence * PeakApexEvidence) continue;
 
 						if (run->full_spectrum && ForceQ1Apex) {
 							float query_mz = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[best_fr].mz, run->scan_RT[(*scan_index)[k]]);
-							if (run->ms2h[(*scan_index)[k] - 1].level<false>(query_mz, run->MassAccuracy) <= ms2[best_fr * l + k]
-								&& run->ms2h[(*scan_index)[k] + 1].level<false>(query_mz, run->MassAccuracy) <= ms2[best_fr * l + k]) {
+							if (run->ms2h[(*scan_index)[k] - 1].level<false>(query_mz, run->MassAccuracy) <= ms2[best_fr * l + ind]
+								&& run->ms2h[(*scan_index)[k] + 1].level<false>(query_mz, run->MassAccuracy) <= ms2[best_fr * l + ind]) {
 							} else continue;
 						}
 
 						total_corr_sum += max;
 						peak_list[n_peaks] = k, best_fr_list[n_peaks] = best_fr, corr_sum_list[n_peaks] = max;
 						if (max > best) best = max, best_n = n_peaks;
-						n_peaks++;
+						n_peaks++, found = true;
 						break;
 					}
 				}
@@ -5108,6 +5657,7 @@ public:
 				pr->info.resize(1);
 				pr->info[0].total_corr_sum = total_corr_sum;
 				pr->info[0].best_corr_sum = best;
+				if (bcs > -INF / 2.0) best = pr->info[0].best_corr_sum = bcs, pr->info[0].total_corr_sum = tcs;
 
 				double min_score = best - MaxCorrDiff;
 				for (i = pos = 0; i < n_peaks; i++) if (corr_sum_list[i] >= min_score) pos++;
@@ -5121,23 +5671,24 @@ public:
 				}
 			}
 
-			noninline void score(int peak) {
+			noninline void score(int peak, int from = 0, int to = 0) {
 				assert(peak >= 0);
 				assert(info->size());
 				Search * inf = &((*info)[0]);
 				assert(peak < inf->peaks.size());
 				if (!m) return;
-
-				int k = inf->peaks[peak].peak, pos, fr, l = scan_index->size(), ind, i, best_fr = inf->peaks[peak].best_fragment, apex = inf->peaks[peak].apex;
+				if (!to) to = scan_index->size();
+					
+				int k = inf->peaks[peak].peak, pos, fr, l = to - from, ind = k - from, i, best_fr = inf->peaks[peak].best_fragment, apex = inf->peaks[peak].apex;
 				float *x = (float*)alloca(m * sizeof(float)), *ref = (float*)alloca(m * sizeof(float));
 				float *elution = (float*)alloca(W * sizeof(float)), *sc = &(inf->scoring[peak * pN]);
 				double w, weight;	
 
-				assert(k >= 0);
-				assert(k < l - pr->S);
+				assert(ind >= pr->S);
+				assert(ind < l - pr->S);
 
 				// elution curve
-				smooth(elution, &(ms2[best_fr * l + k - S]), W);
+				smooth(elution, &(ms2[best_fr * l + ind - S]), W);
 				for (i = 0; i < pN; i++) sc[i] = 0.0;
 
 				// pRef
@@ -5158,8 +5709,7 @@ public:
 					char symbol = name[i];
 					if (symbol < 'A' || symbol > 'Z') {
 						if (symbol != '(' && symbol != '[') continue;
-						int end = name.find(symbol == '(' ? ")" : "]", i + 1);
-						i = end;
+						i = closing_bracket(name, symbol, i);
 						sc[pMods] += 1.0;
 						continue;
 					}
@@ -5171,7 +5721,7 @@ public:
 				float heights[TopF];
 				for (i = 0; i < TopF; i++) heights[i] = 0.0;
 				for (fr = 0; fr < Min(m, TopF); fr++) {
-					float h = ms2[fr * l + k];
+					float h = ms2[fr * l + ind];
 					for (pos = 0; pos < TopF; pos++) {
 						if (h > heights[pos]) {
 							for (int j = TopF - 1; j > pos; j--) heights[j] = heights[j - 1];
@@ -5183,12 +5733,11 @@ public:
 				for (i = 1; i < TopF; i++) sc[pTotal] += heights[i];
 				if (sc[pTotal] < MinPeakHeight) sc[pTotal] += heights[0];
 				sc[pTotal] = log(Max(E, sc[pTotal]));
-				sc[pMs1Ratio] = sc[pTotal] - log(Max(E, ms1[k]));
+				sc[pMs1Ratio] = sc[pTotal] - log(Max(E, ms1[ind]));
 
 				// pCos
-				for (pos = k - S, w = 0.0; pos <= k + S; pos++) {
-					ind = pos - k + S;
-					weight = Sqr(elution[ind]);
+				for (pos = ind - S, w = 0.0; pos <= ind + S; pos++) {
+					weight = Sqr(elution[pos - ind + S]);
 					if (weight < E) continue;
 					w += weight;
 
@@ -5219,21 +5768,21 @@ public:
 				// time corr
 				int T = Max(S / 2, 1);
 				for (fr = 0; fr < Min(m, auxF); fr++) {
-					double u = corr(elution, &(ms2[fr * l + k - S]), W);
+					double tu, u = corr(elution, &(ms2[fr * l + ind - S]), W);
 					if (fr < TopF) {
+						if (TightMassAcc) {
+							sc[pTightCorrOne] += (tu = corr(elution, &(ms2_tight_one[fr * l + ind - S]), W)); if (tu > u) u = tu;
+							sc[pTightCorrTwo] += (tu = corr(elution, &(ms2_tight_two[fr * l + ind - S]), W)); if (tu > u) u = tu;
+						}
 						sc[pTimeCorr] += u;
-						sc[pLocCorr] += corr(&(elution[S - T]), &(ms2[fr * l + k - T]), 2 * T + 1);
-						sc[pMinCorr] += corr(elution, &(ms2_min[fr * l + k - S]), W);
+
+						sc[pLocCorr] += corr(&(elution[S - T]), &(ms2[fr * l + ind - T]), 2 * T + 1);
+						sc[pMinCorr] += corr(elution, &(ms2_min[fr * l + ind - S]), W);
 						if (run->full_spectrum && UseIsotopes) {
-							double v = corr(elution, &(shadow[fr * l + k - S]), W);
+							double v = corr(elution, &(shadow[fr * l + ind - S]), W);
 							sc[pShadow] += v;
 							sc[pShadowCorr + fr] += v;
-							sc[pHeavy] += corr(elution, &(ms2_H[fr * l + k - S]), W);
-						}
-
-						if (TightMassAcc) {
-							sc[pTightCorrOne] += corr(elution, &(ms2_tight_one[fr * l + k - S]), W);
-							sc[pTightCorrTwo] += corr(elution, &(ms2_tight_two[fr * l + k - S]), W);
+							sc[pHeavy] += corr(elution, &(ms2_H[fr * l + ind - S]), W);
 						}
 
 						float peak_mz = 0.0, query_mz = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[fr].mz, run->scan_RT[i]);
@@ -5245,26 +5794,26 @@ public:
 
 				if (m > TopF) {
 					for (fr = TopF; fr < m; fr++) {
-						double u = corr(elution, &(ms2[fr * l + k - S]), W);
+						double u = corr(elution, &(ms2[fr * l + ind - S]), W);
 						sc[pResCorr] += u;
 					}
 					sc[pResCorrNorm] = sc[pResCorr] / (double)(m - TopF);
 				}
 
-				sc[pNFCorr] = corr(elution, &(nf[k - S]), W);
-				sc[pMs1TimeCorr] += corr(elution, &(ms1[k - S]), W);
-				sc[pMs1TightOne] += corr(elution, &(ms1[k - S + l]), W);
-				sc[pMs1TightTwo] += corr(elution, &(ms1[k - S + 2 * l]), W);
+				sc[pNFCorr] = corr(elution, &(nf[ind - S]), W);
+				sc[pMs1TimeCorr] += corr(elution, &(ms1[ind - S]), W);
+				sc[pMs1TightOne] += corr(elution, &(ms1[ind - S + l]), W);
+				sc[pMs1TightTwo] += corr(elution, &(ms1[ind - S + 2 * l]), W);
 				if (UseIsotopes) for (int isotope = 1; isotope < 3; isotope++) {
 					int ii = isotope * 3;
-					sc[pMs1Iso] += corr(elution, &(ms1[k - S + ii * l]), W);
-					sc[pMs1IsoOne] += corr(elution, &(ms1[k - S + (ii + 1) * l]), W);
-					sc[pMs1IsoTwo] += corr(elution, &(ms1[k - S + (ii + 2) * l]), W);
+					sc[pMs1Iso] += corr(elution, &(ms1[ind - S + ii * l]), W);
+					sc[pMs1IsoOne] += corr(elution, &(ms1[ind - S + (ii + 1) * l]), W);
+					sc[pMs1IsoTwo] += corr(elution, &(ms1[ind - S + (ii + 2) * l]), W);
 				}
 
 				// signals
 				for (fr = 0, w = 0.0; fr < Min(m, TopF); fr++) {
-					for (pos = k - S; pos <= k + S; pos++) {
+					for (pos = ind - S; pos <= ind + S; pos++) {
 						w += ms2[fr * l + pos];
 						sc[pSig + fr] += ms2[fr * l + pos];
 					}
@@ -5275,11 +5824,11 @@ public:
 				int nnD = 2 * (S / (nnS * 2)) + 1;
 				for (pos = k - S, w = 0.0; pos <= k + S; pos++) {
 					int dist = Min(nnS, (Abs(pos - k) + nnD / 2) / nnD);
-					ind = pos >= k ? (nnS + dist) : (nnS - dist);
+					int bin = pos >= k ? (nnS + dist) : (nnS - dist);
 					w += elution[pos - k + S];
-					sc[pShape + ind] += elution[pos - k + S];
+					sc[pShape + bin] += elution[pos - k + S];
 				}
-				for (i = 0; i < nnW; i++) sc[pShape + ind] /= w;
+				for (i = 0; i < nnW; i++) sc[pShape + i] /= w;
 
 				// corr sums
 				sc[pBestCorrDelta] = sc[pTimeCorr] - inf->best_corr_sum;
@@ -5385,59 +5934,80 @@ public:
 			}
 		}
 
-		noninline void quantify(int peak, bool stats_only = false, bool filter = false) {
+		noninline void quantify(int peak, int stage, bool filter = false) {
 			assert(peak >= 0);
+
 			if (!(flags & fFound)) return;
-			if (!stats_only) {
+			if (flags & fTranslated) {
+				if (stage < 3) return;
+			} else if (stage >= 3) return;
+			if (stage) {
 				if (filter && info[0].qvalue > QFilter) return;
 				auto &le = run->lib->entries[pep->index];
 				if (!pep->fragments.size()) le.generate();
 			}
 			build_index();
 
-			int fr, pos, k = peak, best_fr = info[0].best_fragment, start, stop, vpos, width;
+			int fr, best_fr, pos, k = peak, start, stop, vpos, width;
             double w, r, e;
 
 			Searcher searcher(this);
-			int p = Min(TopF, searcher.m);
-			if (!stats_only) info[0].quant.resize(p);
-			float scaled[TopF];
+			int p = Min(TopF, searcher.m), R, low, high, len;
+			float scaled[TopF], *elution;
 
-			int R = (QuantMode == 1 ? Max(1, S / 2) : Max(1, S));
-			int low = Max(0, k - R);
-			int high = Min(searcher.scan_index->size() - 1, k + R);
-			int len = high - low + 1;
-			float *elution = (float*)alloca(len * sizeof(float));
-
+			R = ((QuantMode == 1 || stage < 2) ? Max(1, S / 2) : Max(1, S));
+			low = Max(0, k - R);
+			high = Min(searcher.scan_index->size() - 1, k + R);
+			len = high - low + 1;
+			elution = (float*)alloca(len * sizeof(float));
 			searcher.quant_chromatogram(low, high + 1);
+
+			if (stage) info[0].quant.resize(p);
+			best_fr = info[0].best_fragment;
 			smooth(&(elution[0]), &(searcher.ms2[best_fr * len]), len);
 
 			e = elution[k - low] * 0.5;
 			for (pos = info[0].peak_width = 0; pos < len; pos++) if (elution[pos] >= e)
 				info[0].peak_width++;
-			float boundary = elution[k - low] / PeakBoundary;
-			start = 0, stop = len - 1;
-			if (QuantMode == 0) {
-				float valley;
-				start = k - low - 1;
-				for (start = vpos = k - low - 1, valley = elution[k - low]; start > 0; start--) {
-					if (elution[start] < valley) valley = elution[start], vpos = start;
-					else if (valley < elution[k - low] / 3.0 && valley < elution[start] / 2.0) { start = vpos;  break; }
-					if (Max(searcher.ms2[best_fr * len + start], searcher.ms2[best_fr * len + start + 1]) < boundary) break;
+			if (flags & fTranslated) { // translate peak boundaries
+				int eg = run->lib->elution_groups[pep->index];
+				if (run->best_egs[eg].second <= -INF) return;
+				int tr_index = run->best_egs[eg].first;
+				auto &tr_pr = run->entries[tr_index].target;
+				assert(tr_pr.pep->index != pep->index);
+
+				for (start = k - low - 1; start > 0; start--) if (run->ms2h[(*searcher.scan_index)[start]].RT < tr_pr.info[0].RT_start - E) {
+					start = Min(k - low - 1, start + 1);
+					break;
 				}
-				stop = k - low + 1;
-				for (stop = vpos = k - low + 1, valley = elution[k - low]; stop < high - low; stop++) {
-					if (elution[stop] < valley) valley = elution[stop], vpos = stop;
-					else if (valley < elution[k - low] / 3.0 && valley < elution[stop] / 2.0) { stop = vpos;  break; }
-					if (Max(searcher.ms2[best_fr * len + stop], searcher.ms2[best_fr * len + stop - 1]) < boundary) break;
+				for (stop = k - low + 1; stop < high - low; stop++) if (run->ms2h[(*searcher.scan_index)[stop]].RT > tr_pr.info[0].RT_stop + E) {
+					stop = Max(k - low + 1, stop - 1);
+					break;
+				}
+			} else {
+				start = 0, stop = len - 1;
+				if (QuantMode == 0) {
+					float valley, boundary = elution[k - low] / PeakBoundary;
+					for (start = vpos = k - low - 1, valley = elution[k - low]; start > 0; start--) {
+						if (elution[start] < valley) valley = elution[start], vpos = start;
+						else if (valley < elution[k - low] / 3.0 && valley < elution[start] / 2.0) { start = vpos;  break; }
+						if (Max(searcher.ms2[best_fr * len + start], searcher.ms2[best_fr * len + start + 1]) < boundary) break;
+					}
+					for (stop = vpos = k - low + 1, valley = elution[k - low]; stop < high - low; stop++) {
+						if (elution[stop] < valley) valley = elution[stop], vpos = stop;
+						else if (valley < elution[k - low] / 3.0 && valley < elution[stop] / 2.0) { stop = vpos;  break; }
+						if (Max(searcher.ms2[best_fr * len + stop], searcher.ms2[best_fr * len + stop - 1]) < boundary) break;
+					}
 				}
 			}
 			width = stop - start + 1;
+			info[0].RT_start = run->ms2h[(*searcher.scan_index)[start]].RT;
+			info[0].RT_stop = run->ms2h[(*searcher.scan_index)[stop]].RT;
 #if Q1
 			float bmz = run->predicted_mz(&(run->MassCorrection[0]), info[0].best_fr_mz, info[0].RT);
 			info[0].q1_shift = run->q1_delta(info[0].apex, pep->mz, bmz, QSL[qL - 1]);
 #endif
-			if (stats_only) return;
+			if (!stage) return;
 
 			for (fr = 0; fr < p; fr++) {
 				info[0].quant[fr].index = (*searcher.fri)[fr];
@@ -5483,7 +6053,14 @@ public:
 
 						r = Max(r * 0.5, Min(r, radj));
 					}
-					for (pos = start; pos <= stop; pos++) info[0].quant[fr].quantity[qFiltered] += Min(searcher.ms2[fr * len + pos], FilterFactor * r * elution[pos]);
+
+					float query_mz = run->predicted_mz(&(run->MassCorrection[0]), searcher.fragments->at(fr).mz, run->ms2h[(*searcher.scan_index)[k]].RT);
+					for (pos = start; pos <= stop; pos++) {
+						float value;
+						if (!QuantFitProfiles) value = searcher.ms2[fr * len + pos];
+						else value = run->ms2h[(*searcher.scan_index)[low + pos]].level(query_mz, run->MassAccuracy, r * searcher.ms2[best_fr * len + pos]);
+						info[0].quant[fr].quantity[qFiltered] += Min(value, FilterFactor * r * elution[pos]);
+					}
 				}
 			}
 			for (fr = 0, info[0].quantity = 0.0; fr < p; fr++) info[0].quantity += info[0].quant[fr].quantity[qFiltered];
@@ -5627,7 +6204,7 @@ public:
 				info[0].ms1_corr = info[0].scores[pMs1TimeCorr];
 				flags |= fFound;
 				if (!(flags & fDecoy) && run->curr_iter == CalibrationIter && (InferWindow || Calibrate))
-					quantify(info[0].peaks[info[0].best_peak].peak, true);
+					quantify(info[0].peaks[info[0].best_peak].peak, 0);
 			} else flags &= ~fFound;
         }
 
@@ -5641,10 +6218,49 @@ public:
 				if (!QuantOnly && run->curr_iter < iN) {
 					search();
 					seek();
-				} else if ((flags & fFound) && !(flags & fDecoy)) quantify(info[0].peak_pos);
+				} else if ((flags & fFound) && !(flags & fDecoy)) quantify(info[0].peak_pos, 2);
 				if (_free) free();
 			}
         }
+
+		noninline void translate() {
+			if (!(flags & fFound)) return;
+			int eg = run->lib->elution_groups[pep->index];
+			if (run->best_egs[eg].second <= -INF) return;
+			int tr_index = run->best_egs[eg].first;
+			auto &tr_pr = run->entries[tr_index].target;
+			if (tr_pr.pep->index == pep->index) return;
+			if (tr_pr.info[0].qvalue > RubbishFilter) return;
+
+			build_index();
+			Searcher searcher(this);
+			int p = Min(TopF, searcher.m), S = searcher.S, W = searcher.W;
+			if (searcher.scan_index->size() <= W + 3) return;
+
+			int k, low = S + 1, high = searcher.scan_index->size() - S - 2;
+			float target_RT = run->entries[tr_index].target.info[0].RT;
+			while (high - low > 1) {
+				k = (low + high) >> 1;
+				if (run->scan_RT[searcher.scan_index->at(k)] <= target_RT) low = k;
+				else high = k;
+			}
+			k = low;
+			if (run->scan_RT[searcher.scan_index->at(k + 1)] - target_RT < target_RT - run->scan_RT[searcher.scan_index->at(k)]) k++;
+
+			if (Abs(k - info[0].peak_pos) <= Max(S / 2, 1)) return;
+			float bcs = info[0].best_corr_sum, tcs = info[0].total_corr_sum;
+
+			int min = Max(0, k - S - 1), max = Min(k + S + 2, searcher.scan_index->size());
+			searcher.chromatogram(min, max);
+			info.clear();
+			searcher.peaks(min, max, bcs, tcs);
+			if (info.size()) {
+				searcher.extra_chromatogram(run->full_spectrum, min, max);
+				for (int peak = 0; peak < info[0].peaks.size(); peak++) searcher.score(peak, min, max), score_RT(peak);
+				seek();
+				flags |= fTranslated;
+			}
+		}
 
 #if (HASH > 0)
 		unsigned int hash() {
@@ -5660,7 +6276,6 @@ public:
 		Lock lock;
 		Precursor target;
 		Precursor decoy;
-		bool training = false, test = false;
 		int batch = 0;
 
 		Target() { }
@@ -6021,31 +6636,15 @@ public:
 			}
 		}
 
-		// select precursors that will not be used for classifier training and assign batches
-		{
-			cnt = 0;
-			std::mt19937_64 gen(1);
-			if (TestDataset && !in_ref_run) {
-				int max = Max(1, Min(entries.size() / 2, (int)(TestDatasetSize * (double)entries.size())));
-				while (cnt < max) {
-					pos = gen() % (unsigned long long)entries.size();
-					if (!entries[pos].test) entries[pos].test = true, cnt++;
-				}
-			}
-		}
-
 		std::mt19937_64 gen(1);
 		if (BatchMode) Batches = Min(MaxBatches, Max(1, entries.size() / MinBatch));
-		if (Batches == 1) for (pos = 0; pos < entries.size(); pos++) {
-			entries[pos].batch = 0;
-			if (!entries[pos].test) entries[pos].training = true;
-		} else {
+		if (Batches == 1) for (pos = 0; pos < entries.size(); pos++) entries[pos].batch = 0;
+		else {
 			if (GuideLibrary) guide_batches = Min(MaxBatches / 2 + 1, Max(1, guide / MinBatch)), fasta_batches = Max(1, Batches - guide_batches), Batches = guide_batches + fasta_batches;
 			std::vector<int> index(entries.size());
 			for (pos = 0; pos < index.size(); pos++) index[pos] = pos;
 			std::shuffle(index.begin(), index.end(), gen);
 			for (pos = 0; pos < entries.size(); pos++) {
-				if (!entries[pos].test) entries[pos].training = true;
 				if (!GuideLibrary)
 					entries[pos].batch = index[pos] % Batches;
 				else {
@@ -6098,23 +6697,23 @@ public:
 		}
     }
 
-	void quantify_precursors(int thread_id, bool filter) {
+	void quantify_precursors(int thread_id, int stage, bool filter) {
 		for (int i = 0; i < entries.size(); i++) {
 			if (entries[i].target.flags & fFound) if (entries[i].target.lock.set()) {
 				entries[i].target.thread_id = thread_id;
-				entries[i].target.quantify(entries[i].target.info[0].peak_pos, false, filter);
+				entries[i].target.quantify(entries[i].target.info[0].peak_pos, stage, filter);
 			}
 		}
 	}
 
-	void quantify_all(bool filter) {
+	void quantify_all(int stage, bool filter) {
 		int i;
 		if (Threads > 1) {
 			std::vector<std::thread> threads;
-			for (i = 0; i < Threads; i++) threads.push_back(std::thread(&Run::quantify_precursors, this, i, filter));
+			for (i = 0; i < Threads; i++) threads.push_back(std::thread(&Run::quantify_precursors, this, i, stage, filter));
 			for (i = 0; i < Threads; i++) threads[i].join();
 		}
-		else quantify_precursors(0, filter);
+		else quantify_precursors(0, stage, filter);
 		for (i = 0; i < entries.size(); i++) entries[i].target.lock.free();
 	}
 
@@ -6147,7 +6746,7 @@ public:
 				}
 		
 		tot += cnt;
-		if (cnt >= MinNonRubbish && tot > MinRubbishFactor * cnt) {
+		if (cnt >= MinNonRubbish && tot > MinRubbishFactor * cnt) { // this is likely indicative of library-free or Prosit library search
 			if (Verbose >= 1) Time(), std::cout << "Removing low confidence identifications\n";
 			for (auto &e : entries)
 				if (e.decoy.flags & fFound) {
@@ -6180,7 +6779,8 @@ public:
 		for (int next = start + 1; next < IDs[i].size(); next++) {
 			if (IDs[i][next] < 0) continue;
 			auto &en = entries[IDs[i][next]].target;
-			if (en.info[0].cscore > smax) continue;
+			if (en.info[0].cscore > smax) continue; 
+			if (lib->elution_groups[en.pep->index] == lib->elution_groups[es.pep->index]) continue; // same elution group => might actually share fragments 
 
 			float masses[TopF];
 			for (fr = 0; fr < TopF; fr++) masses[fr] = 0.0;
@@ -6255,6 +6855,37 @@ public:
 		}
 	}
 
+	void map_egs() {
+		int i = 0;
+		best_egs.clear(); best_egs.resize(lib->co_elution_index.size(), std::pair<int, float>(0, -INF));
+		for (auto &e : entries) {
+			if (e.target.flags & fFound) {
+				int index = lib->elution_groups[e.target.pep->index];
+				if (e.target.info[0].cscore > best_egs[index].second) best_egs[index].first = i, best_egs[index].second = e.target.info[0].cscore;
+			}
+			i++;
+		}
+	}
+
+	void translate_peaks(int thread_id) {
+		for (int i = 0; i < entries.size(); i++) {
+			if (entries[i].target.lock.set()) {
+				entries[i].target.thread_id = thread_id;
+				entries[i].target.translate();
+			}
+		}
+	}
+
+	void translate_all() {
+		int i;
+		if (Threads > 1) {
+			std::vector<std::thread> threads;
+			for (i = 0; i < Threads; i++) threads.push_back(std::thread(&Run::translate_peaks, this, i));
+			for (i = 0; i < Threads; i++) threads[i].join();
+		} else translate_peaks(0);
+		for (i = 0; i < entries.size(); i++) entries[i].target.lock.free();
+	}
+
 	void standardise() {
 		int i, pos;
 		double e[pN], s2[pN], mul;
@@ -6327,7 +6958,6 @@ public:
 			}
 
 			for (i = 0; i < nnBagging; i++) training[i].resize(maxTraining), training_classes[i].resize(maxTraining);
-			test.resize(maxTraining), test_classes.resize(maxTraining);
 
 			for (i = j = 0; i < nnBagging; i++) {
 				nn_mod[i] = i % nn_mod_n;
@@ -6353,7 +6983,7 @@ public:
 				continue;
 			}
 
-			if (curr_iter >= nnIter && it->training && (!nnFilter || !it->target.pep->no_cal)) {
+			if (curr_iter >= nnIter && (!nnFilter || !it->target.pep->no_cal)) {
 				if (it->target.flags & fFound) {
 					if (it->target.info[0].qvalue <= 0.5) {
 						t50++;
@@ -6369,11 +6999,6 @@ public:
 						training[i][nn_cnt[i]] = it->decoy.info[0].scores, training_classes[i][nn_cnt[i]] = decoy_nn, nn_cnt[i]++;
 					nnCnt++;
 				}
-			}
-
-			if (curr_iter >= nnIter && TestDataset && it->test) {
-				if (it->target.flags & fFound) test[nnTest] = it->target.info[0].scores, test_classes[nnTest++] = target_nn;
-				if (it->decoy.flags & fFound) test[nnTest] = it->decoy.info[0].scores, test_classes[nnTest++] = decoy_nn;
 			}
 
 			if (!(it->target.flags & fFound) || !(it->decoy.flags & fFound)) continue;
@@ -6456,58 +7081,19 @@ public:
 		}
 		if (Verbose >= 1) Time(), std::cout << "Training the neural network: " << nnCnt - dall << " targets, " << dall << " decoys\n";
 
-		size_t* hiddenSize = (size_t*)alloca(nnHidden * sizeof(size_t));
-		Activation* hiddenActivation = (Activation*)alloca(nnHidden * sizeof(Activation));
-		for (i = 0; i < nnHidden; i++) {
-			hiddenSize[i] = (nnHidden - i) * 5;
-			hiddenActivation[i] = tanH;
-		}
-
 		{
-			std::vector<NN> net(nnBagging);
-			for (i = 0; i < nnBagging; i++) {
-				DataSet* trainingData = createDataSet(nn_cnt[i], pN, &(training[i][0]));
-				DataSet* trainingClasses = createDataSet(nn_cnt[i], 2, &(training_classes[i][0]));
-
-				net[i].network = createNetwork(pN, nnHidden, hiddenSize, hiddenActivation, 2, softmax, net[i].random);
-				net[i].seed(i);
-				net[i].lossFunction = CROSS_ENTROPY_LOSS;
-				net[i].batchSize = Min(50, Max(1, nn_cnt[i] / 100));
-				net[i].learningRate = nnLearning;
-				net[i].searchTime = 0;
-				net[i].regularizationStrength = Regularisation;
-				net[i].B1 = 0.9, net[i].B2 = 0.999;
-				net[i].shuffle = 1;
-				net[i].verbose = (Verbose >= 5);
-				net[i].data = trainingData;
-				net[i].classes = trainingClasses;
-				net[i].maxIters = (nn_cnt[i] * nnEpochs) / net[i].batchSize;
-			}
-
-			std::vector<std::thread> thr;
-			for (i = 0; i < Threads; i++) thr.push_back(std::thread(train, i, &net));
-			for (i = 0; i < Threads; i++) thr[i].join();
-
-			if (Verbose >= 4 && TestDataset) for (i = 0; i < nnBagging; i++) {
-				DataSet* testData = createDataSet(nnTest, pN, &(test[0]));
-				DataSet* testClasses = createDataSet(nnTest, 2, &(test_classes[0]));
-				float loss = crossEntropyLoss(net[i].network, testData, testClasses);
-				free(testData), free(testClasses);
-				std::cout << "Test loss: " << loss << "\n";
-			}
-			if (Verbose >= 4 && !TestDataset) for (i = 0; i < nnBagging; i++) {
-				DataSet* trainingData = createDataSet(nn_cnt[i], pN, &(training[i][0]));
-				DataSet* trainingClasses = createDataSet(nn_cnt[i], 2, &(training_classes[i][0]));
-				float loss = crossEntropyLoss(net[i].network, trainingData, trainingClasses);
-				free(trainingData), free(trainingClasses);
-				std::cout << "Training loss: " << loss << "\n";
-			}
+			NNClassifier NNC(nnBagging, pN, nnHidden, nn_cnt, training, training_classes);
+			NNC.run(nnEpochs);
 			nn_trained = true;
-			nn_scores(all, &net);
-			for (i = 0; i < nnBagging; i++) {
-				free(net[i].data);
-				free(net[i].classes);
-				destroyNetwork(net[i].network);
+			nn_scores(all, &NNC.net);
+
+			if (TranslatePeaks) {
+				calculate_qvalues();
+				nn_validated = true;
+				if (Verbose >= 1) Time(), std::cout << "Translating peaks within elution groups\n";
+				map_egs();
+				translate_all();
+				nn_scores(all, &NNC.net, true);
 			}
 		}
 
@@ -6515,7 +7101,7 @@ public:
 		if (!all && non_guide_present) fit_weights(max_batch, true);
 	}
 
-	void nn_score(int thread_id, bool all, std::vector<NN> * net, std::vector<float> * nn_sc) {
+	void nn_score(int thread_id, bool all, std::vector<NN> * net, std::vector<float> * nn_sc, bool translated) {
 		int i, j, cnt, batch_size = 1000;
 		std::vector<float*> data(2 * batch_size);
 		std::vector<int> index(2 * batch_size);
@@ -6526,10 +7112,10 @@ public:
 			for (auto it = entries.begin(); it != entries.end(); it++, i++) {
 				if (it->batch > curr_batch) continue;
 				if (GuideLibrary && !all && lib->entries[it->target.pep->index].from_fasta) continue;
-				if (it->target.flags & fFound)
+				if (it->target.flags & fFound) if (!translated || (it->target.flags & fTranslated))
 					if (test_on_index(it->target.info[0].nn_index, ind))
 						index[cnt] = 2 * i, data[cnt++] = it->target.info[0].scores;
-				if (it->decoy.flags & fFound)
+				if (it->decoy.flags & fFound) if (!translated)
 					if (test_on_index(it->decoy.info[0].nn_index, ind))
 						index[cnt] = 2 * i + 1, data[cnt++] = it->decoy.info[0].scores;
 
@@ -6550,29 +7136,29 @@ public:
 		}
 	}
 
-	void nn_scores(bool all, std::vector<NN> * net) {
+	void nn_scores(bool all, std::vector<NN> * net, bool translated = false) {
 		for (auto it = entries.begin(); it != entries.end(); it++) {
 			if (it->batch > curr_batch) continue;
-			if (it->target.flags & fFound) it->target.info[0].cscore = 0.0, it->target.info[0].nn_inc = 0;
-			if (it->decoy.flags & fFound) it->decoy.info[0].cscore = 0.0, it->decoy.info[0].nn_inc = 0;
+			if (it->target.flags & fFound) if (!translated || (it->target.flags & fTranslated)) it->target.info[0].cscore = 0.0, it->target.info[0].nn_inc = 0;
+			if (!translated) if (it->decoy.flags & fFound) it->decoy.info[0].cscore = 0.0, it->decoy.info[0].nn_inc = 0;
 		}
 
 		std::vector<float> nn_sc(entries.size() * nnBagging * 2, -1.0);
 		std::vector<std::thread> thr;
-		for (int i = 0; i < Threads; i++) thr.push_back(std::thread(&Run::nn_score, this, i, all, net, &nn_sc));
+		for (int i = 0; i < Threads; i++) thr.push_back(std::thread(&Run::nn_score, this, i, all, net, &nn_sc, translated));
 		for (int i = 0; i < Threads; i++) thr[i].join();
 
 		for (int i = 0; i < entries.size(); i++) {
 			auto &e = entries[i];
 			if (e.batch > curr_batch) continue;
-			if (e.target.flags & fFound) {
+			if (e.target.flags & fFound) if (!translated || (e.target.flags & fTranslated)) {
 				e.target.info[0].cscore = 0.0;
 				int cnt = 0;
 				for (int j = 0; j < nnBagging; j++) if (nn_sc[i * (nnBagging * 2) + j] >= 0.0) e.target.info[0].cscore += nn_sc[i * (nnBagging * 2) + j], cnt++;
 				assert(cnt > 0);
 				e.target.info[0].cscore /= (double)cnt;
 			}
-			if (e.decoy.flags & fFound) {
+			if (e.decoy.flags & fFound) if (!translated) {
 				e.decoy.info[0].cscore = 0.0;
 				int cnt = 0;
 				for (int j = 0; j < nnBagging; j++) if (nn_sc[i * (nnBagging * 2) + nnBagging + j] >= 0.0) e.decoy.info[0].cscore += nn_sc[i * (nnBagging * 2) + nnBagging + j], cnt++;
@@ -6586,9 +7172,9 @@ public:
     int calculate_qvalues(bool use_evidence = true, bool recalc = true) {
 		start:
 		if (Verbose >= 2) Time(), std::cout << "Calculating q-values\n";
-		iRTTopPrecursors = Max(2, (!(TestDataset && curr_iter >= nnIter && nn_trained) || in_ref_run) ? iRTTargetTopPrecursors : (TestDatasetSize * (double)iRTTargetTopPrecursors));
+		iRTTopPrecursors = Max(2, iRTTargetTopPrecursors);
 
-        int i = 0, ids = 00;
+        int i = 0, ids = 0;
 		Ids01 = Ids1 = Ids10 = Ids50 = IdsCal = 0;
         iRT_cscore = iRT_ref_score = INF;
 		if (curr_iter >= nnIter && nn_trained) use_evidence = false;
@@ -6604,20 +7190,18 @@ public:
 				if (it->decoy.flags & fFound) it->decoy.info[0].cscore = !use_evidence ? cscore<false>(it->decoy.info[0].scores, guide) : it->decoy.info[0].scores[0];
 			}
 
-            if (!(TestDataset && curr_iter >= nnIter && nn_trained) || in_ref_run || it->test) {
-				if (it->target.flags & fFound) {
-					if (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta)
-						target_scores.push_back(it->target.info[0].cscore);
-					else
-						guide_target_scores.push_back(it->target.info[0].cscore);
-				}
-				if (it->decoy.flags & fFound) {
-					if (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta)
-						decoy_scores.push_back(it->decoy.info[0].cscore);
-					else
-						guide_decoy_scores.push_back(it->decoy.info[0].cscore);
-				}
-            }
+			if (it->target.flags & fFound) if (!(it->target.flags & fTranslated)) {
+				if (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta)
+					target_scores.push_back(it->target.info[0].cscore);
+				else
+					guide_target_scores.push_back(it->target.info[0].cscore);
+			}
+			if (it->decoy.flags & fFound) {
+				if (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta)
+					decoy_scores.push_back(it->decoy.info[0].cscore);
+				else
+					guide_decoy_scores.push_back(it->decoy.info[0].cscore);
+			}
         }
 
 		std::sort(target_scores.begin(), target_scores.end());
@@ -6672,7 +7256,7 @@ public:
 
 		for (auto it = entries.begin(); it != entries.end(); it++) {
 			if (it->batch > curr_batch) continue;
-			if (FastaSearch || GenSpecLib) if (it->decoy.flags & fFound) {
+			if (curr_iter >= iN - 1) if (it->decoy.flags & fFound) {
 				auto pos = (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta) ?
 					cs_qv.lower_bound(it->decoy.info[0].cscore) : guide_cs_qv.lower_bound(it->decoy.info[0].cscore);
 				it->decoy.info[0].qvalue = pos->second;
@@ -6683,8 +7267,7 @@ public:
 				cs_qv.lower_bound(it->target.info[0].cscore) : guide_cs_qv.lower_bound(it->target.info[0].cscore);
 			it->target.info[0].qvalue = pos->second;
 			if (it->target.info[0].qvalue > 1.0) it->target.info[0].qvalue = 1.0;
-			if (!(TestDataset && curr_iter >= nnIter && nn_trained) || in_ref_run || it->test)
-				if (it->target.info[0].qvalue <= 0.01) ids++;
+			if (it->target.info[0].qvalue <= 0.01) ids++;
 			if (it->target.info[0].qvalue <= MassCalQvalue && Abs(it->target.info[0].mass_delta) > E) IdsCal++;
 			if (it->target.info[0].qvalue <= 0.5) Ids50++; else continue;
 			if (it->target.info[0].qvalue <= 0.1) Ids10++; else continue;
@@ -6693,16 +7276,11 @@ public:
 		}
 		RS.precursors = Ids1;
 		if (Verbose >= 2 || (Verbose >= 1 && curr_iter >= iN - 1)) {
-			if (TestDataset && curr_iter >= nnIter && nn_trained) Time(), std::cout << "Number of test set IDs at 0.01 FDR: " << ids << "\n";
-			else if (Verbose < 3) Time(), std::cout << "Number of IDs at 0.01 FDR: " << ids << "\n";
+			if (Verbose < 3) Time(), std::cout << "Number of IDs at 0.01 FDR: " << ids << "\n";
 			if (Verbose >= 3) Time(), std::cout << "Number of IDs at 50%, 10%, 1%, 0.1% FDR: "
 				<< Ids50 << ", " << Ids10 << ", " << Ids1 << ", " << Ids01 << "\n";
 		}
-		if (TestDataset && curr_iter >= nnIter && nn_trained) {
-			ids = (int)(((double)ids) / TestDatasetSize);
-			if (Verbose >= 1 && curr_iter == iN - 1) Time(), std::cout << "Estimated number of precursors at 0.01 FDR: " << ids << "\n";
-		}
-		if (curr_iter >= nnIter && nn_trained && (Ids10 < linear_classifier_ids10 ||
+		if (!nn_validated) if (curr_iter >= nnIter && nn_trained && (Ids10 < linear_classifier_ids10 ||
 			(ids < linear_classifier_ids1 && linear_classifier_ids1 >= 50 && ((double)ids/(double)linear_classifier_ids1) < ((double)linear_classifier_ids10 / (double)Max(1, Ids10)))
 			|| Ids10 < 100)) {
 			if (Verbose >= 1) Time(), std::cout << "Too low number of IDs with NNs: reverting to the linear classifier\n";
@@ -6859,7 +7437,7 @@ public:
 
 				std::sort(q1_diff.begin(), q1_diff.end()), k = 0;
 				for (int i = (q1_diff.size() / 5); i < q1_diff.size() - (q1_diff.size() / 5); i++) diff += q1_diff[i], k++;
-				Q1Correction[0] = diff / (float)k;
+				Q1Correction[0] = diff / (float)Max(1, k);
 
 				if (Verbose >= 1) Time(), std::cout << "Q1 correction: " << Q1Correction[0] << "Th + " << Q1Correction[1] << "(m/z)" << "\n";
 			}
@@ -7407,8 +7985,8 @@ public:
 
 		remove_rubbish();
 		if (IDsInterference) {
-			if (Verbose >= 1) Time(), std::cout << "Removing interferences\n";
-			quantify_all(false);
+			if (Verbose >= 1) Time(), std::cout << "Removing interfering precursors\n";
+			quantify_all(1, false);
 			for (int ir = 0; ir < IDsInterference; ir++) {
 				map_ids();
 				refine_ids();
@@ -7419,7 +7997,15 @@ public:
 		curr_iter = nnIter;
 		if (curr_iter >= iN - 1) {
 			free_precursors();
-			if (curr_iter >= iN) goto report;
+			if (curr_iter >= iN) {
+				if (TranslatePeaks) {
+					if (Verbose >= 1) Time(), std::cout << "Translating peaks within elution groups\n";
+					map_egs();
+					translate_all();
+					calculate_qvalues();
+				}
+				goto report;
+			}
 		}
 
 		if (Standardise) standardise();
@@ -7432,7 +8018,8 @@ public:
 		Quant quant;
 		quant.proteins = calculate_protein_qvalues();
 		if (Verbose >= 1) Time(), std::cout << "Quantification\n";
-		quantify_all(true);
+		quantify_all(2, true);
+		if (TranslatePeaks) quantify_all(3, true);
 		if (no_report) return;
 
 		if (args.find("--!list-peptides") != std::string::npos) {
@@ -7725,12 +8312,18 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
-	if (ExportProsit && !FastaSearch && fasta_files.size() && !lib_file.size()) {
+	if ((ExportProsit || ExportLibrary) && !FastaSearch && fasta_files.size() && !lib_file.size()) {
 		Fasta fasta;
 		Library lib;
-		if (Verbose >= 1) Time(), std::cout << "Preparing Prosit input from the FASTA database provided\n";
+		if (Verbose >= 1 && ExportProsit) Time(), std::cout << "Preparing Prosit input from the FASTA database provided\n";
 		if (!fasta.load(fasta_files, fasta_filter_files)) Throw("Cannot load FASTA");
 		lib.load(fasta);
+		if (ExportLibrary) {
+			if (Verbose >= 1) Time(), std::cout << "Preparing an in silico spectral library from the FASTA database provided\n";
+			if (learn_lib_file.size()) learn_from_library(learn_lib_file);
+			lib.generate_all();
+			lib.save(out_lib_file, NULL, false);
+		}
 	}
 
 	Fasta fasta;
@@ -7800,7 +8393,7 @@ int main(int argc, char *argv[]) {
 	if (RTProfiling) if (Verbose >= 1) Time(), std::cout << "First pass: collecting retention time information\n";
 	for (auto it = ms_files.begin(); it != ms_files.end(); it++) {
 		if ((UseRTInfo && RTProfiling) || UseQuant) {
-			std::ifstream in((*it) + std::string(".quant"));
+			std::ifstream in((*it) + std::string(".quant"), std::ifstream::binary);
 			if (in.fail() || temp_folder.size()) in = std::ifstream(location_to_file_name(*it) + std::string(".quant"), std::ifstream::binary);
 			if (in.is_open()) {
 				if (IndividualReports) {
@@ -7883,7 +8476,7 @@ quant_only:
 
 		for (auto it = ms_files.begin(); it != ms_files.end(); it++) {
 			if (UseQuant) {
-				std::ifstream in((*it) + std::string(".quant"));
+				std::ifstream in((*it) + std::string(".quant"), std::ifstream::binary);
 				if (in.fail() || temp_folder.size()) in = std::ifstream(location_to_file_name(*it) + std::string(".quant"), std::ifstream::binary);
 				if (in.is_open()) {
 					if (IndividualReports) {
@@ -7928,6 +8521,16 @@ gen_spec_lib:
 		std::cout << "\n";
 	}
 
+	if (IndividualReports || !(out_file.size() || out_gene_file.size())) goto gen_lib;
+	if (Verbose >= 1) Time(), std::cout << "Cross-run analysis\n";
+	if (QuantInMem) lib.info.load(&(lib), ms_files, &quants);
+	else lib.info.load(&(lib), ms_files);
+	lib.info.quantify();
+	lib.quantify_proteins(TopN, ProteinQuantQvalue);
+	if (out_file.size()) lib.report(out_file), lib.stats_report(remove_extension(out_file) + std::string(".stats.tsv"));
+	if (out_gene_file.size()) lib.gene_report(out_gene_file);
+
+gen_lib:
 	if (out_lib_file.size()) if (FastaSearch || GenSpecLib) { // generating spectral library
 		MaxF = INF;
 		if (Verbose >= 1) Time(), std::cout << "Generating spectral library:\n";
@@ -7967,7 +8570,7 @@ gen_spec_lib:
 			Quant Qt;
 			auto Q = &Qt;
 			if (!QuantInMem) {
-				std::ifstream in((*it) + std::string(".quant"));
+				std::ifstream in((*it) + std::string(".quant"), std::ifstream::binary);
 				if (in.fail() || temp_folder.size()) in = std::ifstream(location_to_file_name(*it) + std::string(".quant"), std::ifstream::binary);
 				if (in.is_open()) {
 					Q->read_meta(in, lib.entries.size());
@@ -7999,15 +8602,6 @@ gen_spec_lib:
 		new_lib.fasta_names = all_fastas;
 		new_lib.save(out_lib_file + std::string(".speclib"));
 	}
-
-	if (IndividualReports || !(out_file.size() || out_gene_file.size())) goto remove;
-	if (Verbose >= 1) Time(), std::cout << "Cross-run analysis\n";
-	if (QuantInMem) lib.info.load(&(lib), ms_files, &quants);
-	else lib.info.load(&(lib), ms_files);
-	lib.info.quantify();
-	lib.quantify_proteins(TopN, ProteinQuantQvalue);
-	if (out_file.size()) lib.report(out_file), lib.stats_report(remove_extension(out_file) + std::string(".stats.tsv"));
-	if (out_gene_file.size()) lib.gene_report(out_gene_file);
 
 	remove:
 #ifdef CPP17
