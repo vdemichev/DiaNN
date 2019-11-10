@@ -3775,7 +3775,7 @@ public:
 
 			if (!elution_groups.size()) { // no elution groups have been added: old version of the .speclib format
 				for (auto &e : entries) {
-					auto &name = to_eg(e.name);
+					auto name = to_eg(e.name);
 					auto egp = eg.insert(std::pair<std::string, int>(name, eg.size()));
 					elution_groups.push_back(egp.first->second);
 				}
@@ -3893,7 +3893,7 @@ public:
 					prev_id = id;
 					ins->second.name = ins->first;
 
-					auto &eg_name = (colInd[libEG] >= 0 ? words[colInd[libEG]] : to_eg(words[colInd[libPr]]));
+					auto eg_name = (colInd[libEG] >= 0 ? words[colInd[libEG]] : to_eg(words[colInd[libPr]]));
 					auto egp = eg.insert(std::pair<std::string, int>(eg_name, eg.size()));
 					elution_groups.push_back(egp.first->second);
 
@@ -4063,7 +4063,7 @@ public:
 					auto pos = std::lower_bound(precursors.begin(), precursors.end(), e.name);
 					if (pos == precursors.end() || *pos != e.name) {
 						entries.push_back(e), i++;
-						auto &eg_name = to_eg(e.name);
+						auto eg_name = to_eg(e.name);
 						auto egp = eg.insert(std::pair<std::string, int>(eg_name, eg.size()));
 						elution_groups.push_back(egp.first->second);
 					}
