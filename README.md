@@ -21,7 +21,7 @@ GUI manual: https://github.com/vdemichev/DiaNN/blob/master/DIA-NN%20GUI%20manual
 Considerably improved identification performance     
 Tunable quantification algorithms        
 It is no longer necessary to define unknown modifications featured in the spectral library      
-Experimental support for SILAC or absolute quantification with spike-in standards    
+Experimental support for SILAC and absolute quantification with spike-in standards    
 
 ### Installation
 
