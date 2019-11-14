@@ -4859,7 +4859,7 @@ void learn_from_library(const std::string &file_name) {
 		for (i = 2; i < aas.size(); i++) if (actual_y[i] > E && actual_y[i - 1] > E) s2_y += Sqr(log(actual_y[i] / actual_y[i - 1]) - (predicted_y[i] - predicted_y[i - 1])), s2_cnt++;
 		to_exp(predicted_y);
 #if (HASH > 0)
-		learn_hash ^= hashA((int*)&(predicted_y[0]), 2 * (seq.size() - 1));
+		learn_hash ^= hashA((int*)&(predicted_y[0]), 2 * (aas.size() - 1));
 #endif
 		double c = corr(&(predicted_y[1]), &(actual_y[1]), aas.size() - 1);
 		r_y += c;
@@ -4890,7 +4890,7 @@ const int fTranslated = 1 << 3;
 class Run {
 public:
 	Lock lock;
-	volatile int ms1_cnt = 0, ms2_cnt = 0;
+	volatile int ms1_cnt = 0, ms2_cnt = 0, total_spectra = 0;
 	volatile long long peaks_cnt;
 	std::atomic<int> sp_alloc;
 	bool scanning = false, no_report = false;
@@ -6145,8 +6145,8 @@ public:
 				if (fmz < MinFrMz || fmz > MaxFrMz) continue;
 				if (fmz <= run->tandem_min || fmz >= run->tandem_max) continue;
 				float query_mz = run->predicted_mz(&(run->MassCorrection[0]), fmz, run->scan_RT[apex]);
-				x[S] = run->ms2h[apex].level<true>(query_mz, run->MassAccuracy, &amz);
-				for (i = 0; i < l; i++) if (i != S) x[i] = run->ms2h[(*scan_index)[low + i]].level<false>(query_mz, run->MassAccuracy);
+				x[S - low] = run->ms2h[apex].level<true>(query_mz, run->MassAccuracy, &amz);
+				for (i = 0; i < l; i++) if (i != S - low) x[i] = run->ms2h[(*scan_index)[low + i]].level<false>(query_mz, run->MassAccuracy);
 				u = x[S - low];
 				if (u >= best_height * MinRelFrHeight && u >= MinGenFrInt) {
 					float c = corr(x, elution, l);
@@ -6462,19 +6462,21 @@ public:
 
 		bool first = true, finish = false;
 		int start = 0, stop = 0, next = 0;
+		if (first) while (!lock.set()) {}
 		while (true) {
 			int curr = sp_alloc.fetch_add(Block);
 			start = curr + 1, stop = curr + Block;
 			for (next = start; next <= stop; next++) {
 				if (first) {
 					first = false;
-					if (!r.readFile(file_name, s[next - start], next)) return;
-					int total = r.getLastScan();
-					if (total > 1) {
-						while (!lock.set()) {}
-						spectra->reserve(total + 2);
+					if (!r.readFile(file_name, s[next - start], next)) {
+						sp_alloc.fetch_sub(Block);
 						lock.free();
+						return;
 					}
+					total_spectra = r.getLastScan();
+					if (total_spectra > 1) spectra->reserve(total_spectra + 2);
+					lock.free();
 				} else { if (!r.readFile(NULL, s[next - start], next)) { finish = true; break; } }
 				if (s[next - start].getScanNumber() == 0) { finish = true; break; }
 			}
@@ -6491,12 +6493,15 @@ public:
 					auto &sc = spectra->at(i - 1);
 					auto &sp = s[i - start];
 					int level = sp.getMsLevel();
-					if (level != 1 && level != 2) continue;
+					if (level != 1 && level != 2) {
+						sc.type = 0;
+						continue;
+					}
 
 					sc.n = sp.size();
 					sc.type = level;
 					sc.RT = sp.getRTime();
-					sc.window_low = s[i - start].getSelWindowLower(), sc.window_high = sp.getSelWindowUpper();
+					sc.window_low = sp.getSelWindowLower(), sc.window_high = sp.getSelWindowUpper();
 					sc.peaks = &(pl[pos]);
 					for (int k = 0; k < sc.n; k++) pl[pos + k].mz = sp.at(k).mz, pl[pos + k].height = sp.at(k).intensity;
 					pos += sc.n;
@@ -6568,7 +6573,7 @@ public:
 			peaks.clear();
 
 			sp_alloc.store(0);
-			ms1_cnt = ms2_cnt = 0;
+			ms1_cnt = ms2_cnt = total_spectra = 0;
 			std::vector<std::thread> threads;
 			int max_threads = Max(1, Threads - 1);
 			for (int i = 0; i < max_threads; i++) threads.push_back(std::thread(&Run::load_raw, this, i, file_name, &spectra));
@@ -6578,6 +6583,7 @@ public:
 				std::cout << "No MS2 spectra: aborting\n";
 				return false;
 			}
+			if (ms1_cnt + ms2_cnt != total_spectra) std::cout << "WARNING: spectra other than MS1 and MS2 detected\n";
 
 			ms1h.resize(ms1_cnt);
 			ms2h.resize(ms2_cnt);

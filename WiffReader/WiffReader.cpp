@@ -176,10 +176,12 @@ public:
 		try {
 			int pos = 0, e = 0, ns = 0, s = 0, m;
 			auto provider = gcnew AnalystWiffDataProvider();
+			while (!(*locks)[0].set()) {}
 			auto batch = AnalystDataProviderFactory::CreateBatch(gcnew System::String(file), provider);
 			auto sample = batch->GetSample(0);
 			auto mss = sample->MassSpectrometerSample;
 			int en = mss->ExperimentCount;
+			(*locks)[0].free();
 			
 			try {
 				std::vector<double> X, Y;
@@ -261,8 +263,8 @@ __declspec(dllexport) HANDLE diann_wiff_load(char * file, bool vendor, int Threa
 	} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout); provider->Close(); return false; }
 
 	provider->Close();
-	std::vector<Spectrum> spectra(ns);
-	std::vector<Lock> locks(ns);
+	std::vector<Spectrum> spectra(Max(1, ns));
+	std::vector<Lock> locks(Max(1, ns));
 
 	auto threads = gcnew System::Collections::Generic::List<Thread^>;
 	for (i = 0; i < Threads; i++)
