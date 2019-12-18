@@ -3071,7 +3071,7 @@ public:
 	std::vector<std::string> genes;
 	int skipped = 0;
 	double iRT_min = 0.0, iRT_max = 0.0;
-	bool fragment_info = false, gen_decoys = true, gen_charges = true, infer_proteotypicity = true, from_speclib = false;
+	bool gen_decoys = true, gen_charges = true, infer_proteotypicity = true, from_speclib = false;
 
 	std::map<std::string, int> eg;
 	std::vector<int> elution_groups; // same length as entries, indices of the elution groups
@@ -3796,7 +3796,7 @@ public:
 			}
 
 			int i, cnt = 0;
-			bool ftw = false, flw = false;
+			bool ftw = false, flw = false, fragment_info = false, fragment_type = false;
 			std::map<std::string, Entry> map;
 			Entry e; e.lib = this;
 
@@ -3843,6 +3843,7 @@ public:
 							if (jt->find(words[i]) != std::string::npos) {
 								int ind = std::distance(library_headers.begin(), jt);
 								if (colInd[ind] < 0) colInd[ind] = i;
+								else if (words[colInd[ind]].size() < words[i].size()) colInd[ind] = i;
 								break;
 							}
 					}
@@ -3854,20 +3855,23 @@ public:
 					if (colInd[libPT] >= 0) infer_proteotypicity = false;
 					if (colInd[libFrCharge] >= 0) {
 						gen_charges = false;
-						if (colInd[libFrType] >= 0 && colInd[libFrNumber] >= 0 && colInd[libFrLoss] >= 0) fragment_info = true;
+						if (colInd[libFrType] >= 0) {
+							fragment_type = true;
+							if (colInd[libFrNumber] >= 0 && colInd[libFrLoss] >= 0) fragment_info = true;
+						}
 					}
 					continue;
 				}
 
 				Product p(std::stof(words[colInd[libFrMz]]), std::stof(words[colInd[libFrI]]), (!gen_charges ? std::stof(words[colInd[libFrCharge]]) : 1));
-				if (fragment_info) {
+				if (fragment_type) {
 					auto &wt = words[colInd[libFrType]];
 					if (wt.size()) {
 						if (wt[0] == 'y') p.type = type_y;
 						else if (wt[0] == 'b') p.type = type_b;
 						else if (!ftw) ftw = true, std::cout << "WARNING: unknown fragment type " << wt << "\n";
 					}
-					if (p.type > type_unknown) {
+					if (p.type > type_unknown && fragment_info) {
 						p.index = std::stoi(words[colInd[libFrNumber]]);
 						if (p.type != type_b) p.index = peptide_length(words[colInd[libPr]]) - p.index;
 						auto &wl = words[colInd[libFrLoss]];
