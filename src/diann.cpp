@@ -258,6 +258,9 @@ bool ExportRecFragOnly = true;
 
 bool ExportProsit = false;
 
+int VisWindowRadius = 8;
+std::vector<std::string> Visualise;
+
 enum {
 	loss_none, loss_H2O, loss_NH3, loss_CO,
 	loss_N, loss_other
@@ -1550,6 +1553,18 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "export-library ", 15)) ExportLibrary = true;
 		else if (!memcmp(&(args[start]), "export-decoys ", 14)) ExportDecoys = true;
 		else if (!memcmp(&(args[start]), "prosit ", 7)) ExportProsit = true;
+		else if (!memcmp(&(args[start]), "vis ", 4)) {
+			std::string word;
+			std::stringstream list(trim(args.substr(start + 4, end - start - 4)));
+			for (i = 0; std::getline(list, word, ','); i++) {
+				try {
+					if (i == 0) VisWindowRadius = Max(1, std::stoi(word) / 2);
+				} catch (std::exception& e) {}
+				if (i == 0) continue;
+				Visualise.push_back(get_aas(word));
+			}
+			std::cout << "XICs for precursors corresponding to " << Visualise.size() << " peptides will be saved\n";
+		}
 		else if (!memcmp(&(args[start]), "cal-info ", 9)) SaveCalInfo = true;
 		else if (!memcmp(&(args[start]), "compact-report ", 15)) ExtendedReport = false;
 		else if (!memcmp(&(args[start]), "no-isotopes ", 12)) UseIsotopes = false, std::cout << "Isotopologue chromatograms will not be used\n";
@@ -3057,6 +3072,30 @@ struct NormInfo {
 	inline friend bool operator < (const NormInfo &left, const NormInfo &right) { return left.RT < right.RT; }
 };
 std::vector<NormInfo> norm_ind;
+
+struct XIC { // for visualisation
+	float RT = 0.0; // apex RT
+	float qvalue = 0.0;
+	float pr_mz = 0.0, fr_mz = 0.0; // masses used for extraction (i.e. mass corrected), not reference masses
+	int run = -1, pr = -1, level = 0; // run index, precursor index in the library, MS level
+	Product fr; // fragment info, if MS2 XIC
+	std::vector<std::pair<float, float> > peaks; // RT, intensity pairs
+
+	XIC() {}
+	inline friend bool operator < (const XIC& left, const XIC& right) { 
+		if (left.pr < right.pr) return true;
+		if (left.pr == right.pr) {
+			if (left.run < right.run) return true;
+			if (left.run == right.run && left.fr < right.fr) return true;
+		}
+		return false;
+	}
+	inline friend bool operator == (const XIC& left, const XIC& right) { 
+		return (left.pr == right.pr && left.run == right.run && !(left.fr < right.fr) && !(right.fr < left.fr)); 
+	}
+};
+
+std::set<XIC> XICs;
 
 class Library {
 public:
@@ -4600,6 +4639,45 @@ public:
 		if (Verbose >= 1) Time(), std::cout << "TICs saved to " << file_name << "\n";
 	}
 
+	void XIC_report(const std::string& file_name) {
+		if (!XICs.size()) {
+			std::cout << "No XICs recorded\n";
+			return;
+		}
+		std::ofstream out(file_name, std::ofstream::out);
+		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
+
+		int i, cnt = 0, in, W = VisWindowRadius * 2 + 1;
+		out << "File.Name\tPrecursor.Id\tModified.Sequence\tStripped.Sequence\tQ.Value\tMS.Level\tIntensities\tRetention.Times\tTheoretical.Mz\tFragmentType\tFragmentCharge\tFragmentSeriesNumber\tFragmentLossType";
+		for (i = 0; i < W; i++) out << '\t' << i; out << '\n';
+
+		for (auto& xic : XICs) {
+			if (!xic.peaks.size()) continue;
+			auto& le = entries[xic.pr];
+			auto aas = get_aas(le.name);
+			for (in = 0; in <= 1; in++) {
+				out << ms_files[xic.run] << '\t'
+					<< le.name << '\t'
+					<< pep_name(le.name) << '\t'
+					<< aas << '\t'
+					<< xic.qvalue << '\t'
+					<< xic.level << '\t'
+					<< in << '\t'
+					<< (in ^ 1) << '\t';
+				if (xic.level == 1) out << xic.pr_mz << "\tNA\tNA\tNA\tNA";
+				else out << xic.fr_mz << '\t' << char_from_type[xic.fr.type] << '\t' << ((int)xic.fr.charge) << '\t'
+					<< (xic.fr.type == type_b ? ((int)xic.fr.index) : aas.size() - ((int)xic.fr.index)) << '\t' << name_from_loss[xic.fr.loss].c_str();
+
+				if (!in) { for (i = 0; i < W; i++) out << '\t' << xic.peaks[i].first; out << '\n'; }
+				if (in) { for (i = 0; i < W; i++) out << '\t' << xic.peaks[i].second; out << '\n'; }
+			}
+			cnt++;
+		}
+
+		out.close();
+		if (Verbose >= 1) Time(), std::cout << cnt << " XICs saved to " << file_name << "\n";
+	}
+
 #if (HASH > 0)
 	unsigned int hash() {
 		unsigned int res = 0;
@@ -5182,6 +5260,43 @@ public:
 	void feature_spectra(std::vector<Scan> &spectra, std::vector<std::vector<Peak> > &features, int N = 100, 
 		float accuracy = 20.0 / 1000000.0, int min_fragments = 4, float corr_threshold = 0.8) {
 
+	}
+
+	XIC ms1_XIC(float mz, float RT, int S) {
+		XIC xic;
+		xic.pr_mz = mz, xic.RT = RT, xic.level = 1;
+		if (!ms1h.size()) return xic;
+
+		Scan query; query.RT = RT;
+		int j, W = 2 * S + 1, n = ms1h.size(), index = std::distance(ms1h.begin(), std::lower_bound(ms1h.begin(), ms1h.end(), query));
+		if (index >= n) index--;
+		if (index > 0) if (RT - ms1h[index - 1].RT < ms1h[index].RT - RT) index--;
+
+		xic.peaks.resize(W);
+		float query_mz = predicted_mz_ms1(&(MassCorrectionMs1[0]), mz, RT);
+
+		int start = Max(index - S, 0);
+		for (int j = start; j <= Min(index + S, n - 1); j++) xic.peaks[j - start].first = ms1h[j].RT, xic.peaks[j - start].second = ms1h[j].level<false>(mz, MassAccuracyMs1);
+		return xic;
+	}
+
+	XIC ms2_XIC(float pr_mz, float fr_mz, int apex, int S) {
+		XIC xic;
+		int cnt, j, W = 2 * S + 1, n = ms2h.size();
+
+		xic.pr_mz = pr_mz, xic.fr_mz = fr_mz, xic.RT = scan_RT[apex], xic.level = 2;
+		xic.peaks.resize(W);
+
+		float query_mz = predicted_mz(&(MassCorrection[0]), fr_mz, scan_RT[apex]);
+		for (j = apex, cnt = 0; j >= 0; j--) {
+			if (cnt >= S + 1) break;
+			if (ms2h[j].has(pr_mz)) xic.peaks[S - cnt].first = scan_RT[j], xic.peaks[S - cnt].second = ms2h[j].level<false>(query_mz, MassAccuracy), cnt++;
+		}
+		for (j = apex + 1, cnt = 0; j < n; j++) {
+			if (cnt >= S) break;
+			if (ms2h[j].has(pr_mz)) xic.peaks[S + cnt + 1].first = scan_RT[j], xic.peaks[S + cnt + 1].second = ms2h[j].level<false>(query_mz, MassAccuracy), cnt++;
+		}
+		return xic;
 	}
 
 	class Search {
@@ -6108,6 +6223,22 @@ public:
 				run->RS.pep_mc += missed_KR_cleavages(run->lib->entries[pep->index].name);
 
 				run->RS.cnt_valid++;
+			}
+
+			if (stage == 2 && Visualise.size()) {
+				auto &le = run->lib->entries[pep->index];
+				auto aas = get_aas(le.name);
+				if (std::find(Visualise.begin(), Visualise.end(), aas) != Visualise.end()) {
+					if (run->ms1h.size()) {
+						auto xic = run->ms1_XIC(pep->mz, info[0].RT, VisWindowRadius); 
+						xic.qvalue = info[0].qvalue, xic.run = run->run_index, xic.pr = pep->index; XICs.insert(xic);
+					}
+					for (auto& fr : pep->fragments) {
+						auto xic = run->ms2_XIC(pep->mz, fr.mz, (*searcher.scan_index)[peak], VisWindowRadius); 
+						xic.qvalue = info[0].qvalue, xic.run = run->run_index, xic.pr = pep->index;
+						xic.fr = fr; XICs.insert(xic);
+					}
+				}
 			}
         }
 
@@ -8537,7 +8668,10 @@ gen_spec_lib:
 	else lib.info.load(&(lib), ms_files);
 	lib.info.quantify();
 	lib.quantify_proteins(TopN, ProteinQuantQvalue);
-	if (out_file.size()) lib.report(out_file), lib.stats_report(remove_extension(out_file) + std::string(".stats.tsv"));
+	if (out_file.size()) {
+		lib.report(out_file), lib.stats_report(remove_extension(out_file) + std::string(".stats.tsv"));
+		if (Visualise.size()) lib.XIC_report(remove_extension(out_file) + std::string(".XIC.tsv"));
+	}
 	if (out_gene_file.size()) lib.gene_report(out_gene_file);
 
 gen_lib:
