@@ -88,6 +88,14 @@ Specifies the output file; by default, the output is saved to quant.tsv in the c
 ```
 diann.exe --threads 4 --f run1 --f run2 --lib yeast.tsv --prefix C:\Data\ --ext .mzML --out run1_2.tsv    
 ```
+--vis <N>,<Peptide 1>,<Peptide 2>,... 
+```
+Specifies a number of peptides for which chromatograms of length >= N will be extracted and saved as a text table. These allow for PSM visualisation using third-party software (e.g. R or Python). This command is supported in development versions uploaded on 20/12/2019 or later.        
+
+#### Example (will save XICs to report.XIC.tsv):
+```
+diann.exe --f run1.mzML --f run2.mzML --lib yeast.tsv --out report.tsv --vis 20,KVYPDVLYTSK,TAIEGSYIDK,DSATHELTK       
+```
 
 For a full list of supported commands see the arguments() function in /src/diann.cpp.
 
