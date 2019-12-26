@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2019, Vadim Demichev
 
 This work is licensed under the Creative Commons Attribution 4.0 International License. To view a copy of this license,
@@ -38,7 +38,7 @@ Uncomment "#define _NO_THERMORAW" in RAWReader.cpp, MSReader.cpp and MSReader.h 
 #define CPP17
 
 #ifdef LINUX
-//#undef MSTOOLKIT
+#undef MSTOOLKIT
 #undef WIFFREADER
 #undef CPP17
 #if (__GNUC__ >= 7) 
@@ -2756,7 +2756,7 @@ class Fasta {
 public:
 	std::string name;
 	std::vector<std::string> peptides, sequences, ids;
-	std::vector<std::pair<string, vector<int> > > dict;
+	std::vector<std::pair<std::string, std::vector<int> > > dict;
 
 	std::vector<FastaEntry> entries;
 	std::vector<Isoform> proteins;
@@ -3345,7 +3345,7 @@ public:
 		in.read((char*)&iRT_max, sizeof(double));
 		read_array(in, entries);
 		for (auto &e : entries) e.lib = this;
-		if (in.peek() != char_traits<char>::eof()) read_vector(in, elution_groups);
+		if (in.peek() != std::char_traits<char>::eof()) read_vector(in, elution_groups);
 	}
 
 	void generate_spectra() {
