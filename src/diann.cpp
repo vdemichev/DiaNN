@@ -38,7 +38,7 @@ Uncomment "#define _NO_THERMORAW" in RAWReader.cpp, MSReader.cpp and MSReader.h 
 #define CPP17
 
 #ifdef LINUX
-#undef MSTOOLKIT
+// #undef MSTOOLKIT
 #undef WIFFREADER
 #undef CPP17
 #if (__GNUC__ >= 7) 
