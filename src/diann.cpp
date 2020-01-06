@@ -1787,8 +1787,6 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "no-fr-exclusion ", 16)) ExcludeSharedFragments = false, std::cout << "Exclusion of fragments shared between heavy and light labelled peptides from quantification disabled\n";
 		else if (!memcmp(&(args[start]), "peak-translation ", 17)) TranslatePeaks = true, std::cout << "Translation of retention times between peptides within the same elution group enabled\n";
 		else if (!memcmp(&(args[start]), "no-standardisation ", 19)) Standardise = false, std::cout << "Scores will not be standardised for neural network training\n";
-		else if (!memcmp(&(args[start]), "standardisation-scale ", 22)) StandardisationScale = std::stod(args.substr(start + 22, std::string::npos)),
-			std::cout << "Standardisation scale set to " << StandardisationScale << "\n";
 		else if (!memcmp(&(args[start]), "no-nn ", 6)) nnIter = INF, std::cout << "Neural network classifier disabled\n";
 		else if (!memcmp(&(args[start]), "nn-iter ", 8)) nnIter = Max(CalibrationIter + 3, std::stoi(args.substr(start + 8, std::string::npos))),
 			std::cout << "Neural network classifier will be used starting from the interation number " << nnIter << "\n";
