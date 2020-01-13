@@ -1128,9 +1128,9 @@ public:
 
 class Product {
 public:
-	float mz;
-	float height;
-	char charge, type = 0, index, loss;
+	float mz = 0.0;
+	float height = 0.0;
+	char charge = 0, type = 0, index = 0, loss = 0;
 
 	Product() {}
 	Product(float _mz, float _height, int _charge) {
@@ -3833,7 +3833,7 @@ public:
 			}
 
 			int i, cnt = 0;
-			bool ftw = false, flw = false, fragment_info = false, fragment_type = false;
+			bool ftw = false, flw = false, fragment_num_info = false, fragment_loss_info = false, fragment_type = false;
 			std::map<std::string, Entry> map;
 			Entry e; e.lib = this;
 
@@ -3894,9 +3894,13 @@ public:
 						gen_charges = false;
 						if (colInd[libFrType] >= 0) {
 							fragment_type = true;
-							if (colInd[libFrNumber] >= 0 && colInd[libFrLoss] >= 0) fragment_info = true;
-						}
-					}
+							if (colInd[libFrNumber] >= 0) {
+								fragment_num_info = true;
+								if (colInd[libFrLoss] >= 0) fragment_loss_info = true;
+								else std::cout << "WARNING: no neutral loss information found in the library - assuming fragments without losses\n";
+							} else std::cout << "WARNING: no fragment number information found in the library\n";
+						} else std::cout << "WARNING: no fragment type information found in the library\n";
+					} else std::cout << "WARNING: no fragment charge information found in the library - assuming fragments with charge 1\n";
 					continue;
 				}
 
@@ -3906,17 +3910,19 @@ public:
 					if (wt.size()) {
 						if (wt[0] == 'y') p.type = type_y;
 						else if (wt[0] == 'b') p.type = type_b;
-						else if (!ftw) ftw = true, std::cout << "WARNING: unknown fragment type " << wt << "\n";
+						else if (!ftw) ftw = true, p.type = type_unknown, std::cout << "WARNING: unknown fragment type " << wt << "\n";
 					}
-					if (p.type > type_unknown && fragment_info) {
+					if (p.type > type_unknown && fragment_num_info) {
 						p.index = std::stoi(words[colInd[libFrNumber]]);
 						if (p.type != type_b) p.index = peptide_length(words[colInd[libPr]]) - p.index;
-						auto &wl = words[colInd[libFrLoss]];
-						if (wl == "noloss") p.loss = loss_none;
-						else if (wl == "H2O") p.loss = loss_H2O;
-						else if (wl == "NH3") p.loss = loss_NH3;
-						else if (wl == "CO") p.loss = loss_CO;
-						else p.loss = loss_other;
+						if (fragment_loss_info) {
+							auto &wl = words[colInd[libFrLoss]];
+							if (wl == "noloss") p.loss = loss_none;
+							else if (wl == "H2O") p.loss = loss_H2O;
+							else if (wl == "NH3") p.loss = loss_NH3;
+							else if (wl == "CO") p.loss = loss_CO;
+							else p.loss = loss_other;
+						} else p.loss = loss_none;
 					}
 				}
 
@@ -7956,201 +7962,201 @@ public:
 
 		if (QuantOnly) goto report;
 
-		recalibrate = (Calibrate && !mz_calibrated);
-		bool do_reset = (InferWindow && !window_calculated) || recalibrate;
-		bool do_calibrate = do_reset || RTWindowedSearch;
-		int start_batch = 0;
-		full_spectrum = true;
-		if (Verbose == 1) Time(), std::cout << "Processing...\n";
-		if (do_calibrate) {
+		{
+			recalibrate = (Calibrate && !mz_calibrated);
+			bool do_reset = (InferWindow && !window_calculated) || recalibrate;
+			bool do_calibrate = do_reset || RTWindowedSearch;
+			int start_batch = 0;
+			full_spectrum = true;
+			if (Verbose == 1) Time(), std::cout << "Processing...\n";
+			if (do_calibrate) {
 			calibrate:
-			full_spectrum = false;
-			for (curr_batch = 0; curr_batch < Batches; curr_batch++) {
-				if (curr_batch >= 5 && curr_batch < Batches - 1) {
+				full_spectrum = false;
+				for (curr_batch = 0; curr_batch < Batches; curr_batch++) {
+					if (curr_batch >= 5 && curr_batch < Batches - 1) {
+						int first_batch = curr_batch;
+						curr_batch = Min(Batches - 1, curr_batch + curr_batch / 5);
+						if (Verbose >= 2) Time(), std::cout << "Processing batches #" << first_batch + 1 << "-" << curr_batch + 1 << " out of " << Batches << " \n";
+					} else if (Verbose >= 2) {
+						if (Batches == 1) Time(), std::cout << "Processing\n";
+						else Time(), std::cout << "Processing batch #" << curr_batch + 1 << " out of " << Batches << " \n";
+					}
+
+					curr_iter = curr_batch ? 1 : 0;
+					update_classifier(true, false, false, false, 0, curr_batch); ids = Ids10;
+					update(false, false, false, false, false);
+					cal_batch = curr_batch;
+					if (ids >= MinCal && do_calibrate) {
+						recalibrate = false;
+						curr_iter = CalibrationIter;
+						update_classifier(true, false, false, false, 0, curr_batch);
+						curr_iter = 2;
+						if (IdsCal >= MinCal / 2) break;
+					}
+					if (recalibrate && ids >= MinCalRec && do_calibrate) break;
+				}
+				if (recalibrate) {
+					curr_iter = CalibrationIter;
+					update_classifier(true, false, false, false, 0, curr_batch);
+					RemoveMassAccOutliers = false, recalibrate = true;
+					update(false, false, true, false, false), recalibrate = false;
+					MassAccuracy = Min(CalibrationMassAccuracy, MassAccuracy * 5.0);
+					MassAccuracyMs1 = Min(CalibrationMassAccuracy, MassAccuracyMs1 * 5.0);
+					if (Verbose >= 2) Time(), std::cout << "Recalibrating with mass accuracy " << MassAccuracy << ", " << MassAccuracyMs1 << " (MS2, MS1)\n";
+					mz_calibrated = acc_calibrated = false;
+					reset_precursors();
+					reset_weights();
+					goto calibrate;
+				}
+				for (curr_iter = curr_iter + 1; curr_iter <= CalibrationIter; curr_iter++)
+					update_classifier(true, false, false, false, 0, curr_batch);
+				RemoveMassAccOutliers = false;
+				update(RTWindowedSearch, InferWindow && !window_calculated, Calibrate && !mz_calibrated, Q1Cal && scanning, false);
+				if (acc_calibrated) {
+					if (Verbose >= 3) Time(), std::cout << "Refining mass correction\n";
+					RemoveMassAccOutliers = true;
+					MassAccOutlier = MassAccuracy;
+					MassAccMs1Outlier = MassAccuracyMs1;
+					update(false, false, true, false, false);
+					RemoveMassAccOutliers = false;
+				}
+				if (ForceMassAcc) {
+					MassAccuracy = GlobalMassAccuracy, MassAccuracyMs1 = GlobalMassAccuracyMs1;
+					if (Verbose >= 2) Time(), std::cout << "Using mass accuracy " << MassAccuracy << ", " << MassAccuracyMs1 << " (MS2, MS1)\n";
+				}
+
+				if (do_reset) reset_precursors();
+				else start_batch = curr_batch;
+			}
+
+			full_spectrum = !(acc_calibrated && !ForceMassAcc);
+			for (curr_batch = start_batch; curr_batch < Batches; curr_batch++) {
+				if (curr_batch >= start_batch + 5 && curr_batch < Batches - 1) {
 					int first_batch = curr_batch;
-					curr_batch = Min(Batches - 1, curr_batch + curr_batch / 5);
+					curr_batch = Min(Batches - 1, curr_batch + (curr_batch - start_batch) / 5);
 					if (Verbose >= 2) Time(), std::cout << "Processing batches #" << first_batch + 1 << "-" << curr_batch + 1 << " out of " << Batches << " \n";
 				} else if (Verbose >= 2) {
 					if (Batches == 1) Time(), std::cout << "Processing\n";
 					else Time(), std::cout << "Processing batch #" << curr_batch + 1 << " out of " << Batches << " \n";
 				}
 
-				curr_iter = curr_batch ? 1 : 0;
+				curr_iter = CalibrationIter + 1;
 				update_classifier(true, false, false, false, 0, curr_batch); ids = Ids10;
+				copy_weights(best_weights, selection_weights), copy_weights(best_guide_weights, selection_guide_weights), best_ids = ids;
 				update(false, false, false, false, false);
-				cal_batch = curr_batch;
-				if (ids >= MinCal && do_calibrate) {
-					recalibrate = false;
-					curr_iter = CalibrationIter;
-					update_classifier(true, false, false, false, 0, curr_batch);
-					curr_iter = 2;
-					if (IdsCal  >= MinCal / 2) break;
-				}
-				if (recalibrate && ids >= MinCalRec && do_calibrate) break;
+				if (ids >= MinClassifier) break;
+				if (acc_calibrated && curr_batch >= cal_batch) break;
 			}
-			if (recalibrate) {
-				curr_iter = CalibrationIter;
-				update_classifier(true, false, false, false, 0, curr_batch);
-				RemoveMassAccOutliers = false, recalibrate = true;
-				update(false, false, true, false, false), recalibrate = false;
-				MassAccuracy = Min(CalibrationMassAccuracy, MassAccuracy * 5.0);
-				MassAccuracyMs1 = Min(CalibrationMassAccuracy, MassAccuracyMs1 * 5.0);
-				if (Verbose >= 2) Time(), std::cout << "Recalibrating with mass accuracy " << MassAccuracy << ", " << MassAccuracyMs1 << " (MS2, MS1)\n";
-				mz_calibrated = acc_calibrated = false;
-				reset_precursors();
+			curr_iter = CalibrationIter + 2;
+			if (acc_calibrated && !ForceMassAcc) {
+				double best_acc = MassAccuracy, start_acc = MassAccuracy;
 				reset_weights();
-				goto calibrate;
-			}
-			for (curr_iter = curr_iter + 1; curr_iter <= CalibrationIter; curr_iter++)
-				update_classifier(true, false, false, false, 0, curr_batch);
-			RemoveMassAccOutliers = false;
-			update(RTWindowedSearch, InferWindow && !window_calculated, Calibrate && !mz_calibrated, Q1Cal && scanning, false);
-			if (acc_calibrated) {
-				if (Verbose >= 3) Time(), std::cout << "Refining mass correction\n";
-				RemoveMassAccOutliers = true;
-				MassAccOutlier = MassAccuracy;
-				MassAccMs1Outlier = MassAccuracyMs1;
-				update(false, false, true, false, false);
-				RemoveMassAccOutliers = false;
-			}
-			if (ForceMassAcc) {
-				MassAccuracy = GlobalMassAccuracy, MassAccuracyMs1 = GlobalMassAccuracyMs1;
-				if (Verbose >= 2) Time(), std::cout << "Using mass accuracy " << MassAccuracy << ", " << MassAccuracyMs1 << " (MS2, MS1)\n";
-			}
-
-			if (do_reset) reset_precursors();
-			else start_batch = curr_batch;
-		}
-
-		full_spectrum = !(acc_calibrated && !ForceMassAcc);
-		for (curr_batch = start_batch; curr_batch < Batches; curr_batch++) {
-			if (curr_batch >= start_batch + 5 && curr_batch < Batches - 1) {
-				int first_batch = curr_batch;
-				curr_batch = Min(Batches - 1, curr_batch + (curr_batch - start_batch) / 5);
-				if (Verbose >= 2) Time(), std::cout << "Processing batches #" << first_batch + 1 << "-" << curr_batch + 1 << " out of " << Batches << " \n";
-			}
-			else if (Verbose >= 2) {
-				if (Batches == 1) Time(), std::cout << "Processing\n";
-				else Time(), std::cout << "Processing batch #" << curr_batch + 1 << " out of " << Batches << " \n";
-			}
-
-			curr_iter = CalibrationIter + 1;
-			update_classifier(true, false, false, false, 0, curr_batch); ids = Ids10;
-			copy_weights(best_weights, selection_weights), copy_weights(best_guide_weights, selection_guide_weights), best_ids = ids;
-			update(false, false, false, false, false);
-			if (ids >= MinClassifier) break;
-			if (acc_calibrated && curr_batch >= cal_batch) break;
-		}
-		curr_iter = CalibrationIter + 2;
-		if (acc_calibrated && !ForceMassAcc) {
-			double best_acc = MassAccuracy, start_acc = MassAccuracy;
-			reset_weights();
-			update_classifier(true, false, false, false, 0, curr_batch), best_ids = ids = Ids10, best1 = Ids1, best50 = Ids50;
-			int fail = 0;
-			while (true) {
-				MassAccuracy *= 1.2;
-				if (MassAccuracy > start_acc * 10.0) break;
-				if (Verbose >= 3) Time(), std::cout << "Trying mass accuracy " << MassAccuracy * 1000000.0 << " ppm\n";
-				reset_precursors();
-				reset_weights();
-				update_classifier(true, false, true, false, 0, curr_batch); ids = Ids10;
-				if (ids > best_ids) best_acc = MassAccuracy, best_ids = ids, best1 = Ids1, best50 = Ids50, fail = 0;
-				else fail++;
-				if (fail >= 3) break;
-			}
-			MassAccuracy = best_acc, fail = 0;
-			if (Verbose >= 1) Time(), std::cout << "Optimised mass accuracy: " << MassAccuracy * 1000000.0 << " ppm\n";
-			reset_precursors();
-
-			reset_weights();
-			full_spectrum = true;
-			update_classifier(true, false, false, false, 0, curr_batch), ids = Ids10;
-			if (ids < best_ids) {
-				reset_weights(), par_limit = true;
-				if (Verbose >= 3) Time(), std::cout << "Resetting weights and preventing the linear classifier from using the full set of weights in the future\n";
-			}
-			else update(false, false, false, false, false);
-
-			GlobalMassAccuracy = MassAccuracy;
-			GlobalMassAccuracyMs1 = MassAccuracyMs1;
-		}
-		if (!IndividualMassAcc) ForceMassAcc = true;
-
-		int processed_batches = curr_batch, fail = 0, switched = 0;
-		copy_weights(best_weights, selection_weights), copy_weights(best_guide_weights, selection_guide_weights), best_ids = Ids10;
-		for (; curr_iter < nnIter - 1; curr_iter++) {
-			update_classifier(true, false, false, false, 0, curr_batch);
-			if (Ids10 < best_ids && switched <= 2) {
-				if (Verbose >= 3) Time(), std::cout << "Trying the other linear classifier\n";
-				LDA ^= 1, switched++;
-				int last10 = Ids10;
-				copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
-				update_classifier(true, false, false, false, 0, curr_batch);
-				if (Ids10 <= last10) {
-					if (Verbose >= 3) Time(), std::cout << "Switching back\n";
-					LDA ^= 1;
+				update_classifier(true, false, false, false, 0, curr_batch), best_ids = ids = Ids10, best1 = Ids1, best50 = Ids50;
+				int fail = 0;
+				while (true) {
+					MassAccuracy *= 1.2;
+					if (MassAccuracy > start_acc * 10.0) break;
+					if (Verbose >= 3) Time(), std::cout << "Trying mass accuracy " << MassAccuracy * 1000000.0 << " ppm\n";
+					reset_precursors();
+					reset_weights();
+					update_classifier(true, false, true, false, 0, curr_batch); ids = Ids10;
+					if (ids > best_ids) best_acc = MassAccuracy, best_ids = ids, best1 = Ids1, best50 = Ids50, fail = 0;
+					else fail++;
+					if (fail >= 3) break;
 				}
- 			}
-			if (Ids10 >= best_ids) {
-				copy_weights(best_weights, selection_weights), copy_weights(best_guide_weights, selection_guide_weights), best_ids = Ids10;
-				update(false, false, false, false, false);
-			} else {
-				copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
-				if (Verbose >= 3) Time(), std::cout << "Reverting weights\n";
-				if (curr_iter == CalibrationIter + 2 && !par_limit) {
-					par_limit = true;
-					if (Verbose >= 3) Time(), std::cout << "Preventing the linear classifier from using the full set of weights in the future\n";
-				} else fail++;
+				MassAccuracy = best_acc, fail = 0;
+				if (Verbose >= 1) Time(), std::cout << "Optimised mass accuracy: " << MassAccuracy * 1000000.0 << " ppm\n";
+				reset_precursors();
+
+				reset_weights();
+				full_spectrum = true;
+				update_classifier(true, false, false, false, 0, curr_batch), ids = Ids10;
+				if (ids < best_ids) {
+					reset_weights(), par_limit = true;
+					if (Verbose >= 3) Time(), std::cout << "Resetting weights and preventing the linear classifier from using the full set of weights in the future\n";
+				} else update(false, false, false, false, false);
+
+				GlobalMassAccuracy = MassAccuracy;
+				GlobalMassAccuracyMs1 = MassAccuracyMs1;
+			}
+			if (!IndividualMassAcc) ForceMassAcc = true;
+
+			int processed_batches = curr_batch, fail = 0, switched = 0;
+			copy_weights(best_weights, selection_weights), copy_weights(best_guide_weights, selection_guide_weights), best_ids = Ids10;
+			for (; curr_iter < nnIter - 1; curr_iter++) {
 				update_classifier(true, false, false, false, 0, curr_batch);
-				if (Ids10 < best_ids) {
-					if (Verbose >= 3) Time(), std::cout << "Reverting weights\n";
+				if (Ids10 < best_ids && switched <= 2) {
+					if (Verbose >= 3) Time(), std::cout << "Trying the other linear classifier\n";
+					LDA ^= 1, switched++;
+					int last10 = Ids10;
 					copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
-				} else best_ids = Ids10, update(false, false, false, false, false);
-				if (fail >= 1) {
-					curr_iter = nnIter - 1;
-					break;
+					update_classifier(true, false, false, false, 0, curr_batch);
+					if (Ids10 <= last10) {
+						if (Verbose >= 3) Time(), std::cout << "Switching back\n";
+						LDA ^= 1;
+					}
+				}
+				if (Ids10 >= best_ids) {
+					copy_weights(best_weights, selection_weights), copy_weights(best_guide_weights, selection_guide_weights), best_ids = Ids10;
+					update(false, false, false, false, false);
+				} else {
+					copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
+					if (Verbose >= 3) Time(), std::cout << "Reverting weights\n";
+					if (curr_iter == CalibrationIter + 2 && !par_limit) {
+						par_limit = true;
+						if (Verbose >= 3) Time(), std::cout << "Preventing the linear classifier from using the full set of weights in the future\n";
+					} else fail++;
+					update_classifier(true, false, false, false, 0, curr_batch);
+					if (Ids10 < best_ids) {
+						if (Verbose >= 3) Time(), std::cout << "Reverting weights\n";
+						copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
+					} else best_ids = Ids10, update(false, false, false, false, false);
+					if (fail >= 1) {
+						curr_iter = nnIter - 1;
+						break;
+					}
 				}
 			}
-		}
-		if (Batches > 1) {
-			assert(nnIter >= iN - 1);
-			free_precursors();
-		}
-		curr_batch = Batches;
-		all_iters = true;
-		copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
-		update_classifier(true, false, true, true, processed_batches + 1, Batches);
-		update(false, false, false, false, false);
-
-		remove_rubbish();
-		if (IDsInterference) {
-			if (Verbose >= 1) Time(), std::cout << "Removing interfering precursors\n";
-			quantify_all(1, false);
-			for (int ir = 0; ir < IDsInterference; ir++) {
-				map_ids();
-				refine_ids();
-				calculate_qvalues();
+			if (Batches > 1) {
+				assert(nnIter >= iN - 1);
+				free_precursors();
 			}
-		}
+			curr_batch = Batches;
+			all_iters = true;
+			copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
+			update_classifier(true, false, true, true, processed_batches + 1, Batches);
+			update(false, false, false, false, false);
 
-		curr_iter = nnIter;
-		if (curr_iter >= iN - 1) {
-			free_precursors();
-			if (curr_iter >= iN) {
-				if (TranslatePeaks) {
-					if (Verbose >= 1) Time(), std::cout << "Translating peaks within elution groups\n";
-					map_egs();
-					translate_all();
+			remove_rubbish();
+			if (IDsInterference) {
+				if (Verbose >= 1) Time(), std::cout << "Removing interfering precursors\n";
+				quantify_all(1, false);
+				for (int ir = 0; ir < IDsInterference; ir++) {
+					map_ids();
+					refine_ids();
 					calculate_qvalues();
 				}
-				goto report;
 			}
-		}
 
-		if (Standardise) standardise();
-		fit_weights(Batches); // train the neural network
-		calculate_qvalues();
-		update(false, false, false, false, GenRef && curr_iter == iN - 1);
+			curr_iter = nnIter;
+			if (curr_iter >= iN - 1) {
+				free_precursors();
+				if (curr_iter >= iN) {
+					if (TranslatePeaks) {
+						if (Verbose >= 1) Time(), std::cout << "Translating peaks within elution groups\n";
+						map_egs();
+						translate_all();
+						calculate_qvalues();
+					}
+					goto report;
+				}
+			}
+
+			if (Standardise) standardise();
+			fit_weights(Batches); // train the neural network
+			calculate_qvalues();
+			update(false, false, false, false, GenRef && curr_iter == iN - 1);
+		}
 
 	report:
 		curr_iter = iN;
