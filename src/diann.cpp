@@ -8613,7 +8613,7 @@ quant_only:
 		Profile profile(ms_files, lib.entries.size());
 		if (RTProfiling) for (auto jt = profile.entries.begin(); jt != profile.entries.end(); jt++)
 			if (jt->index >= 0) if (jt->pr.qvalue < MaxProfilingQvalue) {
-				lib.entries[jt->pr.index].target.iRT = lib.entries[jt->pr.index].decoy.iRT = jt->pr.predicted_iRT;
+				lib.entries[jt->pr.index].target.iRT = lib.entries[jt->pr.index].decoy.iRT = (!FastaSearch || GuideLibrary || RTLearnLib) ? jt->pr.predicted_iRT : jt->pr.RT;
 				lib.entries[jt->pr.index].best_run = jt->pr.run_index;
 				lib.entries[jt->pr.index].qvalue = jt->pr.qvalue;
 				lib.entries[jt->pr.index].protein_qvalue = jt->pr.protein_qvalue;
@@ -8694,7 +8694,7 @@ gen_lib:
 					if (lib.entries[jt->pr.index].qvalue > ReportQValue) lib.entries[jt->pr.index].best_run = -1;
 					else {
 						lib.entries[jt->pr.index].best_run = jt->pr.run_index;
-						lib.entries[jt->pr.index].target.iRT = (GuideLibrary || GenSpecLib || RTLearnLib) ? jt->pr.predicted_iRT : jt->pr.RT;
+						lib.entries[jt->pr.index].target.iRT = (GuideLibrary || (GenSpecLib && !FastaSearch) || RTLearnLib) ? jt->pr.predicted_iRT : jt->pr.RT;
 						lib.entries[jt->pr.index].peak = jt->pr.peak;
 						lib.entries[jt->pr.index].apex = jt->pr.apex;
 						lib.entries[jt->pr.index].protein_qvalue = jt->pr.protein_qvalue;
