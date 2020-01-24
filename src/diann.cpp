@@ -1,5 +1,5 @@
 /*
-Copyright 2019, Vadim Demichev
+Copyright 2020, Vadim Demichev
 
 This work is licensed under the Creative Commons Attribution 4.0 International License. To view a copy of this license,
 visit http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.
@@ -10,6 +10,7 @@ Uncomment "#define _NO_THERMORAW" in RAWReader.cpp, MSReader.cpp and MSReader.h 
 #define _HAS_ITERATOR_DEBUGGING 0 
 #define _ITERATOR_DEBUG_LEVEL 0
 #define _CRT_SECURE_NO_WARNINGS
+#define EIGEN_MPL2_ONLY
 
 #pragma warning(disable:4244)
 #pragma warning(disable:4267)
@@ -46,6 +47,7 @@ Uncomment "#define _NO_THERMORAW" in RAWReader.cpp, MSReader.cpp and MSReader.h 
 #endif
 #endif
 
+#include "cpu_info.h"
 #include "../cranium/src/cranium.h"
 #include "../eigen/Eigen/Dense"
 #include "../eigen/Eigen/Sparse"
@@ -77,15 +79,16 @@ Uncomment "#define _NO_THERMORAW" in RAWReader.cpp, MSReader.cpp and MSReader.h 
 char * wiff_load_func = "?diann_wiff_load@@YAPEAXPEAD_NH@Z";
 #endif
 
-#define Throw(x) { std::cout << "ERROR: " << __FILE__ << ": " << __LINE__ << ": " << x << "\n"; exit(-1); }
-#define Warning(x) { if (Verbose >= 1) std::cout << "WARNING: " << x << "\n"; }
-
 #define Min(x, y) ((x) < (y) ? (x) : (y))
 #define Max(x, y) ((x) > (y) ? (x) : (y))
 #define Abs(x) ((x) >= 0 ? (x) : (-(x)))
 #define Sgn(x) ((x) >= 0.0 ? (1) : (-1))
 #define Sqr(x) ((x) * (x))
 #define Cube(x) ((x) * Sqr(x))
+
+DStream dsout;
+#define Throw(x) { dsout << "ERROR: " << __FILE__ << ": " << __LINE__ << ": " << x << "\n"; exit(-1); }
+#define Warning(x) { if (Verbose >= 1) dsout << "WARNING: " << x << "\n"; }
 
 typedef std::chrono::high_resolution_clock Clock;
 static auto StartTime = Clock::now();
@@ -95,9 +98,9 @@ inline void Time() {
 	double time = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - StartTime).count();
 	int min = Minutes(time);
 	int sec = Seconds(time);
-	std::cout << "[" << min << ":";
-	if (sec < 10) std::cout << "0";
-	std::cout << sec << "] ";
+	dsout << "[" << min << ":";
+	if (sec < 10) dsout << "0";
+	dsout << sec << "] ";
 }
 
 const double E = 0.000000001;
@@ -210,7 +213,6 @@ double PeakApexEvidence = 0.99; // force peak apexes to be close to the detectio
 double MinCorrScore = 0.5;
 double MinMs1Corr = -INF;
 double MaxCorrDiff = 2.0;
-bool LibFreeAllPeaks = false;
 bool ForceMs1 = false;
 bool MS1PeakSelection = true;
 int TopN = 1;
@@ -228,12 +230,13 @@ int MinClassifier = 2000;
 double FilterFactor = 1.5;
 
 bool Convert = false;
+bool Reannotate = false;
 bool UseRTInfo = false; // use .quant files created previously for RT profiling
 bool UseQuant = false; // use .quant files created previously; implies UseRTInfo
 bool QuantOnly = false; // quantification will be performed anew using identification info from .quant files
 bool ReportOnly = false; // generate report from quant files
 bool GenRef = false; // update the .ref file with newly computed data
-std::string args, lib_file, learn_lib_file, out_file = "report.tsv", prosit_file = "report.prosit.csv", out_lib_file = "lib.tsv", out_dir = "", out_gene_file = "report.genes.tsv", temp_folder = "";
+std::string args, lib_file, learn_lib_file, out_file = "report.tsv", prosit_file = "lib.prosit.csv", predictor_file = "lib.predicted.speclib", out_lib_file = "lib.tsv", out_dir = "", out_gene_file = "report.genes.tsv", temp_folder = "";
 std::string ref_file, gen_ref_file, all_fastas;
 std::vector<std::string> ms_files, fasta_files, fasta_filter_files;
 std::set<std::string> failed_files;
@@ -244,6 +247,7 @@ bool RTLearnLib = false;
 bool SaveOriginalLib = false;
 bool SaveCalInfo = false;
 bool iRTOutputFromLearnLib = true;
+bool PredictorSaved = false;
 
 int Verbose = 1;
 bool ExportWindows = false;
@@ -378,12 +382,12 @@ std::vector<MOD> FixedMods, VarMods;
 std::vector<MOD> Modifications = {
 	MOD("UniMod:4", (float)57.021464),
 	MOD("Carbamidomethyl (C)", (float)57.021464),
+	MOD("Carbamidomethyl", (float)57.021464),
 	MOD("CAM", (float)57.021464),
 	MOD("+57", (float)57.021464),
 	MOD("+57.0", (float)57.021464),
 	MOD("UniMod:26", (float)39.994915),
 	MOD("PCm", (float)39.994915),
-	MOD("UniMod:5", (float)43.005814),
 	MOD("UniMod:5", (float)43.005814),
 	MOD("Carbamylation (KR)", (float)43.005814),
 	MOD("+43", (float)43.005814),
@@ -391,11 +395,14 @@ std::vector<MOD> Modifications = {
 	MOD("CRM", (float)43.005814),
 	MOD("UniMod:7", (float)0.984016),
 	MOD("Deamidation (NQ)", (float)0.984016),
+	MOD("Deamidation", (float)0.984016),
 	MOD("Dea", (float)0.984016),
 	MOD("+1", (float)0.984016),
 	MOD("+1.0", (float)0.984016),
 	MOD("UniMod:35", (float)15.994915),
 	MOD("Oxidation (M)", (float)15.994915),
+	MOD("Oxidation", (float)15.994915),
+	MOD("Oxi", (float)15.994915),
 	MOD("+16", (float)15.994915),
 	MOD("+16.0", (float)15.994915),
 	MOD("Oxi", (float)15.994915),
@@ -455,7 +462,7 @@ inline char to_lower(char c) { return c + 32; }
 
 void init_unimod() {
 	std::set<int> indices;
-	auto mods = Modifications;
+	auto &mods = Modifications;
 	std::sort(mods.begin(), mods.end());
 	UniMod.resize(mods.size());
 	UniModIndex.resize(mods.size());
@@ -471,7 +478,7 @@ void init_unimod() {
 				if (delta < min) min = delta, min_index = j;
 			}
 			if (min > 0.00001) {
-				if (Verbose >= 1) std::cout << "Cannot find a UniMod modification match for " << mods[i].name << ": " << min << " minimal mass discrepancy; using the original modificaiton name\n";
+				if (Verbose >= 1) dsout << "Cannot find a UniMod modification match for " << mods[i].name << ": " << min << " minimal mass discrepancy; using the original modificaiton name\n";
 				UniMod[i].second = UniMod[i].first;
 				indices.insert(UniModIndex[i].second = i);
 			} else {
@@ -572,20 +579,23 @@ unsigned int hashD(float **dataset, int n, int m) {
 }
 #endif
 
-class Lock {
-public:
-	std::atomic_bool lock = ATOMIC_VAR_INIT(false);
-	Lock() :lock() {}
+bool Predictor = false;
+#ifdef PREDICTOR
+namespace predictor {
+	extern void init_predictor(int id_range, int threads);
+	extern bool code_from_precursor(vector<long long> &code, const string &precursor, string &temp_s, vector<string> &temp_sv, const vector<pair<string, int> > &dict);
 
-	Lock(const std::atomic_bool &flag) :lock(flag.load()) {}
+	class Predictor {
+	public:
+		Predictor();
+		void set_instance(int instance_id);
+		map<string, int> get_aa_indices();
+		void predict(vector<vector<float> > &spectra, vector<pair<vector<long long>, int> > &codes, int mode, bool verbose = false);
+	};
+}
 
-	Lock(const Lock &another) :lock(another.lock.load()) {}
-
-	Lock &operator=(const Lock &another) { lock.store(another.lock.load()); return *this; }
-
-	bool set() { return !lock.exchange(true); }
-	void free() { lock.store(false); }
-};
+predictor::Predictor P;
+#endif
 
 class Parameter {
 public:
@@ -601,7 +611,7 @@ const int qL = 2;
 const int QSL[qL] = { 1, 3 };
 enum {
 	pTimeCorr,
-	pLocCorr, pMinCorr, pTotal, pCos, pCosCube, pMs1TimeCorr, pNFCorr, pdRT, pResCorr, pResCorrNorm, pBSeriesCorr, pTightCorrOne, pTightCorrTwo, pShadow, pHeavy,
+	pLocCorr, pMinCorr, pTotal, pCos, pCosCube, pMs1TimeCorr, pNFCorr, pdRT, pResCorr, pResCorrNorm, pTightCorrOne, pTightCorrTwo, pShadow, pHeavy,
 	pMs1TightOne, pMs1TightTwo,
 	pMs1Iso, pMs1IsoOne, pMs1IsoTwo,
 	pMs1Ratio,
@@ -659,12 +669,6 @@ inline bool test_on_index(int scan, int net) {
 	return !train_on_index(scan, net);
 }
 
-inline std::string fast_trim(const std::string& input) { return std::regex_replace(input, std::regex("^ +| +$"), ""); }
-inline std::string trim(const std::string& input) {
-	auto res = fast_trim(input);
-	std::replace(res.begin(), res.end(), '\"', ' ');
-	return fast_trim(res);
-}
 std::string location_to_file_name(const std::string& loc) {
 	auto result = loc;
 	for (int i = 0; i < result.size(); i++) {
@@ -776,16 +780,6 @@ template <class T> inline void get_corr_matrix(double * mat, T * x, int p, int i
 		for (j = i + 1; j < p; j++) 
 			mat[j * p + i] = mat[m_ind + j] = (dn * mat[m_ind + j] - si * s[j]) / sqrt(Max(E, di * (dn * s2[j] - Sqr(s[j]))));
 	}
-}
-
-std::vector<int> rx, ry;
-inline double spearman_corr(double * x, double * y, int n) {
-	rx.resize(n);
-	ry.resize(n);
-	for (int i = 0; i < n; i++) rx[i] = ry[i] = i;
-	std::sort(rx.begin(), rx.end(), [&](const int &l, const int &r) { return x[l] < x[r]; });
-	std::sort(ry.begin(), ry.end(), [&](const int &l, const int &r) { return y[l] < y[r]; });
-	return corr(&(rx[0]), &(ry[0]), n);
 }
 
 template <class Tx, class Ty> inline double grad_corr(Tx * x, Ty * y, int n) {
@@ -1431,6 +1425,8 @@ std::string to_eg(const std::string &name) {
 	return result;
 }
 
+std::string to_charged_eg(const std::string &name, int charge) { return to_eg(name) + std::to_string(charge); }
+
 std::string to_prosit(const std::string &name) {
 	int i, j;
 	std::string result;
@@ -1517,8 +1513,9 @@ void arguments(int argc, char *argv[]) {
 	for (i = 0; i < argc; i++) args += argv[i] + std::string(" ");
 	args = std::regex_replace(args, std::regex("\n|\r"), " ");
 	if (args.find("--clear-mods") != std::string::npos) Modifications.clear(), cleared_mods = true,
-		std::cout << "Modification names specified in the spectral library will be used for annotating output. Only suitable for library-based analysis.\n";
+		dsout << "Modification names specified in the spectral library will be used for annotating output. Only suitable for library-based analysis.\n";
 	start = args.find("--", 0);
+	dsout.s << args << "\n\n";
 	while (start != std::string::npos) {
 		start += 2;
 		next = args.find("--", start);
@@ -1538,16 +1535,13 @@ void arguments(int argc, char *argv[]) {
 				args = std::regex_replace(args, std::regex("\n|\r"), " ");
 				start = args.find("--", 0);
 				continue;
-			}
-			else std::cout << "WARNING: failed to open cfg file\n";
-		}
-		else if (!memcmp(&(args[start]), "clear-mods ", 11)) {}
-		else if (!memcmp(&(args[start]), "threads ", 8)) Threads = std::stoi(args.substr(start + 8, std::string::npos)), std::cout << "Thread number set to " << Threads << "\n";
-		else if (!memcmp(&(args[start]), "fasta-search ", 13)) FastaSearch = true, std::cout << "Library-free search enabled\n";
+			} else dsout << "WARNING: failed to open cfg file\n";
+		} else if (!memcmp(&(args[start]), "clear-mods ", 11)) {} else if (!memcmp(&(args[start]), "threads ", 8)) Threads = std::stoi(args.substr(start + 8, std::string::npos)), dsout << "Thread number set to " << Threads << "\n";
+		else if (!memcmp(&(args[start]), "fasta-search ", 13)) FastaSearch = true, dsout << "Library-free search enabled\n";
 		else if (!memcmp(&(args[start]), "pg-level ", 9)) PGLevelSet = PGLevel = std::stoi(args.substr(start + 9, std::string::npos)),
-			std::cout << "Implicit protein grouping: " << ImplicitProteinGrouping[PGLevel]
-					  << "; this determines which peptides are considered 'proteotypic' and thus affects protein FDR calculation\n";
-		else if (!memcmp(&(args[start]), "no-batch-mode ", 14)) BatchMode = false, std::cout << "Batch mode disabled\n";
+			dsout << "Implicit protein grouping: " << ImplicitProteinGrouping[PGLevel]
+			<< "; this determines which peptides are considered 'proteotypic' and thus affects protein FDR calculation\n";
+		else if (!memcmp(&(args[start]), "no-batch-mode ", 14)) BatchMode = false, dsout << "Batch mode disabled\n";
 		else if (!memcmp(&(args[start]), "verbose ", 8)) Verbose = std::stoi(args.substr(start + 8, std::string::npos));
 		else if (!memcmp(&(args[start]), "export-windows ", 15)) ExportWindows = true;
 		else if (!memcmp(&(args[start]), "export-library ", 15)) ExportLibrary = true;
@@ -1563,36 +1557,35 @@ void arguments(int argc, char *argv[]) {
 				if (i == 0) continue;
 				Visualise.push_back(get_aas(word));
 			}
-			std::cout << "XICs for precursors corresponding to " << Visualise.size() << " peptides will be saved\n";
-		}
-		else if (!memcmp(&(args[start]), "cal-info ", 9)) SaveCalInfo = true;
+			dsout << "XICs for precursors corresponding to " << Visualise.size() << " peptides will be saved\n";
+		} else if (!memcmp(&(args[start]), "cal-info ", 9)) SaveCalInfo = true;
 		else if (!memcmp(&(args[start]), "compact-report ", 15)) ExtendedReport = false;
-		else if (!memcmp(&(args[start]), "no-isotopes ", 12)) UseIsotopes = false, std::cout << "Isotopologue chromatograms will not be used\n";
-		else if (!memcmp(&(args[start]), "no-ms2-range ", 13)) MS2Range = false, std::cout << "MS2 range inference will not be performed\n";
-		else if (!memcmp(&(args[start]), "min-peak ", 9)) MinPeakHeight = std::stod(args.substr(start + 9, std::string::npos)), std::cout << "Minimum peak height set to " << MinPeakHeight << "\n";
+		else if (!memcmp(&(args[start]), "no-isotopes ", 12)) UseIsotopes = false, dsout << "Isotopologue chromatograms will not be used\n";
+		else if (!memcmp(&(args[start]), "no-ms2-range ", 13)) MS2Range = false, dsout << "MS2 range inference will not be performed\n";
+		else if (!memcmp(&(args[start]), "min-peak ", 9)) MinPeakHeight = std::stod(args.substr(start + 9, std::string::npos)), dsout << "Minimum peak height set to " << MinPeakHeight << "\n";
 		else if (!memcmp(&(args[start]), "no-cal-filter ", 14)) MassCalFilter = false,
-			std::cout << "Peptides with modifications that can cause interferences with isotopologues will not be filtered out for mass calibration\n";
+			dsout << "Peptides with modifications that can cause interferences with isotopologues will not be filtered out for mass calibration\n";
 		else if (!memcmp(&(args[start]), "no-nn-filter ", 13)) nnFilter = false,
-			std::cout << "Peptides with modifications that can cause interferences with isotopologues will be used for neural network training\n";
+			dsout << "Peptides with modifications that can cause interferences with isotopologues will be used for neural network training\n";
 		else if (!memcmp(&(args[start]), "nn-cross-val ", 13)) nnCrossVal = true,
-			std::cout << "Neural network cross-validation will be used to tackle potential overfitting\n";
-		else if (!memcmp(&(args[start]), "guide-classifier ", 17)) GuideClassifier = true, std::cout << "A separate classifier for the guide library will be used\n";
+			dsout << "Neural network cross-validation will be used to tackle potential overfitting\n";
+		else if (!memcmp(&(args[start]), "guide-classifier ", 17)) GuideClassifier = true, dsout << "A separate classifier for the guide library will be used\n";
 		else if (!memcmp(&(args[start]), "int-removal ", 12)) IDsInterference = std::stoi(args.substr(start + 12, std::string::npos)),
-			std::cout << "Number of interference removal iterations set to " << IDsInterference << "\n";
+			dsout << "Number of interference removal iterations set to " << IDsInterference << "\n";
 		else if (!memcmp(&(args[start]), "int-margin ", 11)) InterferenceCorrMargin = std::stod(args.substr(start + 11, std::string::npos)),
-			std::cout << "Interference correlation margin set to " << InterferenceCorrMargin << "\n";
-		else if (!memcmp(&(args[start]), "strict-int-removal ", 19)) StrictIntRemoval = true, std::cout << "Potentially interfering peptides with close (but not the same) elution times will also be discarded\n";
-		else if (!memcmp(&(args[start]), "reverse-decoys ", 15)) ReverseDecoys = true, std::cout << "Decoys will be generated using the pseudo-reverse method\n";
-		else if (!memcmp(&(args[start]), "force-frag-rec ", 15)) ForceFragRec = true, std::cout << "Decoys will be generated only for precursors with all library fragments recognised\n";
+			dsout << "Interference correlation margin set to " << InterferenceCorrMargin << "\n";
+		else if (!memcmp(&(args[start]), "strict-int-removal ", 19)) StrictIntRemoval = true, dsout << "Potentially interfering peptides with close (but not the same) elution times will also be discarded\n";
+		else if (!memcmp(&(args[start]), "reverse-decoys ", 15)) ReverseDecoys = true, dsout << "Decoys will be generated using the pseudo-reverse method\n";
+		else if (!memcmp(&(args[start]), "force-frag-rec ", 15)) ForceFragRec = true, dsout << "Decoys will be generated only for precursors with all library fragments recognised\n";
 		else if (!memcmp(&(args[start]), "max-rec-charge ", 15)) MaxRecCharge = Max(2, std::stoi(args.substr(start + 15, std::string::npos))),
-			std::cout << "Fragment recognition module will consider charges up to " << MaxRecCharge << "\n";
+			dsout << "Fragment recognition module will consider charges up to " << MaxRecCharge << "\n";
 		else if (!memcmp(&(args[start]), "max-rec-loss ", 13)) MaxRecLoss = Max(0, std::stoi(args.substr(start + 13, std::string::npos))),
-			std::cout << "Fragment recognition module will consider losses with the index up to " << MaxRecLoss << "\n";
-		else if (!memcmp(&(args[start]), "gen-spec-lib ", 13)) GenSpecLib = true, std::cout << "A spectral library will be generated\n";
-		else if (!memcmp(&(args[start]), "lib-gen-direct-q ", 17)) ProfileQValue = false, std::cout << "When generating a spectral library, run-specific q-values will be used instead of profile q-values\n";
-		else if (!memcmp(&(args[start]), "save-original-lib ", 18)) SaveOriginalLib = true, std::cout << "All entries from the library provided will be saved to the newly generated library\n";
+			dsout << "Fragment recognition module will consider losses with the index up to " << MaxRecLoss << "\n";
+		else if (!memcmp(&(args[start]), "gen-spec-lib ", 13)) GenSpecLib = true, dsout << "A spectral library will be generated\n";
+		else if (!memcmp(&(args[start]), "lib-gen-direct-q ", 17)) ProfileQValue = false, dsout << "When generating a spectral library, run-specific q-values will be used instead of profile q-values\n";
+		else if (!memcmp(&(args[start]), "save-original-lib ", 18)) SaveOriginalLib = true, dsout << "All entries from the library provided will be saved to the newly generated library\n";
 #ifdef WIFFREADER
-		else if (!memcmp(&(args[start]), "fast-wiff ", 10)) fast_wiff = true, std::cout << "Custom fast centroiding will be used when processing .wiff files (WARNING: experimental).\n";
+		else if (!memcmp(&(args[start]), "fast-wiff ", 10)) fast_wiff = true, dsout << "Custom fast centroiding will be used when processing .wiff files (WARNING: experimental).\n";
 #endif
 		else if (!memcmp(&(args[start]), "f ", 2)) files.push_back(trim(args.substr(start + 2, end - start - 2)));
 #ifdef CPP17
@@ -1614,233 +1607,230 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "ref ", 4)) ref_file = trim(args.substr(start + 4, end - start - 4));
 		else if (!memcmp(&(args[start]), "out ", 4)) out_file = trim(args.substr(start + 4, end - start - 4));
 		else if (!memcmp(&(args[start]), "out-gene ", 9)) out_gene_file = trim(args.substr(start + 9, end - start - 9));
-		else if (!memcmp(&(args[start]), "qvalue ", 7)) ReportQValue = std::stod(args.substr(start + 7, std::string::npos)), std::cout << "Output will be filtered at " << ReportQValue << " FDR\n";
+		else if (!memcmp(&(args[start]), "qvalue ", 7)) ReportQValue = std::stod(args.substr(start + 7, std::string::npos)), dsout << "Output will be filtered at " << ReportQValue << " FDR\n";
 		else if (!memcmp(&(args[start]), "protein-qvalue ", 15)) ReportProteinQValue = std::stod(args.substr(start + 15, std::string::npos)),
-			std::cout << "Output will be filtered at " << ReportProteinQValue << " protein-level FDR\n";
-		else if (!memcmp(&(args[start]), "no-prot-inf ", 12)) InferPGs = false, std::cout << "Protein inference will not be performed\n";
-		else if (!memcmp(&(args[start]), "no-swissprot ", 13)) SwissProtPriority = false, std::cout << "SwissProt proteins will not be prioritised for protein inference\n";
-		else if (!memcmp(&(args[start]), "force-swissprot ", 16)) ForceSwissProt = true, std::cout << "Only SwissProt proteins will be considered in library-free search\n";
-		else if (!memcmp(&(args[start]), "species-genes ", 14)) SpeciesGenes = true, std::cout << "Species suffix will be added to gene annotation; this affects proteotypicity definition\n";
-		else if (!memcmp(&(args[start]), "duplicate-proteins ", 19)) FastaProtDuplicates = true, std::cout << "Duplicate proteins in FASTA files will not be skipped\n";
+			dsout << "Output will be filtered at " << ReportProteinQValue << " protein-level FDR\n";
+		else if (!memcmp(&(args[start]), "no-prot-inf ", 12)) InferPGs = false, dsout << "Protein inference will not be performed\n";
+		else if (!memcmp(&(args[start]), "no-swissprot ", 13)) SwissProtPriority = false, dsout << "SwissProt proteins will not be prioritised for protein inference\n";
+		else if (!memcmp(&(args[start]), "force-swissprot ", 16)) ForceSwissProt = true, dsout << "Only SwissProt proteins will be considered in library-free search\n";
+		else if (!memcmp(&(args[start]), "species-genes ", 14)) SpeciesGenes = true, dsout << "Species suffix will be added to gene annotation; this affects proteotypicity definition\n";
+		else if (!memcmp(&(args[start]), "duplicate-proteins ", 19)) FastaProtDuplicates = true, dsout << "Duplicate proteins in FASTA files will not be skipped\n";
 		else if (!memcmp(&(args[start]), "out-lib ", 8)) out_lib_file = trim(args.substr(start + 8, end - start - 8));
 		else if (!memcmp(&(args[start]), "learn-lib ", 10)) learn_lib_file = trim(args.substr(start + 10, end - start - 10));
-		else if (!memcmp(&(args[start]), "out-measured-rt ", 16)) iRTOutputFromLearnLib = false,
-			std::cout << "When generating a spectral library without a guide library but with a training library, iRT values (Tr_recalibrated) will correspond to the measured retention times\n";
+		else if (!memcmp(&(args[start]), "predictor ", 10)) {
+#ifdef PREDICTOR
+			dsout << "Deep learning will be used to generate a new in silico spectral library from peptides provided\n";
+			Predictor = true;
+#else
+			dsout << "WARNING: DIA-NN has been compiled without support for deep learning-based in silico spectral library generation\n";
+#endif
+		} else if (!memcmp(&(args[start]), "out-measured-rt ", 16)) iRTOutputFromLearnLib = false,
+			dsout << "When generating a spectral library without a guide library but with a training library, iRT values (Tr_recalibrated) will correspond to the measured retention times\n";
 		else if (!memcmp(&(args[start]), "library-headers ", 16)) {
 			std::string word;
 			std::stringstream list(trim(args.substr(start + 16, end - start - 16)));
 			for (i = 0; std::getline(list, word, ','); i++) {
 				if (i >= libCols) {
-					std::cout << "WARNING: " << word << ": extra headers will be ignored\n";
+					dsout << "WARNING: " << word << ": extra headers will be ignored\n";
 					break;
 				}
 				if (word.find("*") == std::string::npos) library_headers[i] = std::string(" ") + word + std::string(" ");
 			}
-		}
-		else if (!memcmp(&(args[start]), "output-headers ", 15)) {
+		} else if (!memcmp(&(args[start]), "output-headers ", 15)) {
 			std::string word;
 			std::stringstream list(trim(args.substr(start + 15, end - start - 15)));
 			for (i = 0; std::getline(list, word, ','); i++) {
 				if (i >= outCols) {
-					std::cout << "WARNING: " << word << ": extra headers will be ignored\n";
+					dsout << "WARNING: " << word << ": extra headers will be ignored\n";
 					break;
 				}
 				if (word.find("*") == std::string::npos) oh[i] = std::string(" ") + word + std::string(" ");
 			}
-		}
-		else if (!memcmp(&(args[start]), "mod ", 4)) {
+		} else if (!memcmp(&(args[start]), "mod ", 4)) {
 			int label = 0;
 			std::string name, mass, l;
 			std::stringstream list(trim(args.substr(start + 4, end - start - 4)));
-			if (!std::getline(list, name, ',')) std::cout << "WARNING: no modification name, modification ignored\n";
-			else if (!std::getline(list, mass, ',')) std::cout << "WARNING: no modification mass, modification ignored\n";
+			if (!std::getline(list, name, ',')) dsout << "WARNING: no modification name, modification ignored\n";
+			else if (!std::getline(list, mass, ',')) dsout << "WARNING: no modification mass, modification ignored\n";
 			else {
 				if (std::getline(list, l, ',')) if (l.find("label") != std::string::npos) label = 1;
 				Modifications.push_back(MOD(name, (float)std::stod(mass), label));
 			}
-			std::cout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " added to the list of recognised modifications for spectral library-based search";
-			if (label) std::cout << " (as label)\n";
-			else std::cout << "\n";
-		}
-		else if (!memcmp(&(args[start]), "fixed-mod ", 10)) {
+			dsout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " added to the list of recognised modifications for spectral library-based search";
+			if (label) dsout << " (as label)\n";
+			else dsout << "\n";
+		} else if (!memcmp(&(args[start]), "fixed-mod ", 10)) {
 			int label = 0;
 			std::string name, mass, aas, l;
 			std::stringstream list(trim(args.substr(start + 10, end - start - 10)));
-			if (!std::getline(list, name, ',')) std::cout << "WARNING: no modification name, modification ignored\n";
-			else if (!std::getline(list, mass, ',')) std::cout << "WARNING: no modification mass, modification ignored\n";
-			else if (!std::getline(list, aas, ',')) std::cout << "WARNING: no amino acids to be modified, modification ignored\n";
+			if (!std::getline(list, name, ',')) dsout << "WARNING: no modification name, modification ignored\n";
+			else if (!std::getline(list, mass, ',')) dsout << "WARNING: no modification mass, modification ignored\n";
+			else if (!std::getline(list, aas, ',')) dsout << "WARNING: no amino acids to be modified, modification ignored\n";
 			else {
 				if (std::getline(list, l, ',')) if (l.size()) if (l.find("label") != std::string::npos) label = 1;
 				Modifications.push_back(MOD(name, (float)std::stod(mass), label));
 				FixedMods.resize(FixedMods.size() + 1);
 				FixedMods[FixedMods.size() - 1].init(name, aas, (float)std::stod(mass));
-				std::cout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " at " << aas << " will be considered as fixed\n";
+				dsout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " at " << aas << " will be considered as fixed\n";
 			}
-		}
-		else if (!memcmp(&(args[start]), "var-mod ", 8)) {
+		} else if (!memcmp(&(args[start]), "var-mod ", 8)) {
 			int label = 0;
 			std::string name, mass, aas, l;
 			std::stringstream list(trim(args.substr(start + 8, end - start - 8)));
-			if (!std::getline(list, name, ',')) std::cout << "WARNING: no modification name, modification ignored\n";
-			else if (!std::getline(list, mass, ',')) std::cout << "WARNING: no modification mass, modification ignored\n";
-			else if (!std::getline(list, aas, ',')) std::cout << "WARNING: no amino acids to be modified, modification ignored\n";
+			if (!std::getline(list, name, ',')) dsout << "WARNING: no modification name, modification ignored\n";
+			else if (!std::getline(list, mass, ',')) dsout << "WARNING: no modification mass, modification ignored\n";
+			else if (!std::getline(list, aas, ',')) dsout << "WARNING: no amino acids to be modified, modification ignored\n";
 			else {
 				if (std::getline(list, l, ',')) if (l.size()) if (l.find("label") != std::string::npos) label = 1;
 				Modifications.push_back(MOD(name, (float)std::stod(mass), label));
 				VarMods.resize(VarMods.size() + 1);
 				VarMods[VarMods.size() - 1].init(name, aas, (float)std::stod(mass));
-				std::cout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " at " << aas << " will be considered as variable\n";
+				dsout << "Modification " << name << " with mass delta " << (float)std::stod(mass) << " at " << aas << " will be considered as variable\n";
 			}
-		}
-		else if (!memcmp(&(args[start]), "ref-cal ", 8)) RefCal = true, std::cout << "Reference peptides will be used for calibration\n";
+		} else if (!memcmp(&(args[start]), "ref-cal ", 8)) RefCal = true, dsout << "Reference peptides will be used for calibration\n";
 		else if (!memcmp(&(args[start]), "gen-ref ", 8)) GenRef = true, gen_ref_file = trim(args.substr(start + 8, end - start - 8)),
-			std::cout << "A library of reference peptides will be generated\n";
+			dsout << "A library of reference peptides will be generated\n";
 		else if (!memcmp(&(args[start]), "window ", 7)) {
 			WindowRadius = std::stoi(args.substr(start + 7, std::string::npos));
-			if (WindowRadius <= 0) std::cout << "WARNING: scan window radius should be a positive integer\n";
-			else InferWindow = false, std::cout << "Scan window radius set to " << WindowRadius << "\n";
-		}
-		else if (!memcmp(&(args[start]), "cut-after ", 10)) CutAfter = trim(args.substr(start + 10, end - start - 10)),
-			std::cout << "In silico digest will include cuts after amino acids: " << CutAfter << "\n";
+			if (WindowRadius <= 0) dsout << "WARNING: scan window radius should be a positive integer\n";
+			else InferWindow = false, dsout << "Scan window radius set to " << WindowRadius << "\n";
+		} else if (!memcmp(&(args[start]), "cut-after ", 10)) CutAfter = trim(args.substr(start + 10, end - start - 10)),
+			dsout << "In silico digest will include cuts after amino acids: " << CutAfter << "\n";
 		else if (!memcmp(&(args[start]), "no-cut-before ", 14)) NoCutBefore = trim(args.substr(start + 14, end - start - 14)),
-			std::cout << "In silico digest will not include cuts before amino acids: " << NoCutBefore << "\n";
+			dsout << "In silico digest will not include cuts before amino acids: " << NoCutBefore << "\n";
 		else if (!memcmp(&(args[start]), "min-pep-len ", 12)) MinPeptideLength = std::stoi(args.substr(start + 12, std::string::npos)),
-			std::cout << "Min peptide length set to " << MinPeptideLength << "\n";
+			dsout << "Min peptide length set to " << MinPeptideLength << "\n";
 		else if (!memcmp(&(args[start]), "max-pep-len ", 12)) MaxPeptideLength = std::stoi(args.substr(start + 12, std::string::npos)),
-			std::cout << "Max peptide length set to " << MaxPeptideLength << "\n";
+			dsout << "Max peptide length set to " << MaxPeptideLength << "\n";
 		else if (!memcmp(&(args[start]), "min-fr-corr ", 12)) MinGenFrCorr = std::stod(args.substr(start + 12, std::string::npos)),
-			std::cout << "Minimum fragment profile correlation for the inclusion into the spectral library set to " << MinGenFrCorr << "\n";
+			dsout << "Minimum fragment profile correlation for the inclusion into the spectral library set to " << MinGenFrCorr << "\n";
 		else if (!memcmp(&(args[start]), "min-gen-fr ", 11)) MinOutFrNum = std::stoi(args.substr(start + 11, std::string::npos)),
-			std::cout << "Minimum number of fragments for library generation set to " << MinOutFrNum << "\n";
+			dsout << "Minimum number of fragments for library generation set to " << MinOutFrNum << "\n";
 		else if (!memcmp(&(args[start]), "min-pr-mz ", 10)) MinPrMz = std::stod(args.substr(start + 10, std::string::npos)),
-			std::cout << "Min precursor m/z set to " << MinPrMz << "\n";
+			dsout << "Min precursor m/z set to " << MinPrMz << "\n";
 		else if (!memcmp(&(args[start]), "max-pr-mz ", 10)) MaxPrMz = std::stod(args.substr(start + 10, std::string::npos)),
-			std::cout << "Max precursor m/z set to " << MaxPrMz << "\n";
+			dsout << "Max precursor m/z set to " << MaxPrMz << "\n";
 		else if (!memcmp(&(args[start]), "min-fr-mz ", 10)) MinFrMz = std::stod(args.substr(start + 10, std::string::npos)),
-			std::cout << "Min fragment m/z set to " << MinFrMz << "\n";
+			dsout << "Min fragment m/z set to " << MinFrMz << "\n";
 		else if (!memcmp(&(args[start]), "max-fr-mz ", 10)) MaxFrMz = std::stod(args.substr(start + 10, std::string::npos)),
-			std::cout << "Max fragment m/z set to " << MaxFrMz << "\n";
+			dsout << "Max fragment m/z set to " << MaxFrMz << "\n";
 		else if (!memcmp(&(args[start]), "max-fr ", 7)) MaxF = std::stoi(args.substr(start + 7, std::string::npos)),
-			std::cout << "Maximum number of fragments set to " << MaxF << "\n";
+			dsout << "Maximum number of fragments set to " << MaxF << "\n";
 		else if (!memcmp(&(args[start]), "min-fr ", 7)) MinF = std::stoi(args.substr(start + 7, std::string::npos)),
-			std::cout << "Minimum number of fragments for library export set to " << MinF << "\n";
+			dsout << "Minimum number of fragments for library export set to " << MinF << "\n";
 		else if (!memcmp(&(args[start]), "min-search-fr ", 14)) MinSearchFrNum = std::stoi(args.substr(start + 14, std::string::npos)),
-			std::cout << "Minimum number of fragments required for a precursor to be searched set to " << MinSearchFrNum << "\n";
+			dsout << "Minimum number of fragments required for a precursor to be searched set to " << MinSearchFrNum << "\n";
 		else if (!memcmp(&(args[start]), "missed-cleavages ", 17)) MissedCleavages = std::stoi(args.substr(start + 17, std::string::npos)),
-			std::cout << "Maximum number of missed cleavages set to " << MissedCleavages << "\n";
+			dsout << "Maximum number of missed cleavages set to " << MissedCleavages << "\n";
 		else if (!memcmp(&(args[start]), "unimod4 ", 8)) {
 			int n = FixedMods.size();
-			FixedMods.resize(n + 1), FixedMods[n].init(std::string("UniMod:4"), std::string("C"), 57.021464), std::cout << "Cysteine carbamidomethylation enabled as a fixed modification\n";
-		}
-		else if (!memcmp(&(args[start]), "unimod35 ", 9)) {
+			FixedMods.resize(n + 1), FixedMods[n].init(std::string("UniMod:4"), std::string("C"), 57.021464), dsout << "Cysteine carbamidomethylation enabled as a fixed modification\n";
+		} else if (!memcmp(&(args[start]), "unimod35 ", 9)) {
 			int n = VarMods.size();
-			VarMods.resize(n + 1), VarMods[n].init(std::string("UniMod:35"), std::string("M"), 15.994915), std::cout << "Methionine oxidation enabled as a variable modification\n";
-		}
-		else if (!memcmp(&(args[start]), "var-mods ", 9)) MaxVarMods = std::stoi(args.substr(start + 9, std::string::npos)),
-			std::cout << "Maximum number of variable modifications set to " << MaxVarMods << "\n";
-		else if (!memcmp(&(args[start]), "met-excision ", 6)) NMetExcision = true, std::cout << "N-terminal methionine excision enabled\n";
-		else if (!memcmp(&(args[start]), "no-rt-window ", 13)) RTWindowedSearch = false, std::cout << "Full range of retention times will be considered\n";
-		else if (!memcmp(&(args[start]), "disable-rt ", 11)) DisableRT = true, std::cout << "All RT-related scores disabled\n";
+			VarMods.resize(n + 1), VarMods[n].init(std::string("UniMod:35"), std::string("M"), 15.994915), dsout << "Methionine oxidation enabled as a variable modification\n";
+		} else if (!memcmp(&(args[start]), "var-mods ", 9)) MaxVarMods = std::stoi(args.substr(start + 9, std::string::npos)),
+			dsout << "Maximum number of variable modifications set to " << MaxVarMods << "\n";
+		else if (!memcmp(&(args[start]), "met-excision ", 6)) NMetExcision = true, dsout << "N-terminal methionine excision enabled\n";
+		else if (!memcmp(&(args[start]), "no-rt-window ", 13)) RTWindowedSearch = false, dsout << "Full range of retention times will be considered\n";
+		else if (!memcmp(&(args[start]), "disable-rt ", 11)) DisableRT = true, dsout << "All RT-related scores disabled\n";
 		else if (!memcmp(&(args[start]), "min-rt-win ", 11)) MinRTWinFactor = std::stod(args.substr(start + 11, std::string::npos)),
-			std::cout << "Minimum acceptable RT window scale set to " << MinRTWinFactor << "\n";
-		else if (!memcmp(&(args[start]), "no-window-inference ", 20)) InferWindow = false, std::cout << "Scan window inference disabled\n";
-		else if (!memcmp(&(args[start]), "individual-windows ", 19)) IndividualWindows = true, std::cout << "Scan windows will be inferred separately for different runs\n";
-		else if (!memcmp(&(args[start]), "individual-mass-acc ", 20)) IndividualMassAcc = true, std::cout << "Mass accuracy will be determined separately for different runs\n";
-		else if (!memcmp(&(args[start]), "individual-reports ", 19)) IndividualReports = true, std::cout << "Reports will be generated separately for different runs (in the respective folders)\n";
+			dsout << "Minimum acceptable RT window scale set to " << MinRTWinFactor << "\n";
+		else if (!memcmp(&(args[start]), "no-window-inference ", 20)) InferWindow = false, dsout << "Scan window inference disabled\n";
+		else if (!memcmp(&(args[start]), "individual-windows ", 19)) IndividualWindows = true, dsout << "Scan windows will be inferred separately for different runs\n";
+		else if (!memcmp(&(args[start]), "individual-mass-acc ", 20)) IndividualMassAcc = true, dsout << "Mass accuracy will be determined separately for different runs\n";
+		else if (!memcmp(&(args[start]), "individual-reports ", 19)) IndividualReports = true, dsout << "Reports will be generated separately for different runs (in the respective folders)\n";
 		else if (!memcmp(&(args[start]), "no-stats ", 9)) SaveRunStats = false;
-		else if (!memcmp(&(args[start]), "convert ", 8)) Convert = true, std::cout << "MS data files will be converted to .dia format\n";
+		else if (!memcmp(&(args[start]), "convert ", 8)) Convert = true, dsout << "MS data files will be converted to .dia format\n";
+		else if (!memcmp(&(args[start]), "reannotate ", 11)) Reannotate = true, dsout << "Library precursors will be reannotated using the FASTA database\n";
 		else if (!memcmp(&(args[start]), "out-dir ", 8)) out_dir = trim(args.substr(start + 8, end - start - 8));
 #ifdef CPP17
-		else if (!memcmp(&(args[start]), "remove-quant ", 13)) RemoveQuant = true, std::cout << ".quant files will be removed when the analysis is finished\n";
+		else if (!memcmp(&(args[start]), "remove-quant ", 13)) RemoveQuant = true, dsout << ".quant files will be removed when the analysis is finished\n";
 #endif
-		else if (!memcmp(&(args[start]), "no-quant-files ", 15)) QuantInMem = true, std::cout << ".quant files will not be saved to the disk\n";
-		else if (!memcmp(&(args[start]), "use-rt ", 7)) UseRTInfo = true, std::cout << "Existing .quant files will be used for RT profiling\n";
-		else if (!memcmp(&(args[start]), "use-quant ", 10)) UseQuant = true, std::cout << "Existing .quant files will be used\n";
-		else if (!memcmp(&(args[start]), "quant-only ", 11)) QuantOnly = true, std::cout << "Quantification will be performed anew using existing identification info\n";
-		else if (!memcmp(&(args[start]), "report-only ", 12)) ReportOnly = true, std::cout << "Report will be generated using .quant files\n";
-		else flag = true; 
-		
-		if (!flag) {}
-		else if (!memcmp(&(args[start]), "iter ", 5)) iN = Max(CalibrationIter + 4, std::stoi(args.substr(start + 5, std::string::npos))),
-			std::cout << "Number of iterations set to " << iN << "\n";
+		else if (!memcmp(&(args[start]), "no-quant-files ", 15)) QuantInMem = true, dsout << ".quant files will not be saved to the disk\n";
+		else if (!memcmp(&(args[start]), "use-rt ", 7)) UseRTInfo = true, dsout << "Existing .quant files will be used for RT profiling\n";
+		else if (!memcmp(&(args[start]), "use-quant ", 10)) UseQuant = true, dsout << "Existing .quant files will be used\n";
+		else if (!memcmp(&(args[start]), "quant-only ", 11)) QuantOnly = true, dsout << "Quantification will be performed anew using existing identification info\n";
+		else if (!memcmp(&(args[start]), "report-only ", 12)) ReportOnly = true, dsout << "Report will be generated using .quant files\n";
+		else flag = true;
+
+		if (!flag) {} else if (!memcmp(&(args[start]), "iter ", 5)) iN = Max(CalibrationIter + 4, std::stoi(args.substr(start + 5, std::string::npos))),
+			dsout << "Number of iterations set to " << iN << "\n";
 		else if (!memcmp(&(args[start]), "profiling-qvalue ", 17)) MaxProfilingQvalue = std::stod(args.substr(start + 17, std::string::npos)),
-			std::cout << "RT profiling q-value threshold set to " << MaxProfilingQvalue << "\n";
+			dsout << "RT profiling q-value threshold set to " << MaxProfilingQvalue << "\n";
 		else if (!memcmp(&(args[start]), "quant-qvalue ", 13)) MaxQuantQvalue = std::stod(args.substr(start + 13, std::string::npos)),
-			std::cout << "Q-value threshold for cross-run quantification set to " << MaxQuantQvalue << "\n";
+			dsout << "Q-value threshold for cross-run quantification set to " << MaxQuantQvalue << "\n";
 		else if (!memcmp(&(args[start]), "protein-quant-qvalue ", 21)) ProteinQuantQvalue = std::stod(args.substr(start + 21, std::string::npos)),
-			std::cout << "Precursor Q-value threshold for protein quantification set to " << ProteinQuantQvalue << "\n";
+			dsout << "Precursor Q-value threshold for protein quantification set to " << ProteinQuantQvalue << "\n";
 		else if (!memcmp(&(args[start]), "top ", 4)) TopN = std::stoi(args.substr(start + 4, std::string::npos)),
-			std::cout << "Top " << TopN << " precursors will be used for protein quantification in each run\n";
+			dsout << "Top " << TopN << " precursors will be used for protein quantification in each run\n";
 		else if (!memcmp(&(args[start]), "out-lib-qvalue ", 15)) ReportQValue = std::stod(args.substr(start + 15, std::string::npos)),
-			std::cout << "Q-value threshold for spectral library generation set to " << ReportQValue << "\n";
-		else if (!memcmp(&(args[start]), "rt-profiling ", 13)) RTProfiling = true, std::cout << "RT profiling enabled\n";
+			dsout << "Q-value threshold for spectral library generation set to " << ReportQValue << "\n";
+		else if (!memcmp(&(args[start]), "rt-profiling ", 13)) RTProfiling = true, dsout << "RT profiling enabled\n";
 		else if (!memcmp(&(args[start]), "prefix ", 7)) prefix = trim(args.substr(start + 7, end - start - 7)); // prefix added to input file names
 		else if (!memcmp(&(args[start]), "ext ", 4)) ext = trim(args.substr(start + 4, end - start - 4)); // extension added to input file names
-		else if (!memcmp(&(args[start]), "lc-all-scores ", 14)) LCAllScores = true, std::cout << "All scores will be used by the linear classifier (not recommended)\n";
-		else if (!memcmp(&(args[start]), "peak-center ", 12)) QuantMode = 1, std::cout << "Fixed-width center of each elution peak will be used for quantification\n";
+		else if (!memcmp(&(args[start]), "lc-all-scores ", 14)) LCAllScores = true, dsout << "All scores will be used by the linear classifier (not recommended)\n";
+		else if (!memcmp(&(args[start]), "peak-center ", 12)) QuantMode = 1, dsout << "Fixed-width center of each elution peak will be used for quantification\n";
 		else if (!memcmp(&(args[start]), "peak-boundary ", 14)) PeakBoundary = std::stod(args.substr(start + 14, std::string::npos)),
-			std::cout << "Peak boundary intensity factor set to " << PeakBoundary << "\n";
+			dsout << "Peak boundary intensity factor set to " << PeakBoundary << "\n";
 		else if (!memcmp(&(args[start]), "standardisation-scale ", 22)) StandardisationScale = std::stod(args.substr(start + 22, std::string::npos)),
-			std::cout << "Standardisation scale set to " << StandardisationScale << "\n";
-		else if (!memcmp(&(args[start]), "no-ifs-removal ", 15)) NoIfsRemoval = true, std::cout << "Interference removal from fragment elution curves disabled\n";
-		else if (!memcmp(&(args[start]), "no-fr-selection ", 16)) NoFragmentSelectionForQuant = true, std::cout << "Cross-run selection of fragments for quantification disabled (not recommended)\n";
-		else if (!memcmp(&(args[start]), "no-fr-exclusion ", 16)) ExcludeSharedFragments = false, std::cout << "Exclusion of fragments shared between heavy and light labelled peptides from quantification disabled\n";
-		else if (!memcmp(&(args[start]), "peak-translation ", 17)) TranslatePeaks = true, std::cout << "Translation of retention times between peptides within the same elution group enabled\n";
-		else if (!memcmp(&(args[start]), "no-standardisation ", 19)) Standardise = false, std::cout << "Scores will not be standardised for neural network training\n";
-		else if (!memcmp(&(args[start]), "no-nn ", 6)) nnIter = INF, std::cout << "Neural network classifier disabled\n";
+			dsout << "Standardisation scale set to " << StandardisationScale << "\n";
+		else if (!memcmp(&(args[start]), "no-ifs-removal ", 15)) NoIfsRemoval = true, dsout << "Interference removal from fragment elution curves disabled\n";
+		else if (!memcmp(&(args[start]), "no-fr-selection ", 16)) NoFragmentSelectionForQuant = true, dsout << "Cross-run selection of fragments for quantification disabled (not recommended)\n";
+		else if (!memcmp(&(args[start]), "no-fr-exclusion ", 16)) ExcludeSharedFragments = false, dsout << "Exclusion of fragments shared between heavy and light labelled peptides from quantification disabled\n";
+		else if (!memcmp(&(args[start]), "peak-translation ", 17)) TranslatePeaks = true, dsout << "Translation of retention times between peptides within the same elution group enabled\n";
+		else if (!memcmp(&(args[start]), "no-standardisation ", 19)) Standardise = false, dsout << "Scores will not be standardised for neural network training\n";
+		else if (!memcmp(&(args[start]), "no-nn ", 6)) nnIter = INF, dsout << "Neural network classifier disabled\n";
 		else if (!memcmp(&(args[start]), "nn-iter ", 8)) nnIter = Max(CalibrationIter + 3, std::stoi(args.substr(start + 8, std::string::npos))),
-			std::cout << "Neural network classifier will be used starting from the interation number " << nnIter << "\n";
+			dsout << "Neural network classifier will be used starting from the interation number " << nnIter << "\n";
 		else if (!memcmp(&(args[start]), "nn-bagging ", 11)) nnBagging = std::stoi(args.substr(start + 11, std::string::npos)),
-			std::cout << "Neural network bagging set to " << nnBagging << "\n";
+			dsout << "Neural network bagging set to " << nnBagging << "\n";
 		else if (!memcmp(&(args[start]), "nn-epochs ", 10)) nnEpochs = std::stoi(args.substr(start + 10, std::string::npos)),
-			std::cout << "Neural network epochs number set to " << nnEpochs << "\n";
+			dsout << "Neural network epochs number set to " << nnEpochs << "\n";
 		else if (!memcmp(&(args[start]), "nn-learning-rate ", 17)) nnLearning = std::stod(args.substr(start + 17, std::string::npos)),
-			std::cout << "Neural network learning rate set to " << nnLearning << "\n";
+			dsout << "Neural network learning rate set to " << nnLearning << "\n";
 		else if (!memcmp(&(args[start]), "nn-reg ", 7)) Regularisation = std::stod(args.substr(start + 7, std::string::npos)),
-			std::cout << "Neural network regularisation set to " << Regularisation << "\n";
+			dsout << "Neural network regularisation set to " << Regularisation << "\n";
 		else if (!memcmp(&(args[start]), "nn-hidden ", 10)) nnHidden = Max(1, std::stoi(args.substr(start + 10, std::string::npos))),
-			std::cout << "Number of hidden layers set to " << nnHidden << "\n";
+			dsout << "Number of hidden layers set to " << nnHidden << "\n";
 		else if (!memcmp(&(args[start]), "mass-acc-cal ", 13)) CalibrationMassAccuracy = std::stod(args.substr(start + 13, std::string::npos)) / 1000000.0,
-			std::cout << "Calibration mass accuracy set to " << CalibrationMassAccuracy << "\n";
+			dsout << "Calibration mass accuracy set to " << CalibrationMassAccuracy << "\n";
 		else if (!memcmp(&(args[start]), "fix-mass-acc ", 13)) ForceMassAcc = true;
 		else if (!memcmp(&(args[start]), "mass-acc ", 9)) GlobalMassAccuracy = std::stod(args.substr(start + 9, std::string::npos)) / 1000000.0, ForceMassAcc = true;
 		else if (!memcmp(&(args[start]), "mass-acc-ms1 ", 13)) GlobalMassAccuracyMs1 = std::stod(args.substr(start + 13, std::string::npos)) / 1000000.0, ForceMassAcc = true;
 		else if (!memcmp(&(args[start]), "gen-acc ", 8)) GeneratorAccuracy = std::stod(args.substr(start + 8, std::string::npos)) / 1000000.0,
-			std::cout << "Fragmentation spectrum generator accuracy set to " << GeneratorAccuracy << "\n";
+			dsout << "Fragmentation spectrum generator accuracy set to " << GeneratorAccuracy << "\n";
 		else if (!memcmp(&(args[start]), "min-corr ", 9)) MinCorrScore = Min(std::stod(args.substr(start + 9, std::string::npos)), -1.1 + (double)TopF),
-			std::cout << "Only peaks with correlation sum exceeding " << MinCorrScore << " will be considered\n";
+			dsout << "Only peaks with correlation sum exceeding " << MinCorrScore << " will be considered\n";
 		else if (!memcmp(&(args[start]), "min-ms1-corr ", 13)) MinMs1Corr = Min(std::stod(args.substr(start + 13, std::string::npos)), 0.99),
-			std::cout << "Only peaks with MS1 profile correlation exceeding " << MinMs1Corr << " will be considered\n";
+			dsout << "Only peaks with MS1 profile correlation exceeding " << MinMs1Corr << " will be considered\n";
 		else if (!memcmp(&(args[start]), "corr-diff ", 10)) MaxCorrDiff = Max(std::stod(args.substr(start + 10, std::string::npos)), E),
-			std::cout << "Peaks with correlation sum below " << MaxCorrDiff << " from maximum will not be considered\n";
+			dsout << "Peaks with correlation sum below " << MaxCorrDiff << " from maximum will not be considered\n";
 		else if (!memcmp(&(args[start]), "peak-apex ", 10)) PeakApexEvidence = Min(std::stod(args.substr(start + 10, std::string::npos)), 0.99),
-			std::cout << "Peaks must have apex height which is at least " << PeakApexEvidence << " of the maximum within the m/z scan window\n";
-		else if (!memcmp(&(args[start]), "all-peaks ", 10)) LibFreeAllPeaks = true,
-			std::cout << "The number of putative elution peaks considered in library-free mode will not be reduced to decrease RAM usage\n";
+			dsout << "Peaks must have apex height which is at least " << PeakApexEvidence << " of the maximum within the m/z scan window\n";
 		else if (!memcmp(&(args[start]), "norm-qvalue ", 12)) NormalisationQvalue = std::stod(args.substr(start + 11, std::string::npos)),
-			std::cout << "Q-value threshold for cross-run normalisation set to " << NormalisationQvalue << "\n";
+			dsout << "Q-value threshold for cross-run normalisation set to " << NormalisationQvalue << "\n";
 		else if (!memcmp(&(args[start]), "norm-fraction ", 14)) NormalisationPeptidesFraction = std::stod(args.substr(start + 14, std::string::npos)),
-			std::cout << "Global normalisation peptides fraction set to " << NormalisationPeptidesFraction << "\n";
+			dsout << "Global normalisation peptides fraction set to " << NormalisationPeptidesFraction << "\n";
 		else if (!memcmp(&(args[start]), "norm-radius ", 12)) LocNormRadius = std::stoi(args.substr(start + 12, std::string::npos)),
-			std::cout << "Local normalisation radius set to " << LocNormRadius << "\n";
-		else if (!memcmp(&(args[start]), "global-norm ", 12)) LocalNormalisation = false, std::cout << "Median-based local normalisation disabled\n";
+			dsout << "Local normalisation radius set to " << LocNormRadius << "\n";
+		else if (!memcmp(&(args[start]), "global-norm ", 12)) LocalNormalisation = false, dsout << "Median-based local normalisation disabled\n";
 #if Q1
-		else if (!memcmp(&(args[start]), "q1-cal ", 7)) Q1Cal = true, std::cout << "Q1 calibration enabled\n";
+		else if (!memcmp(&(args[start]), "q1-cal ", 7)) Q1Cal = true, dsout << "Q1 calibration enabled\n";
 #endif
-		else if (!memcmp(&(args[start]), "no-calibration ", 15)) Calibrate = false, std::cout << "Mass calibration disabled\n";
+		else if (!memcmp(&(args[start]), "no-calibration ", 15)) Calibrate = false, dsout << "Mass calibration disabled\n";
 		else if (!memcmp(&(args[start]), "mass-cal-bins ", 14)) MassCalBinsMax = std::stoi(args.substr(start + 14, std::string::npos)),
-			std::cout << "Maximum number of mass calibration bins set to " << MassCalBinsMax << "\n";
+			dsout << "Maximum number of mass calibration bins set to " << MassCalBinsMax << "\n";
 		else if (!memcmp(&(args[start]), "min-cal ", 8)) MinCal = std::stoi(args.substr(start + 8, std::string::npos)),
-			std::cout << "Minimum number of precursors identified at 10% FDR used for calibration set to " << MinCal << "\n";
+			dsout << "Minimum number of precursors identified at 10% FDR used for calibration set to " << MinCal << "\n";
 		else if (!memcmp(&(args[start]), "min-class ", 10)) MinClassifier = std::stoi(args.substr(start + 10, std::string::npos)),
-			std::cout << "Minimum number of precursors identified at 10% FDR used for linear classifier training set to " << MinClassifier << "\n";
-		else if (!memcmp(&(args[start]), "scanning-swath ", 15)) ForceScanningSWATH = true, std::cout << "All runs will be analysed as Scanning SWATH runs\n";
-		else if (!memcmp(&(args[start]), "regular-swath ", 14)) ForceNormalSWATH = true, std::cout << "All runs will be analysed as regular SWATH runs\n";
+			dsout << "Minimum number of precursors identified at 10% FDR used for linear classifier training set to " << MinClassifier << "\n";
+		else if (!memcmp(&(args[start]), "scanning-swath ", 15)) ForceScanningSWATH = true, dsout << "All runs will be analysed as Scanning SWATH runs\n";
+		else if (!memcmp(&(args[start]), "regular-swath ", 14)) ForceNormalSWATH = true, dsout << "All runs will be analysed as regular SWATH runs\n";
 #if Q1
-		else if (!memcmp(&(args[start]), "no-q1 ", 6)) UseQ1 = false, std::cout << "Q1 scores disabled\n";
-		else if (!memcmp(&(args[start]), "use-q1 ", 8)) ForceQ1 = true, std::cout << "Q1 scores will be used for regular SWATH runs\n";
+		else if (!memcmp(&(args[start]), "no-q1 ", 6)) UseQ1 = false, dsout << "Q1 scores disabled\n";
+		else if (!memcmp(&(args[start]), "use-q1 ", 8)) ForceQ1 = true, dsout << "Q1 scores will be used for regular SWATH runs\n";
 #endif
-		else std::cout << "WARNING: unrecognised option [--" << trim(args.substr(start, end - start)) << "]\n";
+		else dsout << "WARNING: unrecognised option [--" << trim(args.substr(start, end - start)) << "]\n";
 
 		start = next;
 	}
@@ -1849,7 +1839,7 @@ void arguments(int argc, char *argv[]) {
 		if (c != '/' && c != '\\') temp_folder += '/';
 #ifdef CPP17
 		if (!std::experimental::filesystem::exists(std::experimental::filesystem::path(temp_folder))) {
-			std::cout << "Cannot find the temp folder " << temp_folder << ". Specify an existing folder\n";
+			dsout << "Cannot find the temp folder " << temp_folder << ". Specify an existing folder\n";
 			exit(-1);
 		}
 #endif
@@ -1864,7 +1854,7 @@ void arguments(int argc, char *argv[]) {
 			if (wiff_dll == NULL && !skip_wiff) {
 				wiff_dll = LoadLibrary(LPSTR("DIA-NN.Wiff.dll"));
 				if (wiff_dll == NULL) {
-					std::cout << "Cannot load DIA-NN.Wiff.dll. Wiff files will be skipped.\n";
+					dsout << "Cannot load DIA-NN.Wiff.dll. Wiff files will be skipped.\n";
 					skip_wiff = true;
 				}
 			}
@@ -1873,7 +1863,7 @@ void arguments(int argc, char *argv[]) {
 #endif
 		auto ext = std::lower_bound(MSFormatsExt.begin(), MSFormatsExt.end(), extension);
 		if (*ext != extension) {
-			std::cout << "WARNING: skipping " << files[i] << " - invalid raw MS data format\n";
+			dsout << "WARNING: skipping " << files[i] << " - invalid raw MS data format\n";
 			continue;
 		}
 		if (extension == std::string(".dia")) {
@@ -1884,19 +1874,20 @@ void arguments(int argc, char *argv[]) {
 	}
 	if (!ms_files.size() && GenSpecLib) ExportLibrary = true, GenSpecLib = false;
 	if (ms_files.size() < 2) RTProfiling = false;
+	if (Predictor || ExportProsit) ExportLibrary = false;
 
 	if (DisableRT) RTWindowedSearch = false;
-	if (!ExportLibrary && !GenSpecLib) out_lib_file.clear();
+	if (!ExportLibrary && !GenSpecLib && !Predictor && !ExportProsit) out_lib_file.clear();
 	if (out_file.find_first_not_of(' ') == std::string::npos || out_file.find_first_of('\r') != std::string::npos || out_file.find_first_of('\n') != std::string::npos) out_file.clear();
 	if (out_gene_file.find_first_not_of(' ') == std::string::npos || out_gene_file.find_first_of('\r') != std::string::npos || out_gene_file.find_first_of('\n') != std::string::npos) out_gene_file.clear();
 	if (out_lib_file.find_first_not_of(' ') == std::string::npos || out_lib_file.find_first_of('\r') != std::string::npos || out_lib_file.find_first_of('\n') != std::string::npos) out_lib_file.clear();
 	if (!out_file.size() && !out_gene_file.size() && !out_lib_file.size() && !IndividualReports) {
 		IndividualReports = true;
-		std::cout << "No output files specified: reports will be generated separately for different runs (in the respective folders)\n";
+		dsout << "No output files specified: reports will be generated separately for different runs (in the respective folders)\n";
 	}
-	if (ExportLibrary && !out_lib_file.size()) {
-		ExportLibrary = false;
-		std::cout << "No output library file, library export disabled\n";
+	if ((ExportLibrary || GenSpecLib || Predictor || ExportProsit) && !out_lib_file.size()) {
+		ExportLibrary = GenSpecLib = Predictor = ExportProsit = false;
+		dsout << "No output library file specified, library generation/export will not be performed\n";
 	}
 	
 	if (UseQuant || QuantOnly) UseRTInfo = true;
@@ -1904,41 +1895,46 @@ void arguments(int argc, char *argv[]) {
 		MaxVarMods = Max(1, MaxVarMods);
 		if (VarMods.size() >= 32) {
 			VarMods.resize(31);
-			std::cout << "WARNING: only the first 31 variable modifications specified will be searched for\n";
+			dsout << "WARNING: only the first 31 variable modifications specified will be searched for\n";
 		}
 	}
 
 	nnIter = Min(Max(Max(RTWindowIter, CalibrationIter), nnIter), iN);
 	if (nnCrossVal) {
 		int bagging = Max(2, nnBagging / 4) * 4;
-		if (bagging != nnBagging) nnBagging = bagging, std::cout << "Bagging factor set to " << bagging << " (required for NN cross validation)\n";
+		if (bagging != nnBagging) nnBagging = bagging, dsout << "Bagging factor set to " << bagging << " (required for NN cross validation)\n";
 	}
 	if (BatchMode) nnIter = Max(iN - 1, nnIter);
 	MinBatch = Max(MinBatch, Min(MinClassifier, MinCal));
 	if (ForceMassAcc) {
-		std::cout << "Mass accuracy will be fixed to " << GlobalMassAccuracy << " (MS2) and "
+		dsout << "Mass accuracy will be fixed to " << GlobalMassAccuracy << " (MS2) and "
 			<< GlobalMassAccuracyMs1 << " (MS1)\n";
 	}
 
-	if (!fasta_files.size()) PGLevel = 0;
+	if (!fasta_files.size()) {
+		PGLevel = 0;
+		if (FastaSearch) {
+			FastaSearch = false;
+			dsout << "WARNING: no FASTA provided, nothing to digest\n";
+		}
+	} else if (!FastaSearch && !lib_file.size() && !Convert) dsout << "WARNING: no spectral library provided, FASTA digest not enabled: nothing to do\n";
 	if (fasta_files.size() && FastaSearch) {
 		if (ExcludeSharedFragments) {
-			std::cout << "Exclusion of fragments shared between heavy and light peptides from quantification is not supported in library-free mode - disabled\n";
+			dsout << "Exclusion of fragments shared between heavy and light peptides from quantification is not supported in library-free mode - disabled\n";
 			ExcludeSharedFragments = false;
 		}
-		if (!LibFreeAllPeaks) { // reduce memory usage
-			MinCorrScore = Max(MinCorrScore, 1.0);
-			MaxCorrDiff = Min(MaxCorrDiff, 1.0);
-			PeakApexEvidence = 0.99;
-		}
 		nnIter = Max(nnIter, iN - 1);
+	}
+	if (Reannotate && !Convert) {
+		if (!lib_file.size()) Reannotate = false;
+		if (!fasta_files.size() && lib_file.size()) Reannotate = false, dsout << "WARNING: no FASTA, cannot reannotate the library\n";
 	}
 
 	QFilter = Max(Max(Max(ReportQValue, MaxQuantQvalue), Max(ProteinQuantQvalue, MaxProfilingQvalue)), Max(NormalisationQvalue, ProteinIDQvalue));
 
 	init_unimod();
 	init_prediction();
-	std::cout << "\n";
+	dsout << "\n";
 }
 
 template <class F, class T> void write_vector(F &out, std::vector<T> &v) {
@@ -2105,7 +2101,7 @@ stop:
 		if (full_spectrum) return result;
 		gen_acc *= 2.0;
 		if (Verbose >= 1 && gen_acc > max_gen_acc)
-			std::cout << "WARNING: not all fragments recognised; generator accuracy threshold increased to " << gen_acc << "\n";
+			dsout << "WARNING: not all fragments recognised; generator accuracy threshold increased to " << gen_acc << "\n";
 		if (gen_acc > max_gen_acc) {
 			while (!gen_acc_lock.set()) {}
 			max_gen_acc = gen_acc;
@@ -2544,13 +2540,13 @@ public:
 
 	template <class F> void read_meta(F &in, int _lib_size = 0) {
 		if (in.fail()) {
-			std::cout << "ERROR: cannot read the quant file\n";
+			dsout << "ERROR: cannot read the quant file\n";
 			exit(0);
 		}
 		in.read((char*)&run_index, sizeof(int));
 		in.read((char*)&lib_size, sizeof(int));
 		if (_lib_size > 0 && lib_size != _lib_size) {
-			std::cout << "ERROR: a .quant file was obtained using a different spectral library / different library-free search settings\n";
+			dsout << "ERROR: a .quant file was obtained using a different spectral library / different library-free search settings\n";
 			exit(0);
 		}
 		in.read((char*)(&RS), sizeof(RunStats));
@@ -2687,7 +2683,7 @@ public:
 		index = _index;
 	}
 
-	void free() {
+	inline void free() {
 		std::vector<Product>().swap(fragments);
 	}
 
@@ -2823,10 +2819,10 @@ public:
 	bool load_proteins(std::vector<std::string> &files) {
 		std::set<std::string> protein_ids;
 		for (auto file : files) {
-			if (Verbose >= 1) Time(), std::cout << "Loading protein annotations from FASTA " << file << "\n";
+			if (Verbose >= 1) Time(), dsout << "Loading protein annotations from FASTA " << file << "\n";
 			std::ifstream in(file);
 			if (in.fail()) {
-				std::cout << "cannot read the file\n";
+				dsout << "cannot read the file\n";
 				return false;
 			}
 			bool swissprot;
@@ -2860,16 +2856,17 @@ public:
 					filter_peptides.insert(trimmed);
 				}
 				in.close();
-			} else std::cout << "WARNING: couldn't open the FASTA filter file " << filter << "\n";
+				if (Verbose >= 1) Time(), dsout << "Loaded FASTA filter " << filter << "\n";
+			} else dsout << "WARNING: couldn't open the FASTA filter file " << filter << "\n";
 			filters.insert(filters.begin(), filter_peptides.begin(), filter_peptides.end());
 			filter_peptides.clear();
 		}
 
 		for (auto file : files) {
-			if (Verbose >= 1) Time(), std::cout << "Loading FASTA " << file << "\n";
+			if (Verbose >= 1) Time(), dsout << "Loading FASTA " << file << "\n";
 			std::ifstream in(file);
 			if (in.fail()) {
-				std::cout << "cannot read the file\n";
+				dsout << "cannot read the file\n";
 				return false;
 			}
 
@@ -3095,6 +3092,10 @@ struct XIC { // for visualisation
 
 std::set<XIC> XICs;
 
+const int fFromFasta = 1 << 0;
+const int fPredictedSpectrum = 1 << 1;
+const int fPredictedRT = 1 << 2;
+
 class Library {
 public:
 	std::string name, fasta_names;
@@ -3120,7 +3121,7 @@ public:
 		Lock lock;
 		Library * lib;
 		Peptide target, decoy;
-		bool from_fasta = false, proteotypic = false;
+		int entry_flags = 0, proteotypic = 0;
 		std::string name; // precursor id
 		std::set<PG>::iterator prot;
 		int pid_index = 0, pg_index = 0, best_run = -1, peak, apex, window;
@@ -3268,7 +3269,7 @@ public:
 			init();
 		}
 
-		void free() {
+		inline void free() {
 			target.free();
 			decoy.free();
 		}
@@ -3279,7 +3280,7 @@ public:
 			out.write((char*)&dc, sizeof(int));
 			if (dc) decoy.write(out);
 
-			int ff = from_fasta, prt = proteotypic;
+			int ff = entry_flags, prt = proteotypic;
 			out.write((char*)&ff, sizeof(int));
 			out.write((char*)&prt, sizeof(int));
 			out.write((char*)&pid_index, sizeof(int));
@@ -3294,7 +3295,7 @@ public:
 			int ff = 0, prt = 0;
 			in.read((char*)&ff, sizeof(int));
 			in.read((char*)&prt, sizeof(int));
-			from_fasta = ff, proteotypic = prt;
+			entry_flags = ff, proteotypic = prt;
 			in.read((char*)&pid_index, sizeof(int));
 			read_string(in, name);
 		}
@@ -3361,6 +3362,140 @@ public:
 		for (i = 0; i < entries.size(); i++) entries[i].lock.free();
 	}
 
+#ifdef PREDICTOR
+	void smp_generate_codes(std::vector<std::pair<std::vector<long long>, int> > *_codes, std::vector<std::pair<std::string, int> > *_dict, std::vector<Lock> *_locks) {
+		std::string temp_s;
+		std::vector<std::string> temp_sv;
+		auto &codes = *_codes;
+		auto &dict = *_dict;
+		auto &locks = *_locks;
+
+		int skipped = 0;
+		for (int i = 0; i < entries.size(); i++) if (locks[i].set()) {
+			auto &e = entries[i];
+			predictor::code_from_precursor(codes[i].first, to_charged_eg(e.name, e.target.charge), temp_s, temp_sv, dict);
+			codes[i].second = i;
+		}
+	}
+
+	void smp_decode_spectra(std::vector<std::vector<float> > *_spectra, std::vector<int> *_decoder, int max_frc, std::vector<Lock> *_locks) {
+		auto &spectra = *_spectra;
+		auto &decoder = *_decoder;
+		auto &locks = *_locks;
+		int i, j, cnt;
+
+		std::vector<Ion> ions, filtered;
+		for (i = 0; i < entries.size(); i++) if (locks[i].set()) {
+			int ind = decoder[i];
+			if (ind < 0) continue;
+
+			auto &e = entries[i];
+			auto &sp = spectra[ind];
+
+			int tot = sp.size(), L = tot / (2 * max_frc);
+			if (tot < MinGenFrNum) continue;
+
+			ions.resize(tot); memset(&(ions[0]), 0, tot * sizeof(Ion));
+			for (int c = 1; c <= max_frc; c++) for (j = 0; j < L; j++) {
+				int index = L * (c - 1) + j;
+				ions[index] = Ion(type_y, j + 1, loss_none, c, sp[index]); // trick with writing intensity in the m/z field of class Ion for later sorting
+				index += L * max_frc;
+				ions[index] = Ion(type_b, j + 3, loss_none, c, sp[index]);
+			}
+
+			std::sort(ions.begin(), ions.end(), [&](const Ion &x, const Ion &y) { return x.mz > y.mz; });
+			if (ions[MinGenFrNum - 1].mz - E <= E) continue;
+			double margin = Min(ions[0].mz * 0.001, ions[MinGenFrNum - 1].mz - E);
+			filtered.clear(); for (auto &ion : ions) if (ion.mz > margin && (ion.type == type_y ? (L + 3 - ion.index) : ion.index) >= MinFrAAs) filtered.push_back(ion);
+			auto frs = generate_fragments(get_sequence(e.name), filtered, e.target.charge);
+			for (j = cnt = 0; j < frs.size(); j++) if (frs[j].mz >= MinFrMz && frs[j].mz <= MaxFrMz) cnt++;
+			e.target.fragments.resize(Min(cnt, auxF));
+			for (j = cnt = 0; j < frs.size(); j++) if (frs[j].mz >= MinFrMz && frs[j].mz <= MaxFrMz) {
+				e.target.fragments[cnt++] = Product(frs[j].mz, filtered[j].mz, filtered[j].charge, filtered[j].type, filtered[j].index, loss_none);
+				if (cnt >= auxF) break;
+			}
+			e.entry_flags |= fPredictedSpectrum;
+
+			e.generate_decoy();
+			e.init();
+		}
+	}
+
+	void generate_predictions() {
+		if (!entries.size()) return;
+		predictor::init_predictor(1, Threads);
+		P.set_instance(0);
+		int i, j;
+
+		if (Verbose >= 1) Time(), std::cout << "Encoding peptides for spectra and RTs prediction\n";
+		auto dict_map = P.get_aa_indices();
+		std::vector<std::pair<std::string, int> > dict(dict_map.begin(), dict_map.end());
+		std::vector<std::pair<std::vector<long long>, int> > codes(entries.size());
+		std::vector<Lock> locks(entries.size());
+
+		{
+			std::vector<std::thread> threads;
+			for (i = 0; i < Threads; i++) threads.push_back(std::thread(&Library::smp_generate_codes, this, &codes, &dict, &locks));
+			for (i = 0; i < Threads; i++) threads[i].join();
+			for (auto &L : locks) L.free();
+		}
+
+		int skipped = 0;
+		for (auto &c : codes) if (!c.first.size()) skipped++;
+		if (skipped) cout << "WARNING: skipping " << skipped << " precursors; unrecognised modifications?\n";
+
+		auto rt_codes = codes;
+		std::sort(codes.begin(), codes.end(), [](auto &x, auto &y) { return x.first < y.first; });
+		for (auto &c : rt_codes) if (c.first.size()) c.first[0] = 0;
+		std::sort(rt_codes.begin(), rt_codes.end(), [](auto &x, auto &y) { return x.first < y.first; });
+		std::vector<int> fr_decoder(entries.size(), -1), rt_decoder(entries.size(), -1);
+		int last_fr = 0, last_rt = 0;
+		auto *code = &codes[0], *rt_code = &rt_codes[0];
+		for (i = 0; i < codes.size(); i++) {
+			auto *curr = &codes[i];
+			bool flag = (i == 0);
+			if (!curr->first.size()) goto rt;
+			if (!flag) if (curr->first != code->first) flag = true;
+			if (!flag) curr->first.clear();
+			else last_fr = i, code = curr;
+			fr_decoder[curr->second] = last_fr;
+
+		rt:
+			curr = &rt_codes[i];
+			if (!curr->first.size()) continue;
+			flag = (i == 0);
+			if (!flag) if (curr->first != rt_code->first) flag = true;
+			if (!flag) curr->first.clear();
+			else last_rt = i, rt_code = curr;
+			rt_decoder[curr->second] = last_rt;
+		}
+
+		std::vector<std::vector<float> > spectra, rts;
+		try {
+			if (Verbose >= 1) Time(), std::cout << "Predicting spectra\n";
+			P.predict(spectra, codes, 1, Verbose >= 3);
+			if (Verbose >= 1) Time(), std::cout << "Predicting RTs\n";
+			P.predict(rts, rt_codes, 2, Verbose >= 3);
+		} catch (std::exception &e) { std::cout << "ERROR: " << e.what() << '\n'; }
+
+		if (Verbose >= 1) Time(), std::cout << "Decoding predicted spectra\n";
+		{
+			std::vector<std::thread> threads;
+			for (i = 0; i < Threads; i++) threads.push_back(std::thread(&Library::smp_decode_spectra, this, &spectra, &fr_decoder, 3, &locks));
+			for (i = 0; i < Threads; i++) threads[i].join();
+		}
+
+		if (Verbose >= 1) Time(), std::cout << "Decoding RTs\n";
+		for (i = 0; i < entries.size(); i++) {
+			int ind = rt_decoder[i];
+			if (ind >= 0) if (rts[ind].size()) {
+				entries[i].target.iRT = entries[i].target.sRT = rts[ind][0] * 243.19 - 58.4;
+				entries[i].entry_flags |= fPredictedRT;
+			}
+		}
+	}
+#endif
+
 	class Info {
 	public:
 		Library * lib;
@@ -3375,7 +3510,7 @@ public:
 		void clear() { map.clear(); std::vector<std::vector<int> >().swap(proteins); }
 
 		void load(Library * parent, std::vector<std::string> &files, std::vector<Quant> * _quants = NULL) {
-			if (Verbose >= 1) Time(), std::cout << "Reading quantification information: " << (n_s = files.size()) << " files\n";
+			if (Verbose >= 1) Time(), dsout << "Reading quantification information: " << (n_s = files.size()) << " files\n";
 			clear();
 
 			lib = parent;
@@ -3437,7 +3572,7 @@ public:
 		void quantify() {
 			int i, j, k, m, pos;
 
-			if (Verbose >= 1) Time(), std::cout << "Quantifying peptides\n";
+			if (Verbose >= 1) Time(), dsout << "Quantifying peptides\n";
 			std::vector<std::pair<float, int> > fr_score(1000), fr_ordered(1000);
 			std::vector<bool> exclude(1024);
 			for (auto it = map.begin(); it != map.end(); it++) {
@@ -3498,7 +3633,7 @@ public:
 					auto v = &(it->second);
 
 					int pr_index = it->first;
-					if (lib->entries[pr_index].from_fasta) continue; // only spectral library entries
+					if (lib->entries[pr_index].entry_flags & fFromFasta) continue; // only spectral library entries
 
 					int eg = lib->elution_groups[pr_index];
 					auto &ce = lib->co_elution_index[eg];
@@ -3772,7 +3907,7 @@ public:
 		}
 
 		if (infer_proteotypicity) {
-			if (Verbose >= 1 && (!FastaSearch || GuideLibrary)) Time(), std::cout << "Finding proteotypic peptides (assuming that the list of UniProt ids provided for each peptide is complete)\n";
+			if (Verbose >= 1 && (!FastaSearch || GuideLibrary)) Time(), dsout << "Finding proteotypic peptides (assuming that the list of UniProt ids provided for each peptide is complete)\n";
 			for (auto &e : entries) if (protein_ids[e.pid_index].proteins.size() <= 1) e.proteotypic = true;
 		}
 	}
@@ -3798,13 +3933,13 @@ public:
 		int colInd[libCols];
 
 		name = std::string(file_name);
-		if (Verbose >= 1) Time(), std::cout << "Loading spectral library " << name << "\n";
+		if (Verbose >= 1) Time(), dsout << "Loading spectral library " << name << "\n";
 
 		elution_groups.clear();
 		if (get_extension(name) == std::string(".speclib")) {
 			std::ifstream speclib(file_name, std::ifstream::binary);
 			if (speclib.fail()) {
-				std::cout << "cannot read the file\n";
+				dsout << "cannot read the file\n";
 				return false;
 			}
 			read(speclib);
@@ -3823,17 +3958,17 @@ public:
 				if (PGLevelSet == 2 && genes.size() >= 2) PGLevel = 2;
 				else if (PGLevelSet == 1 && names.size() >= 2) PGLevel = 1;
 			}
-			if (fasta_names.size()) if (Verbose >= 1) Time(), std::cout << "Library annotated with sequence database(s): " << fasta_names << "\n";
+			if (fasta_names.size()) if (Verbose >= 1) Time(), dsout << "Library annotated with sequence database(s): " << fasta_names << "\n";
 			if (!fasta_files.size() && (genes.size() >= 2 || names.size() >= 2)) library_protein_stats();
 		} else {
 			std::ifstream csv(file_name, std::ifstream::in);
 			if (csv.fail()) {
-				std::cout << "cannot read the file\n";
+				dsout << "cannot read the file\n";
 				return false;
 			}
 
 			int i, cnt = 0;
-			bool ftw = false, flw = false, fragment_num_info = false, fragment_loss_info = false, fragment_type = false;
+			bool ftw = false, ftmw = false, flw = false, fragment_num_info = false, fragment_loss_info = false, fragment_type = false;
 			std::map<std::string, Entry> map;
 			Entry e; e.lib = this;
 
@@ -3885,7 +4020,7 @@ public:
 							}
 					}
 					for (i = 0; i < libCols; i++) if (colInd[i] < 0 && i < libPID) {
-						if (Verbose >= 1) std::cout << "WARNING: cannot find column " + library_headers[i] << "\n";
+						if (Verbose >= 1) dsout << "WARNING: cannot find column " + library_headers[i] << "\n";
 						csv.close();
 						return false;
 					}
@@ -3897,10 +4032,10 @@ public:
 							if (colInd[libFrNumber] >= 0) {
 								fragment_num_info = true;
 								if (colInd[libFrLoss] >= 0) fragment_loss_info = true;
-								else std::cout << "WARNING: no neutral loss information found in the library - assuming fragments without losses\n";
-							} else std::cout << "WARNING: no fragment number information found in the library\n";
-						} else std::cout << "WARNING: no fragment type information found in the library\n";
-					} else std::cout << "WARNING: no fragment charge information found in the library - assuming fragments with charge 1\n";
+								else dsout << "WARNING: no neutral loss information found in the library - assuming fragments without losses\n";
+							} else dsout << "WARNING: no fragment number information found in the library\n";
+						} else dsout << "WARNING: no fragment type information found in the library\n";
+					} else dsout << "WARNING: no fragment charge information found in the library - assuming fragments with charge 1\n";
 					continue;
 				}
 
@@ -3910,8 +4045,8 @@ public:
 					if (wt.size()) {
 						if (wt[0] == 'y') p.type = type_y;
 						else if (wt[0] == 'b') p.type = type_b;
-						else if (!ftw) ftw = true, p.type = type_unknown, std::cout << "WARNING: unknown fragment type " << wt << "\n";
-					}
+						else if (!ftw) ftw = true, p.type = type_unknown, dsout << "WARNING: unknown fragment type " << wt << "\n";
+					} else if (!ftmw) ftmw = true, p.type = type_unknown, dsout << "WARNING: fragment type missing for row number " << cnt << "\n";
 					if (p.type > type_unknown && fragment_num_info) {
 						p.index = std::stoi(words[colInd[libFrNumber]]);
 						if (p.type != type_b) p.index = peptide_length(words[colInd[libPr]]) - p.index;
@@ -3992,7 +4127,7 @@ public:
 		if (!FastaSearch) eg.clear();
 		elution_group_index();
 
-		if (Verbose >= 1) Time(), std::cout << "Spectral library loaded: "
+		if (Verbose >= 1) Time(), dsout << "Spectral library loaded: "
 			<< ps << " protein isoforms, "
 			<< pis << " protein groups and "
 			<< entries.size() << " precursors in " << co_elution_index.size() << " elution groups.\n";
@@ -4001,10 +4136,10 @@ public:
 	}
 
 	void export_prosit() {
-		prosit_file = remove_extension(out_file) + std::string(".prosit.csv");
+		prosit_file = remove_extension(out_lib_file) + std::string(".prosit.csv");
 		std::ofstream out(prosit_file);
 		if (out.fail()) {
-			std::cout << "ERROR: cannot save precursors in the Prosit format to " << prosit_file << ". Check if the destination folder is write-protected or the file is in use";
+			dsout << "ERROR: cannot save precursors in the Prosit format to " << prosit_file << ". Check if the destination folder is write-protected or the file is in use";
 			return;
 		}
 		out << "modified_sequence,collision_energy,precursor_charge\n";
@@ -4012,7 +4147,7 @@ public:
 		for (auto &e : entries) prs.insert(std::pair<std::pair<std::string, int>, float>(std::pair<std::string, int>(to_prosit(e.name), e.target.charge), e.target.mz));
 		for (auto &s : prs) out << s.first.first << ",30," << s.first.second << '\n';
 		out.close();
-		if (Verbose >= 1) Time(), std::cout << "Prosit input saved to " << prosit_file << "\n";
+		if (Verbose >= 1) Time(), dsout << "Prosit input saved to " << prosit_file << "\n";
 	}
 
 	void load_protein_annotations(Fasta &fasta) {
@@ -4021,13 +4156,13 @@ public:
 		std::pair<std::string, std::vector<int> > key;
 		for (int i = 0; i < entries.size(); i++) {
 			bool prot_from_lib = false;
-			if (OverwriteLibraryPGs || entries[i].from_fasta) {
+			if (OverwriteLibraryPGs || (entries[i].entry_flags & fFromFasta)) {
 				auto stripped = get_aas(entries[i].name);
 				if (stripped.size() < 5) prot_from_lib = true;
 				else {
 					key.first = stripped.substr(0, 5);
 					auto pos = std::lower_bound(fasta.dict.begin(), fasta.dict.end(), key);
-					if (pos != fasta.dict.end()) if (pos->first == key.first) { // checks needed when !entries[i].from_fasta
+					if (pos != fasta.dict.end()) if (pos->first == key.first) { // checks needed when !(entries[i].entry_flags & fFromFasta)
 						std::string ids;
 						for (auto &seq : pos->second) {
 							auto &sequence = fasta.sequences[seq];
@@ -4058,7 +4193,7 @@ public:
 					} else prot_from_lib = true;
 				}
 			}
-			if (prot_from_lib || (!entries[i].from_fasta && !OverwriteLibraryPGs)) {
+			if (prot_from_lib || (!(entries[i].entry_flags & fFromFasta) && !OverwriteLibraryPGs)) {
 				auto ins = pid.insert(PG(protein_ids[entries[i].pid_index].ids));
 				ins.first->precursors.push_back(i);
 			}
@@ -4073,19 +4208,19 @@ public:
 				entries[*it].pid_index = i;
 
 		extract_proteins();
-		if (Verbose >= 1) Time(), std::cout << entries.size() << " precursors generated\n";
+		if (Verbose >= 1) Time(), dsout << entries.size() << " precursors generated\n";
 
 		if (ExportProsit) export_prosit();
 	}
 
 	void load(Fasta &fasta) {
-		if (Verbose >= 1) Time(), std::cout << "Processing FASTA\n";
+		if (Verbose >= 1) Time(), dsout << "Processing FASTA\n";
 
 		int i = entries.size(), cnt = 0;
 		if (!i && !InSilicoRTPrediction) iRT_min = -1.0, iRT_max = 1.0;
 		double default_iRT = (iRT_min + iRT_max) * 0.5;
 		Entry e;
-		e.lib = this; e.from_fasta = true;
+		e.lib = this; e.entry_flags = fFromFasta;
 		for (auto &pep : fasta.peptides) {
 			auto seq = get_sequence(pep);
 			auto fragments = generate_fragments(seq, 1, loss_none, &cnt, MinFrAAs);
@@ -4127,13 +4262,13 @@ public:
 		int ns = names.size(), gs = genes.size();
 		if (ns) if (!names[0].size()) {
 			ns--;
-			if (Verbose >= 1) Time(), std::cout << "Protein names missing for some isoforms\n";
+			if (Verbose >= 1) Time(), dsout << "Protein names missing for some isoforms\n";
 		}
 		if (gs) {
 			if (!genes[0].size()) gs--;
-			if (Verbose >= 1) Time(), std::cout << "Gene names missing for some isoforms\n";
+			if (Verbose >= 1) Time(), dsout << "Gene names missing for some isoforms\n";
 		}
-		if (Verbose >= 1) Time(), std::cout << "Library contains " << ns << " proteins, and " << gs << " genes\n";
+		if (Verbose >= 1) Time(), dsout << "Library contains " << ns << " proteins, and " << gs << " genes\n";
 	}
 
 	void annotate() {
@@ -4154,9 +4289,9 @@ public:
 	}
 
 	void save(const std::string &file_name, std::vector<int> * ref, bool searched, bool decoys = false) {
-		if (Verbose >= 1) Time(), std::cout << "Saving spectral library to " << file_name << "\n";
+		if (Verbose >= 1) Time(), dsout << "Saving spectral library to " << file_name << "\n";
 		std::ofstream out(file_name, std::ofstream::out);
-		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
+		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 		out << "FileName\tPrecursorMz\tProductMz\tTr_recalibrated\ttransition_name\tLibraryIntensity\ttransition_group_id\tdecoy\tPeptideSequence\tProteotypic\tQValue\t";
 		out << "ProteinGroup\tProteinName\tGenes\tFullUniModPeptideName\tModifiedPeptide\t";
 		out << "PrecursorCharge\tPeptideGroupLabel\tUniprotID\tFragmentType\tFragmentCharge\tFragmentSeriesNumber\tFragmentLossType\n";
@@ -4167,7 +4302,7 @@ public:
 		int cnt = -1, skipped = 0, empty = 0, targets_written = 0, decoys_written = 0;
 		for (auto &it : entries) {
 			cnt++;
-			if (searched && it.best_run < 0 && ((FastaSearch && it.from_fasta) || !SaveOriginalLib)) continue;
+			if (searched && it.best_run < 0 && ((FastaSearch && (it.entry_flags & fFromFasta)) || !SaveOriginalLib)) continue;
 			if (!searched && it.target.fragments.size() < MinF) continue;
 			if (ref != NULL) {
 				auto pos = std::lower_bound(ref->begin(), ref->end(), cnt);
@@ -4219,7 +4354,7 @@ public:
 						fr_type = fr_loss = fr_num = 0;
 						if (ExportRecFragOnly) continue;
 					}
-					if (!it.from_fasta) {
+					if (!(it.entry_flags & fFromFasta)) {
 						bool skip = false;
 						for (auto pos = ions.begin(); pos < ions.begin() + fr; pos++)
 							if (pos->index == fr_num && pos->type == fr_type && pos->charge == fr_charge && pos->loss == fr_loss) {
@@ -4268,20 +4403,23 @@ public:
 
 		out.close();
 		if (Verbose >= 1) {
-			if (!decoys_written) Time(), std::cout << targets_written << " precursors saved\n";
-			else Time(), std::cout << targets_written << " target and " << decoys_written << " decoy precursors saved\n";
+			if (!decoys_written) Time(), dsout << targets_written << " precursors saved\n";
+			else Time(), dsout << targets_written << " target and " << decoys_written << " decoy precursors saved\n";
 		}
-		if (skipped) std::cout << "WARNING: " << skipped << " precursors with unrecognised library fragments were skipped\n";
-		if (empty) std::cout << "WARNING: " << empty << " precursors without any fragments annotated were skipped\n";
+		if (skipped) dsout << "WARNING: " << skipped << " precursors with unrecognised library fragments were skipped\n";
+		if (empty) dsout << "WARNING: " << empty << " precursors without any fragments annotated were skipped\n";
 	}
 
-	void save(const std::string &file_name) {
-		if (Verbose >= 1) Time(), std::cout << "Saving the library to " << file_name << "\n";
+	bool save(const std::string &file_name) {
+		if (Verbose >= 1) Time(), dsout << "Saving the library to " << file_name << "\n";
 		std::ofstream speclib(file_name, std::ofstream::binary);
-		if (speclib.fail()) std::cout << "Could not save " << file_name << "\n";
-		else {
+		if (speclib.fail()) {
+			dsout << "Could not save " << file_name << "\n";
+			return false;
+		} else {
 			write(speclib);
 			speclib.close();
+			return true;
 		}
 	}
 
@@ -4291,17 +4429,24 @@ public:
 			if (it->target.charge <= 0) it->target.charge = 2, corrected_charge = true;
 			if (gen_decoys && decoys) it->generate_decoy();
 			if (it->decoy.charge <= 0 && decoys) it->decoy.charge = 2, corrected_charge = true;
-			else if (UseIsotopes && gen_charges && !it->from_fasta) it->annotate_charges();
+			else if (UseIsotopes && gen_charges && !(it->entry_flags & fFromFasta)) it->annotate_charges();
 			it->init();
 		}
-		if (corrected_charge) std::cout << "WARNING: at least one library precursor had non-positive charge; corrected to charge = 2\n";
+		if (corrected_charge) dsout << "WARNING: at least one library precursor had non-positive charge; corrected to charge = 2\n";
 	}
 
 	void initialise(bool decoys) {
 		int i;
 
+		if (Predictor) {
+#ifdef PREDICTOR
+			generate_predictions();
+			predictor_file = remove_extension(out_lib_file) + std::string(".predicted.speclib");
+			PredictorSaved = save(predictor_file);
+#endif
+		}
 		skipped = 0;
-		if (Verbose >= 1) Time(), std::cout << "Initialising library\n";
+		if (Verbose >= 1) Time(), dsout << "Initialising library\n";
 		if (Threads > 1) {
 			std::vector<std::thread> threads;
 			for (i = 0; i < Threads; i++) threads.push_back(std::thread(&Library::init, this, decoys));
@@ -4309,17 +4454,17 @@ public:
 		} else init(decoys);
 
 		for (i = 0; i < entries.size(); i++) entries[i].lock.free();
-		if (skipped) std::cout << "WARNING: " << skipped
+		if (skipped) dsout << "WARNING: " << skipped
 			<< " library precursors were skipped due to unrecognised fragments when generating decoys.\n";
 		if (ExportLibrary) save(out_lib_file, NULL, false, ExportDecoys);
 	}
 
 	void infer_proteins() { // filters precursors and proteins at q_cutoff level and infers protein groups
 		int i;
-		if (PGsInferred) return;
+		if (PGsInferred || !protein_ids.size() || !proteins.size()) return;
 		protein_groups.clear();
 
-		if (Verbose >= 1) Time(), std::cout << "Assembling protein groups\n";
+		if (Verbose >= 1) Time(), dsout << "Assembling protein groups\n";
 
 		// get IDs
 		std::vector<std::pair<int, int> > IDs;
@@ -4414,7 +4559,7 @@ public:
 			return;
 		}
 
-		if (Verbose >= 1 && stage == 0) Time(), std::cout << "Quantifying proteins\n";
+		if (Verbose >= 1 && stage == 0) Time(), dsout << "Quantifying proteins\n";
 		std::vector<float> max_q(n * info.n_s, 1.0), top_l(n * info.n_s * N, 0.0), quant(n * info.n_s, 0.0), norm(n * info.n_s, 0.0);
 
 		for (pass = 0; pass <= 3; pass++) {
@@ -4470,11 +4615,11 @@ public:
 	}
 
 	void report(const std::string &file_name) {
-		if (Verbose >= 1) Time(), std::cout << "Writing report\n";
+		if (Verbose >= 1) Time(), dsout << "Writing report\n";
 		auto &prot = InferPGs ? protein_groups : protein_ids;
 
 		std::ofstream out(file_name, std::ofstream::out);
-		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
+		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 		out << oh[outFile] << '\t' << oh[outPG] << '\t' << oh[outPID] << '\t' << oh[outPNames] << '\t' << oh[outGenes] << '\t'
 			<< oh[outPGQ] << '\t' << oh[outPGN] << '\t' << oh[outGQ] << '\t' << oh[outGN] << '\t' << oh[outGQP] << '\t' << oh[outGNP] << '\t' << oh[outModSeq] << '\t' << oh[outStrSeq] << '\t'
 			<< oh[outPrId] << '\t' << oh[outCharge] << '\t' << oh[outQv] << '\t' << oh[outPQv] << '\t' << oh[outPPt] << '\t'
@@ -4553,7 +4698,7 @@ public:
 		}
 
 		out.close();
-		if (Verbose >= 1) Time(), std::cout << "Report saved to " << file_name << ".\n";
+		if (Verbose >= 1) Time(), dsout << "Report saved to " << file_name << ".\n";
 	}
 
 	void gene_report(const std::string &file_name) {
@@ -4561,7 +4706,7 @@ public:
 		std::vector<float> gq(size), gn(size), gqu(size), gnu(size);
 		if (!size || !gg_index.size()) return;
 
-		if (Verbose >= 1) Time(), std::cout << "Writing gene report\n";
+		if (Verbose >= 1) Time(), dsout << "Writing gene report\n";
 		for (auto it = info.map.begin(); it != info.map.end(); it++) {
 			auto v = &(it->second);
 			auto entry = &(entries[it->first]);
@@ -4579,7 +4724,7 @@ public:
 		}
 
 		std::ofstream out(file_name, std::ofstream::out);
-		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
+		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 		out << "File.Name\tGenes\tGene.Group.Quantity\tGene.Group.Normalised\tGene.Quantity.Unique\tGene.Normalised.Unique\n";
 
 		for (int i = 0; i < gene_groups.size(); i++) for (int j = 0; j < s; j++) {
@@ -4597,7 +4742,7 @@ public:
 		}
 
 		out.close();
-		if (Verbose >= 1) Time(), std::cout << "Gene report saved to " << file_name << ".\n";
+		if (Verbose >= 1) Time(), dsout << "Gene report saved to " << file_name << ".\n";
 	}
 
 	void stats_report(const std::string &file_name) {
@@ -4616,7 +4761,7 @@ public:
 		}
 
 		std::ofstream out(file_name, std::ofstream::out);
-		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
+		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 		out << "File.Name\tPrecursors.Identified\tProteins.Identified\tTotal.Quantity\tMS1.Signal\tMS2.Signal\tFWHM.Scans\tFWHM.RT"
 			<< "\tMedian.Mass.Acc.MS1\tMedian.Mass.Acc.MS1.Corrected\tMedian.Mass.Acc.MS2\tMedian.Mass.Acc.MS2.Corrected\tMedian.RT.Prediction.Acc"
 			<< "\tAverage.Peptide.Length\tAverage.Peptide.Charge\tAverage.Missed.Tryptic.Cleavages\n";
@@ -4629,27 +4774,27 @@ public:
 		}
 		out.close();
 
-		if (Verbose >= 1) Time(), std::cout << "Stats report saved to " << file_name << "\n";
+		if (Verbose >= 1) Time(), dsout << "Stats report saved to " << file_name << "\n";
 	}
 
 	void tic_report(const std::string &file_name) {
 		if (!SaveRunStats) return;
 
 		std::ofstream out(file_name, std::ofstream::out);
-		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
+		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 		for (int i = 0; i < TIC_n; i++) out << (((float)i) / (float)TIC_n) << "\t"; out << "\n";
 		for (auto &rs : info.RS) { for (int i = 0; i < TIC_n; i++) out << rs.TIC[i] << "\t"; out << "\n"; }
 		out.close();
-		if (Verbose >= 1) Time(), std::cout << "TICs saved to " << file_name << "\n";
+		if (Verbose >= 1) Time(), dsout << "TICs saved to " << file_name << "\n";
 	}
 
 	void XIC_report(const std::string& file_name) {
 		if (!XICs.size()) {
-			std::cout << "No XICs recorded\n";
+			dsout << "No XICs recorded\n";
 			return;
 		}
 		std::ofstream out(file_name, std::ofstream::out);
-		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
+		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 
 		int i, cnt = 0, in, W = VisWindowRadius * 2 + 1;
 		out << "File.Name\tPrecursor.Id\tModified.Sequence\tStripped.Sequence\tQ.Value\tMS.Level\tIntensities\tRetention.Times\tTheoretical.Mz\tFragmentType\tFragmentCharge\tFragmentSeriesNumber\tFragmentLossType";
@@ -4679,7 +4824,7 @@ public:
 		}
 
 		out.close();
-		if (Verbose >= 1) Time(), std::cout << cnt << " XICs saved to " << file_name << "\n";
+		if (Verbose >= 1) Time(), dsout << cnt << " XICs saved to " << file_name << "\n";
 	}
 
 #if (HASH > 0)
@@ -4741,11 +4886,11 @@ public:
 
 		int bg = Min(Min(size.size(), data.size()), classes.size());
 		if (!bg) {
-			std::cout << "ERROR: no data provided to the NNClassifier() constructor, aborting\n";
+			dsout << "ERROR: no data provided to the NNClassifier() constructor, aborting\n";
 			return;
 		}
 		if (bagging > bg) {
-			std::cout << "ERROR: bagging factor reduced to " << bg << " to match the data provided\n";
+			dsout << "ERROR: bagging factor reduced to " << bg << " to match the data provided\n";
 			bagging = bg;
 		}
 
@@ -4820,7 +4965,7 @@ void learn_from_library(const std::string &file_name) {
 	int i, j, n, P_y = y_delta_size(), P_l = y_loss_size(), M = in_silico_rt_size(), pos_y = 0, pos_l = 0, pos_RT = 0;
 	Library lib;
 	if (!lib.load(&(file_name[0]))) Throw("Cannot load the library");
-	if (Verbose >= 1) Time(), std::cout << "Learning peptide characteristics\n";
+	if (Verbose >= 1) Time(), dsout << "Learning peptide characteristics\n";
 
 	yDelta.resize(P_y);
 	InSilicoRT.resize(M);
@@ -4865,7 +5010,7 @@ void learn_from_library(const std::string &file_name) {
 		}
 		if (AddLosses && !pos_l) {
 			AddLosses = false;
-			if (Verbose >= 1) Time(), std::cout << "No H2O/NH3 neutral losses in the library, losses will not be used\n";
+			if (Verbose >= 1) Time(), dsout << "No H2O/NH3 neutral losses in the library, losses will not be used\n";
 		}
 
 		for (i = 2; i < y_index.size(); i++) if (y_index[i] >= 0 && y_index[i - 1] >= 0) {
@@ -4953,16 +5098,16 @@ void learn_from_library(const std::string &file_name) {
 		cnt++;
 	}
 #if (HASH > 0)
-	std::cout << "Fragmentation prediction hash: " << learn_hash << "\n";
+	dsout << "Fragmentation prediction hash: " << learn_hash << "\n";
 #endif
 	std::sort(rm_y.begin(), rm_y.end());
-	Time(), std::cout << "y-series fragmentation prediction: ratio SD = " << sqrt(s2_y / (double)Max(1, s2_cnt - 1))
+	Time(), dsout << "y-series fragmentation prediction: ratio SD = " << sqrt(s2_y / (double)Max(1, s2_cnt - 1))
 		<< ", Pearson correlation = " << r_y / (double)cnt << " average, " << rm_y[cnt / 2] << " median\n";
 	if (InSilicoRTPrediction) {
 		std::sort(rt_d.begin(), rt_d.end());
-		Time(), std::cout << "iRT prediction: median error = " << rt_d[rt_d.size() / 2] << "\n";
+		Time(), dsout << "iRT prediction: median error = " << rt_d[rt_d.size() / 2] << "\n";
 #if (HASH > 0)
-		std::cout << "LRT prediction hash: " << hashA((int*)&(rt_d[0]), 2 * (rt_d.size())) << "\n";
+		dsout << "LRT prediction hash: " << hashA((int*)&(rt_d[0]), 2 * (rt_d.size())) << "\n";
 #endif
 		RTLearnLib = true;
 	}
@@ -5069,7 +5214,6 @@ public:
 		pars.push_back(p_end); // pdRT
 		pars.push_back(p_none); // pResCorr
 		pars.push_back(p_none); // pResCorrNorm
-		pars.push_back(p_end); // pBSeriesCorr
 		pars.push_back(TightMassAauxForCal ? p_fit : p_end); // pTightCorrOne
 		pars.push_back(TightMassAauxForCal ? p_fit : p_end); // pTightCorrTwo
 		pars.push_back(p_end); // pShadow
@@ -5384,7 +5528,7 @@ public:
 				pep = pr->pep;
 
 				auto &le = run->lib->entries[pep->index];
-				if (le.from_fasta && !le.target.fragments.size()) le.generate();
+				if ((le.entry_flags & fFromFasta) && !le.target.fragments.size()) le.generate();
 
 				mz = pep->mz;
 				n = run->ms2h.size();
@@ -5685,7 +5829,7 @@ public:
 				int * best_fr_list = &(run->BestFrList[pr->thread_id][0]);
 				float * corr_sum_list = &(run->CorrSumList[pr->thread_id][0]);
 
-				if (p >= 2) for (k = from + S, total_corr_sum = 0.0; k < to - S; k++) {
+				if (p >= 2) for (k = from + S + 1, total_corr_sum = 0.0; k < to - S - 1; k++) {
 					int ind = k - from;
 					best_fr = next_fr = -1;
 					for (fr = i = j = 0; fr < p; fr++) {
@@ -5957,28 +6101,6 @@ public:
 				sc[pBestCorrDelta] = sc[pTimeCorr] - inf->best_corr_sum;
 				sc[pTotCorrSum] = log(Max(1.0, sc[pTimeCorr]) / (inf->total_corr_sum + 1.0));
 
-				// b-series
-				const int bsn = 3;
-				if (FastaSearch && run->full_spectrum) {
-					int cnt = 0;
-					float clist[bsn], lmz = Max(MinFrMz, run->tandem_min), umz = Min(MaxFrMz, run->tandem_max);
-					for (i = 0; i < bsn; i++) clist[i] = 0.0;
-					auto gen = generate_fragments(get_sequence(run->lib->entries[pr->pep->index].name), 1, loss_none, &cnt, MinFrAAs);
-					float *b = (float*)alloca(W * sizeof(float));
-					for (auto &fragment : gen) if (fragment.type == type_b && fragment.mz >= lmz && fragment.mz <= umz) {
-						double query_mz = run->predicted_mz(&(run->MassCorrection[0]), fragment.mz, run->scan_RT[apex]);
-						for (pos = k - S; pos <= k + S; pos++)
-							b[pos - k + S] = run->ms2h[(*scan_index)[pos]].level<false>(query_mz, run->MassAccuracy);
-						w = corr(elution, b, W);
-						for (i = 0; i < bsn; i++) if (w > clist[i]) {
-							for (pos = bsn - 1; pos > i; pos--) clist[pos] = clist[pos - 1];
-							clist[i] = w;
-							break;
-						}
-					}
-					sc[pBSeriesCorr] = sum(clist, bsn);
-				}
-
 				// extra transform to improve the performance of the linear classifier
 #if LOGSC
 #define LogEnhance(x,cap) x -= log(Max(E, -x + ((double)cap)));
@@ -5998,8 +6120,6 @@ public:
 				LogEnhance(sc[pMs1IsoTwo], 2.0);
 				LogEnhance(sc[pCos], 1.0);
 				LogEnhance(sc[pCosCube], 1.0);
-
-				if (FastaSearch && run->full_spectrum) LogEnhance(sc[pBSeriesCorr], Min(bsn, TopF));
 #endif
 			}
 		};
@@ -6109,7 +6229,7 @@ public:
 				}
 			} else {
 				start = 0, stop = len - 1;
-				if (QuantMode == 0) {
+				if (QuantMode == 0 && stage >= 2) {
 					float valley, boundary = elution[k - low] / PeakBoundary;
 					for (start = vpos = k - low - 1, valley = elution[k - low]; start > 0; start--) {
 						if (elution[start] < valley) valley = elution[start], vpos = start;
@@ -6322,7 +6442,7 @@ public:
 			fragments->clear();
 			for (auto &fr : pep->fragments) if (fr.mz > run->tandem_min && fr.mz < run->tandem_max) (*fragments).push_back(fr);
 
-			bool guide = GuideLibrary && GuideClassifier && !run->lib->entries[pep->index].from_fasta;
+			bool guide = GuideLibrary && GuideClassifier && !(run->lib->entries[pep->index].entry_flags & fFromFasta);
             for (peak = 0; peak < info[0].peaks.size(); peak++) {
                 score = run->cscore<true>(&(info[0].scoring[peak * pN]), guide);
                 if (score > info[0].cscore) {
@@ -6428,7 +6548,7 @@ public:
 
 	void write(char * file_name) {
 		std::ofstream out(file_name, std::ofstream::binary);
-		if (out.fail()) { std::cout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
+		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 
 		int size = -2; // second version of the .dia file format
 		out.write((char*)&size, sizeof(int));
@@ -6475,10 +6595,10 @@ public:
 
 	bool read(char * file_name) {
 		std::ifstream in(file_name, std::ifstream::binary);
-		if (in.fail()) { std::cout << "ERROR: cannot open " << file_name << "\n"; return false; }
+		if (in.fail()) { dsout << "ERROR: cannot open " << file_name << "\n"; return false; }
 
 		int size; in.read((char*)&size, sizeof(int));
-		if (size == 0) { std::cout << "ERROR: no MS2 spectra in the file\n"; return false; }
+		if (size == 0) { dsout << "ERROR: no MS2 spectra in the file\n"; return false; }
 		if (size > 0) { // first version of the .dia format
 			const int Block = 5;
 			std::vector<std::vector<Peak> > S(Block);
@@ -6524,7 +6644,7 @@ public:
 
 			for (int i = 0; i < ms1h.size(); i++) ms1h[i].peaks = &(peaks[(long long)ms1h[i].peaks]);
 			for (int i = 0; i < ms2h.size(); i++) ms2h[i].peaks = &(peaks[(long long)ms2h[i].peaks]);
-		} else { std::cout << "ERROR: unknown version of the .dia file format\n"; return false; }
+		} else { dsout << "ERROR: unknown version of the .dia file format\n"; return false; }
 
 		in.close();
 		return true;
@@ -6536,7 +6656,7 @@ public:
 		n_scans = ms2h.size();
 
 		if (ExportWindows) {
-			if (Verbose >= 1) Time(), std::cout << "Exporting window acquisition scheme\n";
+			if (Verbose >= 1) Time(), dsout << "Exporting window acquisition scheme\n";
 			std::ofstream out(name + std::string(".txt"), std::ofstream::out);
 			out << "lower_offset\tupper_offset\n";
 			for (i = 0; i < Min(n_scans, MaxCycleLength); i++) out << ms2h[i].window_low << "\t" << ms2h[i].window_high << "\n";
@@ -6558,7 +6678,7 @@ public:
 
 		if (ForceNormalSWATH) scanning = false;
 		if (ForceScanningSWATH) scanning = true;
-		if (Verbose >= 1 && scanning && !Convert) Time(), std::cout << "Analysing as Scanning SWATH run\n";
+		if (Verbose >= 1 && scanning && !Convert) Time(), dsout << "Analysing as Scanning SWATH run\n";
 
 		scan_RT.resize(n_scans);
 		double t_min = INF, t_max = -INF;
@@ -6575,7 +6695,7 @@ public:
 
 		if (MS2Range) {
 			if (t_min < t_max) tandem_min = t_min, tandem_max = t_max;
-			if (Verbose >= 3) Time(), std::cout << "Detected MS/MS range: " << tandem_min << " - " << tandem_max << "\n";
+			if (Verbose >= 3) Time(), dsout << "Detected MS/MS range: " << tandem_min << " - " << tandem_max << "\n";
 		}
 
 		ms1_RT.resize(ms1h.size());
@@ -6658,7 +6778,7 @@ public:
 
 	bool load(char * file_name) { // Spectra in the file should be ordered by the acquisition time
 		name = std::string(file_name);
-		if (Verbose >= 1) Time(), std::cout << "Loading run " << name << "\n";
+		if (Verbose >= 1) Time(), dsout << "Loading run " << name << "\n";
 
 		auto ext = name.substr(name.find_last_of('.'));
 		if (ext == std::string(".dia")) {
@@ -6672,11 +6792,11 @@ public:
 			try {
 				auto load_func = (LPLOAD)GetProcAddress(wiff_dll, wiff_load_func);
 				if (load_func == NULL) {
-					std::cout << "Cannot load the reader from DIA-NN.Wiff.dll\n";
+					dsout << "Cannot load the reader from DIA-NN.Wiff.dll\n";
 					return false;
 				}
 				auto data = load_func(file_name, !fast_wiff, Max(1, Threads - 1));
-				if (data == NULL) { std::cout << "Unhandled exception when reading the .wiff file\n"; return false; }
+				if (data == NULL) { dsout << "Unhandled exception when reading the .wiff file\n"; return false; }
 				int * ptr = (int*)data;
 				int i, j, pos = 0, n = *(ptr++), nms1 = 0, nms2 = 0;
 				long long *lptr = (long long*)ptr, tot_peaks = *(lptr++);
@@ -6699,7 +6819,7 @@ public:
 				}
 				GlobalFree(data);
 			} catch (std::exception &e) {
-				std::cout << "Unhandled exception when reading the .wiff file\n";
+				dsout << "Unhandled exception when reading the .wiff file\n";
 				return false;
 			};
 			goto finalise;
@@ -6719,10 +6839,10 @@ public:
 			for (int i = 0; i < max_threads; i++) threads[i].join();
 
 			if (!ms2_cnt) {
-				std::cout << "No MS2 spectra: aborting\n";
+				dsout << "No MS2 spectra: aborting\n";
 				return false;
 			}
-			if (ms1_cnt + ms2_cnt != total_spectra) std::cout << "WARNING: spectra other than MS1 and MS2 detected\n";
+			if (ms1_cnt + ms2_cnt != total_spectra) dsout << "WARNING: spectra other than MS1 and MS2 detected\n";
 
 			ms1h.resize(ms1_cnt);
 			ms2h.resize(ms2_cnt);
@@ -6740,10 +6860,10 @@ public:
 		if (!Convert) init();
 
 #if (HASH > 0)
-		std::cout << "Raw hash: " << raw_hash() << "\n";
+		dsout << "Raw hash: " << raw_hash() << "\n";
 #endif
 
-		if (Verbose >= 2) Time(), std::cout << "Run loaded\n";
+		if (Verbose >= 2) Time(), dsout << "Run loaded\n";
 		return true;
 	}
 
@@ -6757,7 +6877,7 @@ public:
 			int max = Min(ms2h.size(), MaxCycleLength);
 			for (i = 0; i < max; i++)
 				if (ms2h[i].has(mz)) {
-					if (!it->from_fasta) break;
+					if (!(it->entry_flags & fFromFasta)) break;
 					gcnt = 0;
 					auto gen = generate_all_fragments(get_sequence(it->name), 1, AddLosses ? loss_NH3 : loss_none, &gcnt);
 					for (fr = frn = 0; fr < gen.size(); fr++) {
@@ -6769,11 +6889,11 @@ public:
 			if (i < max) has[pos] = true, cnt++;
 		}
 		entries.resize(cnt);
-		if (Verbose >= 1) Time(), std::cout << cnt << " library precursors are potentially detectable\n";
+		if (Verbose >= 1) Time(), dsout << cnt << " library precursors are potentially detectable\n";
 		cnt = pos = 0;
 		for (auto it = lib->entries.begin(); it != lib->entries.end(); it++, pos++) {
 			if (has[pos]) {
-				if (!it->from_fasta) guide++;
+				if (!(it->entry_flags & fFromFasta)) guide++;
 				entries[cnt].target.init(this, &(it->target));
 				entries[cnt].decoy.init(this, &(it->decoy));
 				entries[cnt].decoy.flags |= fDecoy;
@@ -6793,7 +6913,7 @@ public:
 				if (!GuideLibrary)
 					entries[pos].batch = index[pos] % Batches;
 				else {
-					if (!lib->entries[entries[pos].target.pep->index].from_fasta)
+					if (!(lib->entries[entries[pos].target.pep->index].entry_flags & fFromFasta))
 						entries[pos].batch = index[pos] % guide_batches;
 					else entries[pos].batch = guide_batches + (index[pos] % fasta_batches);
 				}
@@ -6821,14 +6941,14 @@ public:
 				if (!QuantOnly && curr_iter < iN) entries[i].decoy.find(thread_id, free, entries[i].batch < min_batch);
 
 				auto &le = lib->entries[entries[i].target.pep->index];
-				if (free_fragments && le.from_fasta && le.target.fragments.size()) le.free();
+				if (free_fragments && (le.entry_flags & fFromFasta) && le.target.fragments.size() && !(le.entry_flags & fPredictedSpectrum)) le.free();
 				entries[i].lock.free();
 			}
         }
     }
 
     void seek_precursors(bool clean, bool free, bool free_fragments, int min_batch, int max_batch) {
-		if (Verbose >= 2) Time(), std::cout << "Precursor search\n";
+		if (Verbose >= 2) Time(), dsout << "Precursor search\n";
 
         int i;
         if (Threads > 1) {
@@ -6884,7 +7004,7 @@ public:
 				if (e.target.info[0].qvalue > RubbishFilter)
 					e.target.flags &= ~fFound, tot++;
 				else {
-					if (GuideLibrary && !lib->entries[e.target.pep->index].from_fasta) {
+					if (GuideLibrary && !(lib->entries[e.target.pep->index].entry_flags & fFromFasta)) {
 						if (e.target.info[0].cscore < smin_g) smin_g = e.target.info[0].cscore;
 					} else if (e.target.info[0].cscore < smin) smin = e.target.info[0].cscore;
 					cnt++;
@@ -6892,10 +7012,10 @@ public:
 		
 		tot += cnt;
 		if (cnt >= MinNonRubbish && tot > MinRubbishFactor * cnt) { // this is likely indicative of library-free or Prosit library search
-			if (Verbose >= 1) Time(), std::cout << "Removing low confidence identifications\n";
+			if (Verbose >= 1) Time(), dsout << "Removing low confidence identifications\n";
 			for (auto &e : entries)
 				if (e.decoy.flags & fFound) {
-					if (GuideLibrary && !lib->entries[e.decoy.pep->index].from_fasta) {
+					if (GuideLibrary && !(lib->entries[e.decoy.pep->index].entry_flags & fFromFasta)) {
 						if (e.decoy.info[0].cscore < smin_g) e.decoy.flags &= ~fFound;
 					} else if (e.decoy.info[0].cscore < smin) e.decoy.flags &= ~fFound;
 				}
@@ -7035,7 +7155,7 @@ public:
 		int i, pos;
 		double e[pN], s2[pN], mul;
 
-		if (Verbose >= 2) Time(), std::cout << "Standardising scores\n";
+		if (Verbose >= 2) Time(), dsout << "Standardising scores\n";
 		pos = 0;
 		for (i = 0; i < pN; i++) e[i] = s2[i] = 0.0;
 		for (auto it = entries.begin(); it != entries.end(); it++) {
@@ -7071,7 +7191,7 @@ public:
 		bool non_guide_present = false, limit_ids10 = false;
 
 #if (HASH > 1)
-		std::cout << "Search hash: " << search_hash() << "\n";
+		dsout << "Search hash: " << search_hash() << "\n";
 #endif
 
 		if (!GuideLibrary || !GuideClassifier || curr_iter >= nnIter) all = true;
@@ -7113,7 +7233,7 @@ public:
 			}
 		}
 
-		if (Verbose >= 2) Time(), std::cout << "Optimising weights\n";
+		if (Verbose >= 2) Time(), dsout << "Optimising weights\n";
 
 		pos = 0;
 		for (i = 0; i < pN; i++) {
@@ -7123,7 +7243,7 @@ public:
 		int nnCnt = 0, nnTest = 0;
 		for (auto it = entries.begin(); it != entries.end(); it++) {
 			if (it->batch > max_batch) continue;
-			if (GuideLibrary && !all && lib->entries[it->target.pep->index].from_fasta) {
+			if (GuideLibrary && !all && (lib->entries[it->target.pep->index].entry_flags & fFromFasta)) {
 				non_guide_present = true;
 				continue;
 			}
@@ -7191,9 +7311,9 @@ public:
 		}
 
 		if (Verbose >= 3) {
-			std::cout << "Averages: \n";
-			for (i = 0; i < pN; i++) std::cout << av[i] << " ";
-			std::cout << "\n";
+			dsout << "Averages: \n";
+			for (i = 0; i < pN; i++) dsout << av[i] << " ";
+			dsout << "\n";
 		}
 
 		if (curr_iter < nnIter || !default_weights) {
@@ -7209,22 +7329,22 @@ public:
 
 		if (Verbose >= 3) {
 			if (all) {
-				std::cout << "Weights: \n";
-				for (i = 0; i < pN; i++) std::cout << weights[i] << " ";
+				dsout << "Weights: \n";
+				for (i = 0; i < pN; i++) dsout << weights[i] << " ";
 			} else {
-				std::cout << "Guide library classifier weights: \n";
-				for (i = 0; i < pN; i++) std::cout << guide_weights[i] << " ";
+				dsout << "Guide library classifier weights: \n";
+				for (i = 0; i < pN; i++) dsout << guide_weights[i] << " ";
 			}
-			std::cout << "\n";
+			dsout << "\n";
 		}
 
 		try_nn:
 		if (curr_iter != nnIter) goto finish;
 		if ((t50 < 200 && t10 < 100) || dall < 100) {
-			if (Verbose >= 1) Time(), std::cout << "Too few confident identifications, neural network will not be used\n";
+			if (Verbose >= 1) Time(), dsout << "Too few confident identifications, neural network will not be used\n";
 			goto finish;
 		}
-		if (Verbose >= 1) Time(), std::cout << "Training the neural network: " << nnCnt - dall << " targets, " << dall << " decoys\n";
+		if (Verbose >= 1) Time(), dsout << "Training the neural network: " << nnCnt - dall << " targets, " << dall << " decoys\n";
 
 		{
 			NNClassifier NNC(nnBagging, pN, nnHidden, nn_cnt, training, training_classes);
@@ -7235,7 +7355,7 @@ public:
 			if (TranslatePeaks) {
 				calculate_qvalues();
 				nn_validated = true;
-				if (Verbose >= 1) Time(), std::cout << "Translating peaks within elution groups\n";
+				if (Verbose >= 1) Time(), dsout << "Translating peaks within elution groups\n";
 				map_egs();
 				translate_all();
 				nn_scores(all, &NNC.net, true);
@@ -7256,7 +7376,7 @@ public:
 			i = cnt = 0;
 			for (auto it = entries.begin(); it != entries.end(); it++, i++) {
 				if (it->batch > curr_batch) continue;
-				if (GuideLibrary && !all && lib->entries[it->target.pep->index].from_fasta) continue;
+				if (GuideLibrary && !all && (lib->entries[it->target.pep->index].entry_flags & fFromFasta)) continue;
 				if (it->target.flags & fFound) if (!translated || (it->target.flags & fTranslated))
 					if (test_on_index(it->target.info[0].nn_index, ind))
 						index[cnt] = 2 * i, data[cnt++] = it->target.info[0].scores;
@@ -7316,7 +7436,7 @@ public:
 	std::vector<float> target_scores, decoy_scores, guide_target_scores, guide_decoy_scores;
     int calculate_qvalues(bool use_evidence = true, bool recalc = true) {
 		start:
-		if (Verbose >= 2) Time(), std::cout << "Calculating q-values\n";
+		if (Verbose >= 2) Time(), dsout << "Calculating q-values\n";
 		iRTTopPrecursors = Max(2, iRTTargetTopPrecursors);
 
         int i = 0, ids = 0;
@@ -7330,19 +7450,19 @@ public:
 			if (it->batch > curr_batch) continue;
 
 			if (curr_iter < nnIter || !nn_trained) {
-				bool guide = GuideLibrary && GuideClassifier && !lib->entries[it->target.pep->index].from_fasta;
+				bool guide = GuideLibrary && GuideClassifier && !(lib->entries[it->target.pep->index].entry_flags & fFromFasta);
 				if (it->target.flags & fFound) it->target.info[0].cscore = !use_evidence ? cscore<false>(it->target.info[0].scores, guide) : it->target.info[0].scores[0];
 				if (it->decoy.flags & fFound) it->decoy.info[0].cscore = !use_evidence ? cscore<false>(it->decoy.info[0].scores, guide) : it->decoy.info[0].scores[0];
 			}
 
 			if (it->target.flags & fFound) if (!(it->target.flags & fTranslated)) {
-				if (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta)
+				if (!GuideLibrary || (lib->entries[it->target.pep->index].entry_flags & fFromFasta))
 					target_scores.push_back(it->target.info[0].cscore);
 				else
 					guide_target_scores.push_back(it->target.info[0].cscore);
 			}
 			if (it->decoy.flags & fFound) {
-				if (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta)
+				if (!GuideLibrary || (lib->entries[it->target.pep->index].entry_flags & fFromFasta))
 					decoy_scores.push_back(it->decoy.info[0].cscore);
 				else
 					guide_decoy_scores.push_back(it->decoy.info[0].cscore);
@@ -7362,8 +7482,8 @@ public:
         for (auto it = entries.begin(); it != entries.end(); it++) {
 			if (it->batch > curr_batch) continue;
             if (it->target.flags & fFound) {
-				auto &vd = (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta) ? decoy_scores : guide_decoy_scores;
-				auto &vt = (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta) ? target_scores : guide_target_scores;
+				auto &vd = (!GuideLibrary || (lib->entries[it->target.pep->index].entry_flags & fFromFasta)) ? decoy_scores : guide_decoy_scores;
+				auto &vt = (!GuideLibrary || (lib->entries[it->target.pep->index].entry_flags & fFromFasta)) ? target_scores : guide_target_scores;
 
 				int n_targets = 0, n_better = 0, n_decoys = 0;
 				double sc = it->target.info[0].cscore;
@@ -7378,12 +7498,12 @@ public:
 				n_decoys = std::distance(pD, vd.end());
 				it->target.info[0].qvalue = Min(1.0, ((double)Max(1, n_decoys)) / (double)Max(1, n_targets));
 
-				if (n_better <= iRTTopPrecursors && (!GuideLibrary || !lib->entries[it->target.pep->index].from_fasta))
+				if (n_better <= iRTTopPrecursors && (!GuideLibrary || !(lib->entries[it->target.pep->index].entry_flags & fFromFasta)))
 					if (it->target.info[0].cscore < iRT_cscore) iRT_cscore = it->target.info[0].cscore;
 				if (n_better <= iRTRefTopPrecursors && it->target.info[0].cscore < iRT_ref_score) iRT_ref_score = it->target.info[0].cscore;
 
 				auto pair = std::pair<float, float>(it->target.info[0].cscore, it->target.info[0].qvalue);
-				if (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta) {
+				if (!GuideLibrary || (lib->entries[it->target.pep->index].entry_flags & fFromFasta)) {
 					auto pos = cs_qv.insert(pair);
 					if (pos.second) {
 						if (pos.first != cs_qv.begin() && std::prev(pos.first)->second < pair.second) pos.first->second = std::prev(pos.first)->second;
@@ -7402,13 +7522,13 @@ public:
 		for (auto it = entries.begin(); it != entries.end(); it++) {
 			if (it->batch > curr_batch) continue;
 			if (curr_iter >= iN - 1) if (it->decoy.flags & fFound) {
-				auto pos = (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta) ?
+				auto pos = (!GuideLibrary || (lib->entries[it->target.pep->index].entry_flags & fFromFasta)) ?
 					cs_qv.lower_bound(it->decoy.info[0].cscore) : guide_cs_qv.lower_bound(it->decoy.info[0].cscore);
 				it->decoy.info[0].qvalue = pos->second;
 				if (it->decoy.info[0].qvalue > 1.0) it->decoy.info[0].qvalue = 1.0;
 			}
 			if (!(it->target.flags & fFound)) continue;
-			auto pos = (!GuideLibrary || lib->entries[it->target.pep->index].from_fasta) ?
+			auto pos = (!GuideLibrary || (lib->entries[it->target.pep->index].entry_flags & fFromFasta)) ?
 				cs_qv.lower_bound(it->target.info[0].cscore) : guide_cs_qv.lower_bound(it->target.info[0].cscore);
 			it->target.info[0].qvalue = pos->second;
 			if (it->target.info[0].qvalue > 1.0) it->target.info[0].qvalue = 1.0;
@@ -7421,14 +7541,14 @@ public:
 		}
 		RS.precursors = Ids1;
 		if (Verbose >= 2 || (Verbose >= 1 && curr_iter >= iN - 1)) {
-			if (Verbose < 3) Time(), std::cout << "Number of IDs at 0.01 FDR: " << ids << "\n";
-			if (Verbose >= 3) Time(), std::cout << "Number of IDs at 50%, 10%, 1%, 0.1% FDR: "
+			if (Verbose < 3) Time(), dsout << "Number of IDs at 0.01 FDR: " << ids << "\n";
+			if (Verbose >= 3) Time(), dsout << "Number of IDs at 50%, 10%, 1%, 0.1% FDR: "
 				<< Ids50 << ", " << Ids10 << ", " << Ids1 << ", " << Ids01 << "\n";
 		}
 		if (!nn_validated) if (curr_iter >= nnIter && nn_trained && (Ids10 < linear_classifier_ids10 ||
 			(ids < linear_classifier_ids1 && linear_classifier_ids1 >= 50 && ((double)ids/(double)linear_classifier_ids1) < ((double)linear_classifier_ids10 / (double)Max(1, Ids10)))
 			|| Ids10 < 100)) {
-			if (Verbose >= 1) Time(), std::cout << "Too low number of IDs with NNs: reverting to the linear classifier\n";
+			if (Verbose >= 1) Time(), dsout << "Too low number of IDs with NNs: reverting to the linear classifier\n";
 			nn_trained = false;
 			goto start;
 		}
@@ -7458,7 +7578,6 @@ public:
 			par_seek[pHeavy] = par_learn[pHeavy] = false;
 			par_seek[pResCorr] = par_learn[pResCorr] = false;
 			par_seek[pResCorrNorm] = par_learn[pResCorrNorm] = false;
-			par_seek[pBSeriesCorr] = false;
 		}
 		seek_precursors(clean, free, free_fragments, min_batch, max_batch);
 		copy_weights(selection_weights, weights);
@@ -7473,7 +7592,7 @@ public:
 	}
 
     void update(bool set_RT_window, bool set_scan_window, bool calibrate, bool calibrate_q1, bool gen_ref) {
-		if (Verbose >= 2) Time(), std::cout << "Calibrating retention times\n";
+		if (Verbose >= 2) Time(), dsout << "Calibrating retention times\n";
 		int peak_width = 0, peak_cnt = 0, mass_cnt = 0, mass_cnt_ms1 = 0, min_mass_cnt = in_ref_run ? MinMassDeltaCalRef : MinMassDeltaCal;
 
 		if (!RemoveMassAccOutliers) {
@@ -7491,7 +7610,7 @@ public:
 					if (calibrate) rt_coo.push_back(it->target.info[0].RT);
 					if (Abs(it->target.info[0].mass_delta_ms1) > E) mass_cnt_ms1++;
 				}
-				if (GuideLibrary && lib->entries[it->target.pep->index].from_fasta) continue;
+				if (GuideLibrary && (lib->entries[it->target.pep->index].entry_flags & fFromFasta)) continue;
 				if (it->target.info[0].qvalue <= iRTMaxQvalue || it->target.info[0].cscore >= iRT_cscore) {
 					int index = std::distance(entries.begin(), it);
 					rt_stats.push_back(index);
@@ -7507,7 +7626,7 @@ public:
 			std::sort(rt_stats.begin(), rt_stats.end(), [&](const auto& lhs, const auto& rhs) { return entries[lhs].target.pep->iRT < entries[rhs].target.pep->iRT; });
 			rt_data.resize(rt_stats.size());
 			for (int i = 0; i < rt_stats.size(); i++) rt_data[i] = std::pair<float, float>(entries[rt_stats[i]].target.pep->iRT, entries[rt_stats[i]].target.info[0].RT);
-			if (Verbose >= 2) Time(), std::cout << rt_data.size() << " precursors used for iRT estimation.\n";
+			if (Verbose >= 2) Time(), dsout << rt_data.size() << " precursors used for iRT estimation.\n";
 
 			if (rt_data.size() >= 2) {
 				int segments = Min(RTSegments, Max(1, 2.0 * sqrt(rt_data.size() / MinRTPredBin)));
@@ -7522,7 +7641,7 @@ public:
 			if (set_RT_window) {
 				rt_delta.resize(rt_stats.size());
 				for (int i = 0; i < rt_stats.size(); i++) {
-					if (!GuideLibrary || lib->entries[entries[rt_stats[i]].target.pep->index].from_fasta) rt_delta[i] = -Abs(entries[rt_stats[i]].target.info[0].RT - calc_spline(RT_coeff, RT_points, entries[rt_stats[i]].target.pep->iRT));
+					if (!GuideLibrary || (lib->entries[entries[rt_stats[i]].target.pep->index].entry_flags & fFromFasta)) rt_delta[i] = -Abs(entries[rt_stats[i]].target.info[0].RT - calc_spline(RT_coeff, RT_points, entries[rt_stats[i]].target.pep->iRT));
 					else rt_delta[i] = -Abs(entries[rt_stats[i]].target.info[0].RT - calc_spline(RT_coeff, RT_points, entries[rt_stats[i]].target.pep->sRT));
 				}
 				std::sort(rt_delta.begin(), rt_delta.end());
@@ -7533,7 +7652,7 @@ public:
 				RT_windowed_search = (in_ref_run ? rt_delta.size() >= RTWinSearchMinRef : rt_delta.size() >= RTWinSearchMinCal);
 				RS.RT_acc = -rt_delta[(int)(0.5 * (double)rt_delta.size())];
 				if (!RT_windowed_search && Verbose >= 3) { Warning("not enough confidently identified precursors for RT-windowed search"); }
-				else if (Verbose >= 1) Time(), std::cout << "RT window set to " << RT_window << "\n";
+				else if (Verbose >= 1) Time(), dsout << "RT window set to " << RT_window << "\n";
 			}
 
 			if (gen_ref) {
@@ -7543,10 +7662,10 @@ public:
 
 			if (set_scan_window) {
 				PeakWidth = (double(peak_width)) / (double)Max(1, peak_cnt);
-				if (Verbose >= 1) Time(), std::cout << "Peak width: " << PeakWidth << "\n";
+				if (Verbose >= 1) Time(), dsout << "Peak width: " << PeakWidth << "\n";
 
 				int window_size = Max(1, int(ScanScale * PeakWidth));
-				if (Verbose >= 1) Time(), std::cout << "Scan window radius set to " << window_size << "\n";
+				if (Verbose >= 1) Time(), dsout << "Scan window radius set to " << window_size << "\n";
 				if (!IndividualWindows) WindowRadius = window_size, InferWindow = false;
 
 				window_calculated = true;
@@ -7584,7 +7703,7 @@ public:
 				for (int i = (q1_diff.size() / 5); i < q1_diff.size() - (q1_diff.size() / 5); i++) diff += q1_diff[i], k++;
 				Q1Correction[0] = diff / (float)Max(1, k);
 
-				if (Verbose >= 1) Time(), std::cout << "Q1 correction: " << Q1Correction[0] << "Th + " << Q1Correction[1] << "(m/z)" << "\n";
+				if (Verbose >= 1) Time(), dsout << "Q1 correction: " << Q1Correction[0] << "Th + " << Q1Correction[1] << "(m/z)" << "\n";
 			}
 #endif
 		}
@@ -7653,9 +7772,9 @@ public:
 				for (int i = 0; i < MassCorrection.size(); i++) MassCorrection[i] = X(i);
 
 				if (Verbose >= 3) {
-					Time(), std::cout << "Mass correction transform (" << mass_cnt << " precursors): ";
-					for (int i = 0; i < MassCorrection.size(); i++) std::cout << MassCorrection[i] << " ";
-					std::cout << "\n";
+					Time(), dsout << "Mass correction transform (" << mass_cnt << " precursors): ";
+					for (int i = 0; i < MassCorrection.size(); i++) dsout << MassCorrection[i] << " ";
+					dsout << "\n";
 				}
 
 				b_r.clear(), b_r.reserve(2 * mass_cnt);
@@ -7666,11 +7785,11 @@ public:
 							predicted_mz(&(MassCorrection[0]), it->target.info[0].mass_delta_mz, it->target.info[0].RT)) / it->target.info[0].mass_delta_mz);
 				}
 
-				if (Verbose >= 3) Time(), std::cout << "M/z SD: " << sqrt(var(b_r)) * 1000000.0 << " ppm\n";
+				if (Verbose >= 3) Time(), dsout << "M/z SD: " << sqrt(var(b_r)) * 1000000.0 << " ppm\n";
 				std::sort(b_r.begin(), b_r.end());
 				MassAccuracy = b_r[0.7 * (double)b_r.size()];
 				RS.MS2_acc_corrected = b_r[0.5 * (double)b_r.size()];
-				if (Verbose >= 2) Time(), std::cout << "Top 70% mass accuracy: " << MassAccuracy * 1000000.0 << " ppm\n";
+				if (Verbose >= 2) Time(), dsout << "Top 70% mass accuracy: " << MassAccuracy * 1000000.0 << " ppm\n";
 				acc_calibrated = true;
 
 				if (SaveCalInfo) {
@@ -7697,13 +7816,13 @@ public:
 				std::sort(b_r.begin(), b_r.end());
 				double acc_no_cal = b_r[0.7 * (double)b_r.size()];
 				RS.MS2_acc = b_r[0.5 * (double)b_r.size()];
-				if (Verbose >= 2) Time(), std::cout << "Top 70% mass accuracy without correction: " << acc_no_cal * 1000000.0 << "ppm\n";
+				if (Verbose >= 2) Time(), dsout << "Top 70% mass accuracy without correction: " << acc_no_cal * 1000000.0 << "ppm\n";
 				if (acc_no_cal < MassAccuracy) {
-					if (Verbose >= 2) Time(), std::cout << "No mass correction required\n";
+					if (Verbose >= 2) Time(), dsout << "No mass correction required\n";
 					MassAccuracy = acc_no_cal;
 					for (int i = 0; i < MassCorrection.size(); i++) MassCorrection[i] = 0.0;
 				}
-			} else if (Verbose >= 1) Time(), std::cout << "Cannot perform mass calibration, too few confidently identified precursors\n";
+			} else if (Verbose >= 1) Time(), dsout << "Cannot perform mass calibration, too few confidently identified precursors\n";
 
 			if (mass_cnt_ms1 >= min_mass_cnt || RemoveMassAccOutliers) {
 				if (!RemoveMassAccOutliers) b.resize(mass_cnt_ms1);
@@ -7764,9 +7883,9 @@ public:
 				for (int i = 0; i < MassCorrectionMs1.size(); i++) MassCorrectionMs1[i] = X(i);
 
 				if (Verbose >= 3) {
-					Time(), std::cout << "MS1 mass correction transform (" << mass_cnt_ms1 << " precursors): ";
-					for (int i = 0; i < MassCorrectionMs1.size(); i++) std::cout << MassCorrectionMs1[i] << " ";
-					std::cout << "\n";
+					Time(), dsout << "MS1 mass correction transform (" << mass_cnt_ms1 << " precursors): ";
+					for (int i = 0; i < MassCorrectionMs1.size(); i++) dsout << MassCorrectionMs1[i] << " ";
+					dsout << "\n";
 				}
 
 				b_r.clear(), b_r.reserve(2 * mass_cnt_ms1);
@@ -7783,7 +7902,7 @@ public:
 				RS.MS1_acc_corrected = b_r[0.5 * (double)b_r.size()];
 				double acc = MassAccuracyMs1;
 				if (!acc_calibrated || RemoveMassAccOutliers) MassAccuracyMs1 *= 5.0;
-				if (Verbose >= 2) Time(), std::cout << "Top 70% MS1 mass accuracy: " << acc * 1000000.0 << " ppm\n";
+				if (Verbose >= 2) Time(), dsout << "Top 70% MS1 mass accuracy: " << acc * 1000000.0 << " ppm\n";
 				acc_ms1_calibrated = true;
 
 				if (SaveCalInfo) {
@@ -7809,16 +7928,16 @@ public:
 				std::sort(b_r.begin(), b_r.end());
 				double acc_no_cal = b_r[0.7 * (double)b_r.size()];
 				RS.MS1_acc = b_r[0.5 * (double)b_r.size()];
-				if (Verbose >= 2) Time(), std::cout << "Top 70% MS1 mass accuracy without correction: " << acc_no_cal * 1000000.0 << "ppm\n";
+				if (Verbose >= 2) Time(), dsout << "Top 70% MS1 mass accuracy without correction: " << acc_no_cal * 1000000.0 << "ppm\n";
 				if (acc_no_cal < acc) {
-					if (Verbose >= 2) Time(), std::cout << "No MS1 mass correction required\n";
+					if (Verbose >= 2) Time(), dsout << "No MS1 mass correction required\n";
 					MassAccuracyMs1 = acc_no_cal;
 					if (!acc_calibrated || RemoveMassAccOutliers) MassAccuracyMs1 *= 5.0;
 					for (int i = 0; i < MassCorrectionMs1.size(); i++) MassCorrectionMs1[i] = 0.0;
 				}
-				if (Verbose >= 2 && MassAccuracyMs1 > Min(acc, acc_no_cal) + E) Time(), std::cout << "Recommended extraction MS1 mass accuracy: "
+				if (Verbose >= 2 && MassAccuracyMs1 > Min(acc, acc_no_cal) + E) Time(), dsout << "Recommended extraction MS1 mass accuracy: "
 					<< MassAccuracyMs1 * 1000000.0 << " ppm\n";
-			} else if (Verbose >= 1) Time(), std::cout << "Cannot perform MS1 mass calibration, too few confidently identified precursors\n";
+			} else if (Verbose >= 1) Time(), dsout << "Cannot perform MS1 mass calibration, too few confidently identified precursors\n";
 			mz_calibrated = true;
 		}
     }
@@ -7829,11 +7948,11 @@ public:
 		std::vector<bool> identified(np);
 		std::vector<int> ids;
 		if (!np) {
-			if (Verbose >= 1) Time(), std::cout << "No protein annotation, skipping protein q-value calculation\n";
+			if (Verbose >= 1) Time(), dsout << "No protein annotation, skipping protein q-value calculation\n";
 			return ids;
 		}
 
-		if (Verbose >= 1) Time(), std::cout << "Calculating protein q-values\n";
+		if (Verbose >= 1) Time(), dsout << "Calculating protein q-values\n";
 
 		for (auto &e : entries) {
 			auto &le = lib->entries[e.target.pep->index];
@@ -7908,7 +8027,7 @@ public:
 			}
 			if (identified[i]) ids01++;
 		}
-		if (Verbose >= 1) Time(), std::cout << "Number of " << (PGLevel == 0 ? "protein isoforms" : (PGLevel == 1 ? "proteins" : "genes")) << " identified at 1% FDR: "
+		if (Verbose >= 1) Time(), dsout << "Number of " << (PGLevel == 0 ? "protein isoforms" : (PGLevel == 1 ? "proteins" : "genes")) << " identified at 1% FDR: "
 			<< ids01 << " (precursor-level), " << ids01p << " (protein-level) (inference performed using proteotypic peptides only)\n";
 		RS.proteins = ids01p;
 
@@ -7937,7 +8056,7 @@ public:
 
 	bool reference_run(Library * ref) {
 		if (!RTWindowedSearch && (!RefCal || (!InferWindow && !Calibrate))) return false;
-		if (Verbose >= 1) Time(), std::cout << "Calibrating retention times using a set of reference precursors.\n";
+		if (Verbose >= 1) Time(), dsout << "Calibrating retention times using a set of reference precursors.\n";
 
 		in_ref_run = true, curr_batch = Batches;
 		load_library(ref);
@@ -7968,7 +8087,7 @@ public:
 			bool do_calibrate = do_reset || RTWindowedSearch;
 			int start_batch = 0;
 			full_spectrum = true;
-			if (Verbose == 1) Time(), std::cout << "Processing...\n";
+			if (Verbose == 1) Time(), dsout << "Processing...\n";
 			if (do_calibrate) {
 			calibrate:
 				full_spectrum = false;
@@ -7976,10 +8095,10 @@ public:
 					if (curr_batch >= 5 && curr_batch < Batches - 1) {
 						int first_batch = curr_batch;
 						curr_batch = Min(Batches - 1, curr_batch + curr_batch / 5);
-						if (Verbose >= 2) Time(), std::cout << "Processing batches #" << first_batch + 1 << "-" << curr_batch + 1 << " out of " << Batches << " \n";
+						if (Verbose >= 2) Time(), dsout << "Processing batches #" << first_batch + 1 << "-" << curr_batch + 1 << " out of " << Batches << " \n";
 					} else if (Verbose >= 2) {
-						if (Batches == 1) Time(), std::cout << "Processing\n";
-						else Time(), std::cout << "Processing batch #" << curr_batch + 1 << " out of " << Batches << " \n";
+						if (Batches == 1) Time(), dsout << "Processing\n";
+						else Time(), dsout << "Processing batch #" << curr_batch + 1 << " out of " << Batches << " \n";
 					}
 
 					curr_iter = curr_batch ? 1 : 0;
@@ -8002,7 +8121,7 @@ public:
 					update(false, false, true, false, false), recalibrate = false;
 					MassAccuracy = Min(CalibrationMassAccuracy, MassAccuracy * 5.0);
 					MassAccuracyMs1 = Min(CalibrationMassAccuracy, MassAccuracyMs1 * 5.0);
-					if (Verbose >= 2) Time(), std::cout << "Recalibrating with mass accuracy " << MassAccuracy << ", " << MassAccuracyMs1 << " (MS2, MS1)\n";
+					if (Verbose >= 2) Time(), dsout << "Recalibrating with mass accuracy " << MassAccuracy << ", " << MassAccuracyMs1 << " (MS2, MS1)\n";
 					mz_calibrated = acc_calibrated = false;
 					reset_precursors();
 					reset_weights();
@@ -8013,7 +8132,7 @@ public:
 				RemoveMassAccOutliers = false;
 				update(RTWindowedSearch, InferWindow && !window_calculated, Calibrate && !mz_calibrated, Q1Cal && scanning, false);
 				if (acc_calibrated) {
-					if (Verbose >= 3) Time(), std::cout << "Refining mass correction\n";
+					if (Verbose >= 3) Time(), dsout << "Refining mass correction\n";
 					RemoveMassAccOutliers = true;
 					MassAccOutlier = MassAccuracy;
 					MassAccMs1Outlier = MassAccuracyMs1;
@@ -8022,7 +8141,7 @@ public:
 				}
 				if (ForceMassAcc) {
 					MassAccuracy = GlobalMassAccuracy, MassAccuracyMs1 = GlobalMassAccuracyMs1;
-					if (Verbose >= 2) Time(), std::cout << "Using mass accuracy " << MassAccuracy << ", " << MassAccuracyMs1 << " (MS2, MS1)\n";
+					if (Verbose >= 2) Time(), dsout << "Using mass accuracy " << MassAccuracy << ", " << MassAccuracyMs1 << " (MS2, MS1)\n";
 				}
 
 				if (do_reset) reset_precursors();
@@ -8034,10 +8153,10 @@ public:
 				if (curr_batch >= start_batch + 5 && curr_batch < Batches - 1) {
 					int first_batch = curr_batch;
 					curr_batch = Min(Batches - 1, curr_batch + (curr_batch - start_batch) / 5);
-					if (Verbose >= 2) Time(), std::cout << "Processing batches #" << first_batch + 1 << "-" << curr_batch + 1 << " out of " << Batches << " \n";
+					if (Verbose >= 2) Time(), dsout << "Processing batches #" << first_batch + 1 << "-" << curr_batch + 1 << " out of " << Batches << " \n";
 				} else if (Verbose >= 2) {
-					if (Batches == 1) Time(), std::cout << "Processing\n";
-					else Time(), std::cout << "Processing batch #" << curr_batch + 1 << " out of " << Batches << " \n";
+					if (Batches == 1) Time(), dsout << "Processing\n";
+					else Time(), dsout << "Processing batch #" << curr_batch + 1 << " out of " << Batches << " \n";
 				}
 
 				curr_iter = CalibrationIter + 1;
@@ -8056,7 +8175,7 @@ public:
 				while (true) {
 					MassAccuracy *= 1.2;
 					if (MassAccuracy > start_acc * 10.0) break;
-					if (Verbose >= 3) Time(), std::cout << "Trying mass accuracy " << MassAccuracy * 1000000.0 << " ppm\n";
+					if (Verbose >= 3) Time(), dsout << "Trying mass accuracy " << MassAccuracy * 1000000.0 << " ppm\n";
 					reset_precursors();
 					reset_weights();
 					update_classifier(true, false, true, false, 0, curr_batch); ids = Ids10;
@@ -8065,7 +8184,7 @@ public:
 					if (fail >= 3) break;
 				}
 				MassAccuracy = best_acc, fail = 0;
-				if (Verbose >= 1) Time(), std::cout << "Optimised mass accuracy: " << MassAccuracy * 1000000.0 << " ppm\n";
+				if (Verbose >= 1) Time(), dsout << "Optimised mass accuracy: " << MassAccuracy * 1000000.0 << " ppm\n";
 				reset_precursors();
 
 				reset_weights();
@@ -8073,7 +8192,7 @@ public:
 				update_classifier(true, false, false, false, 0, curr_batch), ids = Ids10;
 				if (ids < best_ids) {
 					reset_weights(), par_limit = true;
-					if (Verbose >= 3) Time(), std::cout << "Resetting weights and preventing the linear classifier from using the full set of weights in the future\n";
+					if (Verbose >= 3) Time(), dsout << "Resetting weights and preventing the linear classifier from using the full set of weights in the future\n";
 				} else update(false, false, false, false, false);
 
 				GlobalMassAccuracy = MassAccuracy;
@@ -8086,13 +8205,13 @@ public:
 			for (; curr_iter < nnIter - 1; curr_iter++) {
 				update_classifier(true, false, false, false, 0, curr_batch);
 				if (Ids10 < best_ids && switched <= 2) {
-					if (Verbose >= 3) Time(), std::cout << "Trying the other linear classifier\n";
+					if (Verbose >= 3) Time(), dsout << "Trying the other linear classifier\n";
 					LDA ^= 1, switched++;
 					int last10 = Ids10;
 					copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
 					update_classifier(true, false, false, false, 0, curr_batch);
 					if (Ids10 <= last10) {
-						if (Verbose >= 3) Time(), std::cout << "Switching back\n";
+						if (Verbose >= 3) Time(), dsout << "Switching back\n";
 						LDA ^= 1;
 					}
 				}
@@ -8101,14 +8220,14 @@ public:
 					update(false, false, false, false, false);
 				} else {
 					copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
-					if (Verbose >= 3) Time(), std::cout << "Reverting weights\n";
+					if (Verbose >= 3) Time(), dsout << "Reverting weights\n";
 					if (curr_iter == CalibrationIter + 2 && !par_limit) {
 						par_limit = true;
-						if (Verbose >= 3) Time(), std::cout << "Preventing the linear classifier from using the full set of weights in the future\n";
+						if (Verbose >= 3) Time(), dsout << "Preventing the linear classifier from using the full set of weights in the future\n";
 					} else fail++;
 					update_classifier(true, false, false, false, 0, curr_batch);
 					if (Ids10 < best_ids) {
-						if (Verbose >= 3) Time(), std::cout << "Reverting weights\n";
+						if (Verbose >= 3) Time(), dsout << "Reverting weights\n";
 						copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
 					} else best_ids = Ids10, update(false, false, false, false, false);
 					if (fail >= 1) {
@@ -8129,7 +8248,7 @@ public:
 
 			remove_rubbish();
 			if (IDsInterference) {
-				if (Verbose >= 1) Time(), std::cout << "Removing interfering precursors\n";
+				if (Verbose >= 1) Time(), dsout << "Removing interfering precursors\n";
 				quantify_all(1, false);
 				for (int ir = 0; ir < IDsInterference; ir++) {
 					map_ids();
@@ -8143,7 +8262,7 @@ public:
 				free_precursors();
 				if (curr_iter >= iN) {
 					if (TranslatePeaks) {
-						if (Verbose >= 1) Time(), std::cout << "Translating peaks within elution groups\n";
+						if (Verbose >= 1) Time(), dsout << "Translating peaks within elution groups\n";
 						map_egs();
 						translate_all();
 						calculate_qvalues();
@@ -8162,7 +8281,7 @@ public:
 		curr_iter = iN;
 		Quant quant;
 		quant.proteins = calculate_protein_qvalues();
-		if (Verbose >= 1) Time(), std::cout << "Quantification\n";
+		if (Verbose >= 1) Time(), dsout << "Quantification\n";
 		quantify_all(2, true);
 		if (TranslatePeaks) quantify_all(3, true);
 		if (no_report) return;
@@ -8268,7 +8387,7 @@ public:
 		}
 		if (result != NULL) return;
 
-		if (QuantInMem) { quants.push_back(quant); std::cout << "\n"; }
+		if (QuantInMem) { quants.push_back(quant); dsout << "\n"; }
 		else {
 			std::ofstream out;
 			std::string out_quant;
@@ -8276,27 +8395,27 @@ public:
 			else {
 				out = std::ofstream(out_quant = name + std::string(".quant"), std::ofstream::binary);
 				if (out.fail()) {
-					std::cout << "WARNING: cannot save the .quant file to the raw data folder; using the current working folder instead\n";
+					dsout << "WARNING: cannot save the .quant file to the raw data folder; using the current working folder instead\n";
 					out = std::ofstream(out_quant = location_to_file_name(name) + std::string(".quant"), std::ofstream::binary);
 				}
 			}
-			if (out.fail()) std::cout << "ERROR: cannot save the .quant file to " << out_quant << ". Check if the destination folder is write-protected or the file is in use\n";
+			if (out.fail()) dsout << "ERROR: cannot save the .quant file to " << out_quant << ". Check if the destination folder is write-protected or the file is in use\n";
 			else {
 				quant.write(out);
 				long long fsize = out.tellp();
 				out.close();
-				if (Verbose >= 1) Time(), std::cout << "Quantification information saved to " << out_quant << ".\n\n";
+				if (Verbose >= 1) Time(), dsout << "Quantification information saved to " << out_quant << ".\n\n";
 #ifdef _MSC_VER
 				if (args.find("--!mmap-quant") != std::string::npos) {
 					std::string mapping_name(1000, 0);
 					sprintf(&(mapping_name[0]), "DIA-NN_%d_%d", GetCurrentProcessId(),run_index);
 					for (i = 0; i < 1000; i++) if (mapping_name[i] == 0) break; mapping_name.resize(i);
-					if (Verbose >= 1) Time(), std::cout << "Creating a file mapping " << mapping_name << " with the quantification information\n";
+					if (Verbose >= 1) Time(), dsout << "Creating a file mapping " << mapping_name << " with the quantification information\n";
 					auto map = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, fsize, mapping_name.c_str());
-					if (map == NULL) std::cout << "ERROR: Cannot create file mapping\n";
+					if (map == NULL) dsout << "ERROR: Cannot create file mapping\n";
 					else {
 						auto buf = (LPTSTR)MapViewOfFile(map, FILE_MAP_ALL_ACCESS, 0, 0, fsize);
-						if (buf == NULL) std::cout << "ERROR: Cannot access file mapping\n";
+						if (buf == NULL) dsout << "ERROR: Cannot access file mapping\n";
 						else {
 							std::stringstream ss(buf);
 							quant.write(ss);
@@ -8327,7 +8446,7 @@ public:
 			e.target.intensities(le.apex, gen);
 			if (le.best_run >= 0) cnt++;
 		}
-		if (Verbose >= 1) Time(), std::cout << cnt << " precursors added to the library\n";
+		if (Verbose >= 1) Time(), dsout << cnt << " precursors added to the library\n";
 	}
 
 #if (HASH > 0)
@@ -8390,7 +8509,7 @@ int analyse_unit_test(int threads) {
 	std::vector<int> ms1_peak_n, ms2_peak_n;
 
 	std::ifstream lib("yeast_ref.tsv.speclib", std::ifstream::binary);
-	if (lib.fail()) { std::cout << "Cannot open the spectral library file\n"; return -1; }
+	if (lib.fail()) { dsout << "Cannot open the spectral library file\n"; return -1; }
 	lib.seekg(0, lib.end);
 	long long size = lib.tellg();
 	lib.seekg(0, lib.beg);
@@ -8412,9 +8531,9 @@ int analyse_unit_test(int threads) {
 	auto result = analyse(&(lib_bytes[0]), lib_bytes.size(), threads, 20.0 / 1000000.0, 20.0 / 1000000.0, 8, 0.01, run.ms1h.size(), &(ms1_rt[0]), &(ms1_peak_n[0]), (float*)(run.ms1h[0].peaks),
 		run.ms2h.size(), &(ms2_rt[0]), &(ms2_low[0]), &(ms2_high[0]), &(ms2_peak_n[0]), (float*)(run.ms2h[0].peaks));
 
-	//std::cout << result.size() << " precursors at 1% FDR:\n";
-	//std::cout << "Precursor.Index.In.Library\tPrecursor.RT\tPrecursor.iRT\tPrecursor.Quantity\tPrecursor.QValue\n";
-	//for (auto &qe : result) std::cout << qe.pr.index << '\t' << qe.pr.RT << '\t' << qe.pr.iRT << '\t' << qe.pr.quantity << '\t' << qe.pr.qvalue << '\n';
+	//dsout << result.size() << " precursors at 1% FDR:\n";
+	//dsout << "Precursor.Index.In.Library\tPrecursor.RT\tPrecursor.iRT\tPrecursor.Quantity\tPrecursor.QValue\n";
+	//for (auto &qe : result) dsout << qe.pr.index << '\t' << qe.pr.RT << '\t' << qe.pr.iRT << '\t' << qe.pr.quantity << '\t' << qe.pr.qvalue << '\n';
 	return result.size();
 }
 #endif
@@ -8429,7 +8548,11 @@ int main(int argc, char *argv[]) {
 #endif
 	std::cout.setf(std::ios::unitbuf);
 	auto curr_time = time(0);
-	std::cout << std::ctime(&curr_time) << "DIA-NN (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\n";
+	dsout << std::ctime(&curr_time) << "DIA-NN (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\n";
+#ifdef _MSC_VER
+	cpu_info(dsout);
+#endif
+	dsout << "Logical CPU cores: " << std::thread::hardware_concurrency() << "\n";
 #if (HASH > 0)
 	init_hash();
 #endif
@@ -8439,12 +8562,12 @@ int main(int argc, char *argv[]) {
 
 #if (EXTERNAL > 0)
 	if (args.find("--!test") != std::string::npos) {
-		std::cout << "Analyse() function unit test:\n"; analyse_unit_test(Threads);
-		std::cout << "\n";
+		dsout << "Analyse() function unit test:\n"; analyse_unit_test(Threads);
+		dsout << "\n";
 	}
 #endif
 
-	if (Verbose >= 1) std::cout << ms_files.size() << " files will be processed\n";
+	if (Verbose >= 1) dsout << ms_files.size() << " files will be processed\n";
 	if (Convert) {
 		for (auto it = ms_files.begin(); it != ms_files.end(); it++) {
 			Run run(std::distance(ms_files.begin(), it));
@@ -8453,22 +8576,8 @@ int main(int argc, char *argv[]) {
 			if (out_dir.size()) dia_name = out_dir + '\\' + get_file_name(dia_name);
 			run.write(&(dia_name[0]));
 		}
-		std::cout << "Finished\n\n";
+		dsout << "Finished\n\n";
 		return 0;
-	}
-
-	if ((ExportProsit || ExportLibrary) && !FastaSearch && fasta_files.size() && !lib_file.size()) {
-		Fasta fasta;
-		Library lib;
-		if (Verbose >= 1 && ExportProsit) Time(), std::cout << "Preparing Prosit input from the FASTA database provided\n";
-		if (!fasta.load(fasta_files, fasta_filter_files)) Throw("Cannot load FASTA");
-		lib.load(fasta);
-		if (ExportLibrary) {
-			if (Verbose >= 1) Time(), std::cout << "Preparing an in silico spectral library from the FASTA database provided\n";
-			if (learn_lib_file.size()) learn_from_library(learn_lib_file);
-			lib.generate_all();
-			lib.save(out_lib_file, NULL, false);
-		}
 	}
 
 	Fasta fasta;
@@ -8494,20 +8603,32 @@ int main(int argc, char *argv[]) {
 		if (!lib_file.size()) return 0;
 		if (!lib.load(&(lib_file[0]))) Throw("Cannot load spectral library");
 		if (ExportProsit && !fasta_files.size()) {
-			if (Verbose >= 1) Time(), std::cout << "Preparing Prosit input from the spectral library provided\n";
+			if (Verbose >= 1) Time(), dsout << "Preparing Prosit input from the spectral library provided\n";
 			lib.export_prosit();
 		}
 	}
 	if (!FastaSearch && fasta_files.size()) {
-		if (lib.protein_ids.size() > 1) fasta.load_proteins(fasta_files);
+		if (lib.protein_ids.size() > 1 && !Reannotate) fasta.load_proteins(fasta_files);
 		else if (!fasta.load(fasta_files, fasta_filter_files)) Throw("Cannot load FASTA");
 	}
 	if (fasta_files.size()) {
-		if (lib.protein_ids.size() > 1 || FastaSearch) {
-			if (Verbose >= 1 && !FastaSearch) Time(), std::cout << "Annotating library proteins with information from the FASTA database\n";
+		if ((lib.protein_ids.size() > 1 || FastaSearch) && !Reannotate) {
+			if (Verbose >= 1 && !FastaSearch) Time(), dsout << "Annotating library proteins with information from the FASTA database\n";
 			annotate_library(lib, fasta);
 		} else {
-			if (Verbose >= 1) Time(), std::cout << "No protein information found in the library. Annotating library precursors with information from the FASTA database\n";
+			if (Verbose >= 1) {
+				if (!Reannotate) 
+					Time(), dsout << "No protein information found in the library. Annotating library precursors with information from the FASTA database\n";
+				else {
+					Time(), dsout << "Reannotating library precursors with information from the FASTA database\n";
+				}
+				if (!lib.protein_ids.size() || Reannotate) {
+					PG pg;
+					lib.protein_ids.clear(); lib.protein_ids.push_back(pg);
+					lib.names.clear(); lib.genes.clear(); lib.proteins.clear();
+					for (auto &e : lib.entries) e.pid_index = 0;
+				}
+			}
 			lib.load_protein_annotations(fasta);
 			annotate_library(lib, fasta);
 		}
@@ -8515,7 +8636,7 @@ int main(int argc, char *argv[]) {
 	}
 	if (GuideLibrary && FastaSearch && nnIter >= iN)
 		ReportProteinQValue = 1.0, Time(),
-		std::cout << "WARNING: protein q-values cannot be calculated without NNs when a guide library is used for FASTA search, protein q-value filter reset to 1.0\n";
+		dsout << "WARNING: protein q-values cannot be calculated without NNs when a guide library is used for FASTA search, protein q-value filter reset to 1.0\n";
 	if (!ReportOnly) lib.initialise(!QuantOnly);
 	if (!FastaSearch && !lib.from_speclib && lib.gen_decoys) lib.save(lib_file + std::string(".speclib"));
 
@@ -8530,12 +8651,12 @@ int main(int argc, char *argv[]) {
 	if (QuantOnly) goto quant_only;
 
 #if (HASH > 0)
-	std::cout << "Library hash: " << lib.hash() << "\n";
+	dsout << "Library hash: " << lib.hash() << "\n";
 #endif
 
 	// first loop
-	std::cout << "\n";
-	if (RTProfiling) if (Verbose >= 1) Time(), std::cout << "First pass: collecting retention time information\n";
+	dsout << "\n";
+	if (RTProfiling) if (Verbose >= 1) Time(), dsout << "First pass: collecting retention time information\n";
 	for (auto it = ms_files.begin(); it != ms_files.end(); it++) {
 		if ((UseRTInfo && RTProfiling) || UseQuant) {
 			std::ifstream in((*it) + std::string(".quant"), std::ifstream::binary);
@@ -8554,10 +8675,10 @@ int main(int argc, char *argv[]) {
 				continue;
 			}
 		}
-		if (Verbose >= 1) Time(), std::cout << "File #" << std::distance(ms_files.begin(), it) + 1 << "/" << ms_files.size() << "\n";
+		if (Verbose >= 1) Time(), dsout << "File #" << std::distance(ms_files.begin(), it) + 1 << "/" << ms_files.size() << "\n";
 
 		Run run(std::distance(ms_files.begin(), it));
-		if (!run.load(&((*it)[0]))) std::cout << "ERROR: cannot load the file, skipping\n", failed_files.insert(*it);
+		if (!run.load(&((*it)[0]))) dsout << "ERROR: cannot load the file, skipping\n", failed_files.insert(*it);
 		if (ref_file.size()) run.reference_run(&ref);
 		run.load_library(&lib);
 		run.process();
@@ -8573,7 +8694,7 @@ int main(int argc, char *argv[]) {
 
 quant_only:
 	if (QuantOnly) {
-		if (Verbose >= 1) Time(), std::cout << "Quantification\n";
+		if (Verbose >= 1) Time(), dsout << "Quantification\n";
 		for (auto it = ms_files.begin(); it != ms_files.end(); it++) {
 			Quant Q; std::ifstream in(*it + std::string(".quant"), std::ifstream::binary);
 			if (in.fail() || temp_folder.size()) in = std::ifstream(location_to_file_name(*it) + std::string(".quant"), std::ifstream::binary);
@@ -8581,7 +8702,7 @@ quant_only:
 
 			int runN = Q.run_index;
 			Run run(runN);
-			if (!run.load(&((*it)[0]))) std::cout << "ERROR: cannot load the file, skipping\n", failed_files.insert(*it);
+			if (!run.load(&((*it)[0]))) dsout << "ERROR: cannot load the file, skipping\n", failed_files.insert(*it);
 			run.load_library(&lib);
 			for (auto pos = Q.entries.begin(); pos != Q.entries.end(); pos++) {
 				auto e = &(run.entries[pos->index]);
@@ -8609,7 +8730,7 @@ quant_only:
 
 	{
 		// second loop: refine iRT predictions
-		if (Verbose >= 1) Time(), std::cout << "Second pass: indentification and quantification\n";
+		if (Verbose >= 1) Time(), dsout << "Second pass: indentification and quantification\n";
 		Profile profile(ms_files, lib.entries.size());
 		if (RTProfiling) for (auto jt = profile.entries.begin(); jt != profile.entries.end(); jt++)
 			if (jt->index >= 0) if (jt->pr.qvalue < MaxProfilingQvalue) {
@@ -8637,10 +8758,10 @@ quant_only:
 					continue;
 				}
 			}
-			if (Verbose >= 1) Time(), std::cout << "Second pass: file #" << std::distance(ms_files.begin(), it) + 1 << "/" << ms_files.size() << "\n";
+			if (Verbose >= 1) Time(), dsout << "Second pass: file #" << std::distance(ms_files.begin(), it) + 1 << "/" << ms_files.size() << "\n";
 
 			Run run(std::distance(ms_files.begin(), it));
-			if (!run.load(&((*it)[0]))) std::cout << "ERROR: cannot load the file, skipping\n", failed_files.insert(*it);
+			if (!run.load(&((*it)[0]))) dsout << "ERROR: cannot load the file, skipping\n", failed_files.insert(*it);
 			if (ref_file.size()) run.reference_run(&ref);
 			run.load_library(&lib);
 			run.process();
@@ -8656,18 +8777,18 @@ quant_only:
 cross_run:
 gen_spec_lib:
 	if (failed_files.size()) {
-		std::cout << "ERROR: DIA-NN tried but failed to load the following files: ";
+		dsout << "ERROR: DIA-NN tried but failed to load the following files: ";
 		int cnt = 0;
 		for (auto &f : failed_files) {
-			std::cout << f;
+			dsout << f;
 			cnt++;
-			if (cnt != failed_files.size()) std::cout << ", ";
+			if (cnt != failed_files.size()) dsout << ", ";
 		}
-		std::cout << "\n";
+		dsout << "\n";
 	}
 
 	if (IndividualReports || !(out_file.size() || out_gene_file.size())) goto gen_lib;
-	if (Verbose >= 1) Time(), std::cout << "Cross-run analysis\n";
+	if (Verbose >= 1) Time(), dsout << "Cross-run analysis\n";
 	if (QuantInMem) lib.info.load(&(lib), ms_files, &quants);
 	else lib.info.load(&(lib), ms_files);
 	lib.info.quantify();
@@ -8681,7 +8802,7 @@ gen_spec_lib:
 gen_lib:
 	if (out_lib_file.size()) if (FastaSearch || GenSpecLib) { // generating spectral library
 		MaxF = INF;
-		if (Verbose >= 1) Time(), std::cout << "Generating spectral library:\n";
+		if (Verbose >= 1) Time(), dsout << "Generating spectral library:\n";
 
 		for (auto &le : lib.entries) le.best_run = -1;
 		// determine the best run for each precursor and collect information from this run
@@ -8727,7 +8848,7 @@ gen_lib:
 			} else Q = &(quants[std::distance(ms_files.begin(), it)]);
 
 			Run run(Q->run_index);
-			if (!run.load(&((*it)[0]))) std::cout << "ERROR: cannot load the file, skipping\n", failed_files.insert(*it);
+			if (!run.load(&((*it)[0]))) dsout << "ERROR: cannot load the file, skipping\n", failed_files.insert(*it);
 			run.load_library(&lib);
 			run.full_spectrum = true;
 
@@ -8742,7 +8863,7 @@ gen_lib:
 
 		lib.save(out_lib_file, NULL, true, false);
 
-		if (Verbose >= 1) Time(), std::cout << "Loading the generated library and saving it in the .speclib format\n";
+		if (Verbose >= 1) Time(), dsout << "Loading the generated library and saving it in the .speclib format\n";
 		Library new_lib;
 		new_lib.load(&(out_lib_file[0]));
 		Fasta fst; fst.load_proteins(fasta_files);
@@ -8754,12 +8875,23 @@ gen_lib:
 	remove:
 #ifdef CPP17
 	if (RemoveQuant) {
-		if (Verbose >= 1) Time(), std::cout << "Removing .quant files\n";
+		if (Verbose >= 1) Time(), dsout << "Removing .quant files\n";
 		for (auto &file : ms_files) try { std::experimental::filesystem::remove(file + std::string(".quant")); } catch (std::exception &e) { }
 	}
 #endif
 
-	std::cout << "Finished\n\n";
+	if ((out_file.size() && ms_files.size()) || out_lib_file.size()) {
+		auto log_name = (out_file.size() && ms_files.size()) ? (remove_extension(out_file) + std::string(".log.txt")) : (remove_extension(out_lib_file) + std::string(".log.txt"));
+		std::ofstream out(log_name, std::ofstream::out);
+		if (out.fail()) dsout << "ERROR: cannot write log to " << log_name << "\n";
+		else {
+			out << dsout.s.rdbuf();
+			out.close();
+			Time(), dsout << "Log saved to " << log_name << "\n";
+		}
+	}
+
+	dsout << "Finished\n\n";
 	return 0;
 }
 

@@ -27,7 +27,9 @@ namespace GUI
             use_quant_b, use_lib_free_b, met_exc_b, carbamet_b, oxid_b, opt_training_b;
         public decimal prec_fdr_d, prot_fdr_d, mass_acc_d, mass_acc_ms1_d;
         public int quant_i;
-        public bool pdf_rep_b, prosit_b;
+        public bool pdf_rep_b, prosit_b, predictor_b;
+        public bool ram_b;
+        public bool reannotate_b;
     }
 
     public partial class Form1 : Form
@@ -39,27 +41,14 @@ namespace GUI
 
         public string curr_dir;
 
-        private void Form1_Load(object sender, EventArgs e)
-        {
-            int cores = 0;
-            foreach (var pr in new System.Management.ManagementObjectSearcher("Select * from Win32_Processor").Get())
-                cores += int.Parse(pr["NumberOfCores"].ToString());
-            ThreadsUpDown.Value = cores;
-            ThreadsUpDown.Maximum = Environment.ProcessorCount;
-            EnzymeCombo.SelectedIndex = 0;
-            PGBox.SelectedIndex = 3;
-            QuantBox.SelectedIndex = 0;
-            curr_dir = System.IO.Directory.GetCurrentDirectory();
-            OutputText.Text = curr_dir + "\\report.tsv";
-        }
-
         bool running = false, finished = false, in_pipeline = false, finished_pipeline = false;
         Process process = new Process();
         List<Settings> Pipeline = new List<Settings>();
         List<string> PipNames = new List<string>();
         int pip_last_index = 0, processed = 0;
         string stats_file, report_file, pdf_file;
-        
+        Settings DefaultConfig = new Settings();
+
         private void SaveSettings(ref Settings S)
         {
             S.diann_s = ExeText.Text;
@@ -74,7 +63,7 @@ namespace GUI
             S.fasta_s = FastaText.Text;
             S.use_lib_free_b = LibraryFreeBox.Checked;
             S.out_lib_s = OutputLibText.Text;
-            S.learn_lib_s = LearnLibText.Text;
+            S.learn_lib_s = "";
             S.protease_i = EnzymeCombo.SelectedIndex;
             S.missed_i = MissedCleavageUpDown.Value;
             S.pep_min_i = PepLenMin.Value;
@@ -87,7 +76,7 @@ namespace GUI
             S.carbamet_b = CysteineBox.Checked;
             S.varmod_i = VarModsUpDown.Value;
             S.oxid_b = OxidationBox.Checked;
-            S.opt_training_b = OptimiseTrainingBox.Checked;
+            S.opt_training_b = false;
             S.scan_i = WindowUpDown.Value;
             S.mass_acc_d = MassAccUpDown.Value;
             S.mass_acc_ms1_d = MassAccMs1UpDown.Value;
@@ -104,6 +93,24 @@ namespace GUI
             S.quant_i = QuantBox.SelectedIndex;
             S.pdf_rep_b = PDFRepBox.Checked;
             S.prosit_b = PrositBox.Checked;
+            S.predictor_b = PredictorBox.Checked;
+            S.ram_b = RAMBox.Checked;
+            S.reannotate_b = ReannotateBox.Checked;
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            int cores = 0;
+            foreach (var pr in new System.Management.ManagementObjectSearcher("Select * from Win32_Processor").Get())
+                cores += int.Parse(pr["NumberOfCores"].ToString());
+            ThreadsUpDown.Value = cores;
+            ThreadsUpDown.Maximum = Environment.ProcessorCount;
+            EnzymeCombo.SelectedIndex = 0;
+            PGBox.SelectedIndex = 3;
+            QuantBox.SelectedIndex = 0;
+            curr_dir = System.IO.Directory.GetCurrentDirectory();
+            OutputText.Text = curr_dir + "\\report.tsv";
+            SaveSettings(ref DefaultConfig);
         }
 
         private void LoadSettings(Settings S)
@@ -119,7 +126,6 @@ namespace GUI
             FastaText.Text = S.fasta_s;
             LibraryFreeBox.Checked = S.use_lib_free_b;
             OutputLibText.Text = S.out_lib_s;
-            LearnLibText.Text = S.learn_lib_s;
             EnzymeCombo.SelectedIndex = S.protease_i;
             MissedCleavageUpDown.Value = S.missed_i;
             PepLenMin.Value = S.pep_min_i;
@@ -132,7 +138,6 @@ namespace GUI
             CysteineBox.Checked = S.carbamet_b;
             VarModsUpDown.Value = S.varmod_i;
             OxidationBox.Checked = S.oxid_b;
-            OptimiseTrainingBox.Checked = S.opt_training_b;
             WindowUpDown.Value = S.scan_i;
             MassAccUpDown.Value = S.mass_acc_d;
             MassAccMs1UpDown.Value = S.mass_acc_ms1_d;
@@ -149,6 +154,9 @@ namespace GUI
             QuantBox.SelectedIndex = S.quant_i;
             PDFRepBox.Checked = S.pdf_rep_b;
             PrositBox.Checked = S.prosit_b;
+            PredictorBox.Checked = S.predictor_b;
+            RAMBox.Checked = S.ram_b;
+            ReannotateBox.Checked = S.reannotate_b;
 
             if (!System.IO.Directory.Exists(S.temp_folder_s)) TempFolderBox.Text = S.temp_folder_s = "";
         }
@@ -294,6 +302,7 @@ namespace GUI
                     process.StartInfo.Arguments += " --out-gene \"" + report + ".genes.tsv\"";
                     process.StartInfo.Arguments += " --qvalue " + Convert.ToString(0.01 * (double)S.prec_fdr_d, new System.Globalization.CultureInfo("en-US"));
 
+                    if (S.ram_b) process.StartInfo.Arguments += " --min-corr 1.0 --corr-diff 1.0";
                     if (S.pdf_rep_b)
                     {
                         stats_file = "\"" + report + ".stats.tsv\"";
@@ -308,7 +317,9 @@ namespace GUI
                         process.StartInfo.Arguments += " --out-lib \"" + S.out_lib_s + "\"";
                         process.StartInfo.Arguments += " --gen-spec-lib";
                     }
-                    if (S.prosit_b) process.StartInfo.Arguments += " --prosit"; 
+                    if (S.predictor_b) process.StartInfo.Arguments += " --predictor";
+                    if (S.prosit_b) process.StartInfo.Arguments += " --prosit";
+                    if (S.reannotate_b) process.StartInfo.Arguments += " --reannotate";
 
                     if (S.fasta_s != "")
                     {
@@ -505,15 +516,6 @@ namespace GUI
                     FastaText.AppendText(str + '\n');
                 }
             }
-        }
-
-        private void LearnLibButton_Click(object sender, EventArgs e)
-        {
-            OpenFileDialog libDialog = new OpenFileDialog();
-            libDialog.Filter = "Spectral library files (*.txt, *.csv, *.tsv, *.xls, *.speclib)|*.txt;*.csv;*.tsv;*.xls;*.speclib|All files (*.*)|*.*";
-            libDialog.FilterIndex = 0;
-            if (libDialog.ShowDialog() == DialogResult.OK)
-                LearnLibText.Text = libDialog.FileName;
         }
 
         private void OutputLibButton_Click(object sender, EventArgs e)
@@ -727,6 +729,7 @@ namespace GUI
             if (LibraryFreeBox.Checked)
             {
                 GenLibBox.Checked = true;
+                PredictorBox.Checked = true;
                 if (OutputLibText.Text == "") OutputLibText.Text = curr_dir + "\\lib.tsv";
             }
         }
@@ -746,28 +749,33 @@ namespace GUI
             else GenLibBox.Checked = false;
         }
 
-        private void OptimiseTrainingBox_CheckedChanged(object sender, EventArgs e)
-        {
-            if (OptimiseTrainingBox.Checked)
-            {
-                GenLibBox.Checked = true;
-                if (OutputLibText.Text == "") OutputLibText.Text = curr_dir + "\\lib.tsv";
-            }
-        }
-
-        private void LearnLibText_TextChanged(object sender, EventArgs e)
-        {
-            if (LearnLibText.Text != "")
-            {
-                LibraryFreeBox.Checked = true;
-                GenLibBox.Checked = true;
-                if (OutputLibText.Text == "") OutputLibText.Text = curr_dir + "\\lib.tsv";
-            }
-        }
-
         private void OutputText_TextChanged(object sender, EventArgs e)
         {
 
+        }
+
+        private void PredictorBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (PredictorBox.Checked)
+            {
+                GenLibBox.Checked = true;
+                if (LibText.Text == "" && FastaText.Text != "") LibraryFreeBox.Checked = true;
+                if (OutputLibText.Text == "") OutputLibText.Text = curr_dir + "\\lib.tsv";
+            }
+        }
+
+        private void PrositBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (PrositBox.Checked)
+            {
+                GenLibBox.Checked = true;
+                if (LibText.Text == "" && FastaText.Text != "") LibraryFreeBox.Checked = true;
+            }
+        }
+
+        private void ResetButton_Click(object sender, EventArgs e)
+        {
+            LoadSettings(DefaultConfig);
         }
 
         private void OpenPipelineButton_Click(object sender, EventArgs e)

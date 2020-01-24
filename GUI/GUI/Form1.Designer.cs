@@ -34,7 +34,6 @@
             this.LogClearButton = new System.Windows.Forms.Button();
             this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             this.OutputLibButton = new System.Windows.Forms.Button();
-            this.LearnLibButton = new System.Windows.Forms.Button();
             this.FastaButton = new System.Windows.Forms.Button();
             this.WindowUpDown = new System.Windows.Forms.NumericUpDown();
             this.IndividualRunsCheck = new System.Windows.Forms.CheckBox();
@@ -57,7 +56,6 @@
             this.RTProfilingBox = new System.Windows.Forms.CheckBox();
             this.EnzymeCombo = new System.Windows.Forms.ComboBox();
             this.MissedCleavageUpDown = new System.Windows.Forms.NumericUpDown();
-            this.LibraryFreeBox = new System.Windows.Forms.CheckBox();
             this.ClearFastaButton = new System.Windows.Forms.Button();
             this.PGBox = new System.Windows.Forms.ComboBox();
             this.IsotopeBox = new System.Windows.Forms.CheckBox();
@@ -69,12 +67,14 @@
             this.PipName = new System.Windows.Forms.TextBox();
             this.PipExec = new System.Windows.Forms.Button();
             this.PipUpdate = new System.Windows.Forms.Button();
-            this.OptimiseTrainingBox = new System.Windows.Forms.CheckBox();
             this.OpenPipelineButton = new System.Windows.Forms.Button();
             this.SavePipelineButton = new System.Windows.Forms.Button();
             this.QuantBox = new System.Windows.Forms.ComboBox();
             this.GenLibBox = new System.Windows.Forms.CheckBox();
             this.PrositBox = new System.Windows.Forms.CheckBox();
+            this.PredictorBox = new System.Windows.Forms.CheckBox();
+            this.RAMBox = new System.Windows.Forms.CheckBox();
+            this.LibraryFreeBox = new System.Windows.Forms.CheckBox();
             this.VarModsUpDown = new System.Windows.Forms.NumericUpDown();
             this.LibFreeSettings = new System.Windows.Forms.GroupBox();
             this.MaxVarModsLabel = new System.Windows.Forms.Label();
@@ -92,7 +92,6 @@
             this.PepLenMin = new System.Windows.Forms.NumericUpDown();
             this.MissedCleavageLabel = new System.Windows.Forms.Label();
             this.EnzymeLabel = new System.Windows.Forms.Label();
-            this.LearnLibText = new System.Windows.Forms.TextBox();
             this.OutputLibText = new System.Windows.Forms.TextBox();
             this.FastaText = new System.Windows.Forms.TextBox();
             this.AlgorithmSettings = new System.Windows.Forms.GroupBox();
@@ -124,6 +123,8 @@
             this.PipelineList = new System.Windows.Forms.ListView();
             this.PipHeader = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.PipAbort = new System.Windows.Forms.Button();
+            this.ResetButton = new System.Windows.Forms.Button();
+            this.ReannotateBox = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.WindowUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MassAccMs1UpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MassAccUpDown)).BeginInit();
@@ -168,7 +169,7 @@
             // 
             // OutputLibButton
             // 
-            this.OutputLibButton.Location = new System.Drawing.Point(5, 122);
+            this.OutputLibButton.Location = new System.Drawing.Point(5, 123);
             this.OutputLibButton.Name = "OutputLibButton";
             this.OutputLibButton.Size = new System.Drawing.Size(90, 23);
             this.OutputLibButton.TabIndex = 33;
@@ -176,18 +177,6 @@
             this.toolTip1.SetToolTip(this.OutputLibButton, "Specify where to save the spectral library produced");
             this.OutputLibButton.UseVisualStyleBackColor = true;
             this.OutputLibButton.Click += new System.EventHandler(this.OutputLibButton_Click);
-            // 
-            // LearnLibButton
-            // 
-            this.LearnLibButton.Location = new System.Drawing.Point(6, 41);
-            this.LearnLibButton.Name = "LearnLibButton";
-            this.LearnLibButton.Size = new System.Drawing.Size(91, 23);
-            this.LearnLibButton.TabIndex = 30;
-            this.LearnLibButton.Text = "Training Library";
-            this.toolTip1.SetToolTip(this.LearnLibButton, "Specify the library which will be used to train peptide fragmentation and retenti" +
-        "on time predictors");
-            this.LearnLibButton.UseVisualStyleBackColor = true;
-            this.LearnLibButton.Click += new System.EventHandler(this.LearnLibButton_Click);
             // 
             // FastaButton
             // 
@@ -467,18 +456,6 @@
             0,
             0});
             // 
-            // LibraryFreeBox
-            // 
-            this.LibraryFreeBox.AutoSize = true;
-            this.LibraryFreeBox.Location = new System.Drawing.Point(6, 20);
-            this.LibraryFreeBox.Name = "LibraryFreeBox";
-            this.LibraryFreeBox.Size = new System.Drawing.Size(131, 17);
-            this.LibraryFreeBox.TabIndex = 27;
-            this.LibraryFreeBox.Text = "Use library-free search";
-            this.toolTip1.SetToolTip(this.LibraryFreeBox, "In silico digest the FASTA file provided and search the generated peptides");
-            this.LibraryFreeBox.UseVisualStyleBackColor = true;
-            this.LibraryFreeBox.CheckedChanged += new System.EventHandler(this.LibraryFreeBox_CheckedChanged);
-            // 
             // ClearFastaButton
             // 
             this.ClearFastaButton.Location = new System.Drawing.Point(6, 305);
@@ -616,19 +593,6 @@
             this.PipUpdate.UseVisualStyleBackColor = true;
             this.PipUpdate.Click += new System.EventHandler(this.PipUpdate_Click);
             // 
-            // OptimiseTrainingBox
-            // 
-            this.OptimiseTrainingBox.AutoSize = true;
-            this.OptimiseTrainingBox.Location = new System.Drawing.Point(174, 100);
-            this.OptimiseTrainingBox.Name = "OptimiseTrainingBox";
-            this.OptimiseTrainingBox.Size = new System.Drawing.Size(118, 17);
-            this.OptimiseTrainingBox.TabIndex = 65;
-            this.OptimiseTrainingBox.Text = "Optimise for training";
-            this.toolTip1.SetToolTip(this.OptimiseTrainingBox, "The spectral library generated will be optimised specifically for the training of" +
-        " peptide fragmentation predictor");
-            this.OptimiseTrainingBox.UseVisualStyleBackColor = true;
-            this.OptimiseTrainingBox.CheckedChanged += new System.EventHandler(this.OptimiseTrainingBox_CheckedChanged);
-            // 
             // OpenPipelineButton
             // 
             this.OpenPipelineButton.Image = ((System.Drawing.Image)(resources.GetObject("OpenPipelineButton.Image")));
@@ -669,19 +633,20 @@
             // GenLibBox
             // 
             this.GenLibBox.AutoSize = true;
-            this.GenLibBox.Location = new System.Drawing.Point(6, 100);
+            this.GenLibBox.Location = new System.Drawing.Point(6, 102);
             this.GenLibBox.Name = "GenLibBox";
             this.GenLibBox.Size = new System.Drawing.Size(140, 17);
             this.GenLibBox.TabIndex = 54;
             this.GenLibBox.Text = "Generate spectral library";
-            this.toolTip1.SetToolTip(this.GenLibBox, "In silico digest the FASTA file provided and search the generated peptides");
+            this.toolTip1.SetToolTip(this.GenLibBox, "Generate spectral library from search results / convert existing spectral library" +
+        " / generate library from FASTA");
             this.GenLibBox.UseVisualStyleBackColor = true;
             this.GenLibBox.CheckedChanged += new System.EventHandler(this.GenLibBox_CheckedChanged);
             // 
             // PrositBox
             // 
             this.PrositBox.AutoSize = true;
-            this.PrositBox.Location = new System.Drawing.Point(6, 151);
+            this.PrositBox.Location = new System.Drawing.Point(6, 152);
             this.PrositBox.Name = "PrositBox";
             this.PrositBox.Size = new System.Drawing.Size(267, 17);
             this.PrositBox.TabIndex = 66;
@@ -689,6 +654,44 @@
             this.toolTip1.SetToolTip(this.PrositBox, "In silico digest the FASTA file and save the list of precursors in a format compa" +
         "tible with Prosit");
             this.PrositBox.UseVisualStyleBackColor = true;
+            this.PrositBox.CheckedChanged += new System.EventHandler(this.PrositBox_CheckedChanged);
+            // 
+            // PredictorBox
+            // 
+            this.PredictorBox.AutoSize = true;
+            this.PredictorBox.Location = new System.Drawing.Point(6, 43);
+            this.PredictorBox.Name = "PredictorBox";
+            this.PredictorBox.Size = new System.Drawing.Size(255, 17);
+            this.PredictorBox.TabIndex = 67;
+            this.PredictorBox.Text = "Deep learning-based spectra and RTs prediction";
+            this.toolTip1.SetToolTip(this.PredictorBox, "Generate an in silico spectral library using deep neural network from FASTA datab" +
+        "ase/spectral library");
+            this.PredictorBox.UseVisualStyleBackColor = true;
+            this.PredictorBox.CheckedChanged += new System.EventHandler(this.PredictorBox_CheckedChanged);
+            // 
+            // RAMBox
+            // 
+            this.RAMBox.AutoSize = true;
+            this.RAMBox.Location = new System.Drawing.Point(9, 237);
+            this.RAMBox.Name = "RAMBox";
+            this.RAMBox.Size = new System.Drawing.Size(257, 17);
+            this.RAMBox.TabIndex = 55;
+            this.RAMBox.Text = "Reduce memory usage (for very large databases)";
+            this.RAMBox.TextAlign = System.Drawing.ContentAlignment.BottomRight;
+            this.toolTip1.SetToolTip(this.RAMBox, "Reduce RAM usage when searching sequence databases yielding tens of millions of p" +
+        "recursors; might decrease ID numbers slightly");
+            this.RAMBox.UseVisualStyleBackColor = true;
+            // 
+            // LibraryFreeBox
+            // 
+            this.LibraryFreeBox.AutoSize = true;
+            this.LibraryFreeBox.Location = new System.Drawing.Point(6, 20);
+            this.LibraryFreeBox.Name = "LibraryFreeBox";
+            this.LibraryFreeBox.Size = new System.Drawing.Size(283, 17);
+            this.LibraryFreeBox.TabIndex = 27;
+            this.LibraryFreeBox.Text = "FASTA digest for library-free search / library generation";
+            this.LibraryFreeBox.UseVisualStyleBackColor = true;
+            this.LibraryFreeBox.CheckedChanged += new System.EventHandler(this.LibraryFreeBox_CheckedChanged);
             // 
             // VarModsUpDown
             // 
@@ -704,6 +707,7 @@
             // 
             // LibFreeSettings
             // 
+            this.LibFreeSettings.Controls.Add(this.PredictorBox);
             this.LibFreeSettings.Controls.Add(this.MaxVarModsLabel);
             this.LibFreeSettings.Controls.Add(this.VarModsUpDown);
             this.LibFreeSettings.Controls.Add(this.OxidationBox);
@@ -726,14 +730,12 @@
             this.LibFreeSettings.Controls.Add(this.EnzymeLabel);
             this.LibFreeSettings.Controls.Add(this.EnzymeCombo);
             this.LibFreeSettings.Controls.Add(this.MissedCleavageUpDown);
-            this.LibFreeSettings.Controls.Add(this.LearnLibText);
-            this.LibFreeSettings.Controls.Add(this.LearnLibButton);
             this.LibFreeSettings.Location = new System.Drawing.Point(3, 437);
             this.LibFreeSettings.Name = "LibFreeSettings";
             this.LibFreeSettings.Size = new System.Drawing.Size(292, 260);
             this.LibFreeSettings.TabIndex = 37;
             this.LibFreeSettings.TabStop = false;
-            this.LibFreeSettings.Text = "Library-free search";
+            this.LibFreeSettings.Text = "Precursor ion generation";
             // 
             // MaxVarModsLabel
             // 
@@ -919,17 +921,9 @@
             this.EnzymeLabel.TabIndex = 40;
             this.EnzymeLabel.Text = "Protease";
             // 
-            // LearnLibText
-            // 
-            this.LearnLibText.Location = new System.Drawing.Point(103, 43);
-            this.LearnLibText.Name = "LearnLibText";
-            this.LearnLibText.Size = new System.Drawing.Size(182, 20);
-            this.LearnLibText.TabIndex = 31;
-            this.LearnLibText.TextChanged += new System.EventHandler(this.LearnLibText_TextChanged);
-            // 
             // OutputLibText
             // 
-            this.OutputLibText.Location = new System.Drawing.Point(102, 124);
+            this.OutputLibText.Location = new System.Drawing.Point(103, 125);
             this.OutputLibText.Name = "OutputLibText";
             this.OutputLibText.Size = new System.Drawing.Size(181, 20);
             this.OutputLibText.TabIndex = 32;
@@ -948,6 +942,7 @@
             // 
             // AlgorithmSettings
             // 
+            this.AlgorithmSettings.Controls.Add(this.RAMBox);
             this.AlgorithmSettings.Controls.Add(this.QuantBox);
             this.AlgorithmSettings.Controls.Add(this.QuantLabel);
             this.AlgorithmSettings.Controls.Add(this.ProtInfBox);
@@ -1019,6 +1014,7 @@
             // 
             // FilesBox
             // 
+            this.FilesBox.Controls.Add(this.ReannotateBox);
             this.FilesBox.Controls.Add(this.RawDataButton);
             this.FilesBox.Controls.Add(this.ConvertButton);
             this.FilesBox.Controls.Add(this.ClearFastaButton);
@@ -1067,7 +1063,6 @@
             // MainSettingsBox
             // 
             this.MainSettingsBox.Controls.Add(this.PrositBox);
-            this.MainSettingsBox.Controls.Add(this.OptimiseTrainingBox);
             this.MainSettingsBox.Controls.Add(this.GenLibBox);
             this.MainSettingsBox.Controls.Add(this.UseQuantCheck);
             this.MainSettingsBox.Controls.Add(this.PDFRepBox);
@@ -1299,6 +1294,28 @@
             this.PipAbort.UseVisualStyleBackColor = false;
             this.PipAbort.Click += new System.EventHandler(this.PipAbort_Click);
             // 
+            // ResetButton
+            // 
+            this.ResetButton.Location = new System.Drawing.Point(606, 144);
+            this.ResetButton.Name = "ResetButton";
+            this.ResetButton.Size = new System.Drawing.Size(90, 23);
+            this.ResetButton.TabIndex = 50;
+            this.ResetButton.Text = "Reset settings";
+            this.ResetButton.UseVisualStyleBackColor = true;
+            this.ResetButton.Click += new System.EventHandler(this.ResetButton_Click);
+            // 
+            // ReannotateBox
+            // 
+            this.ReannotateBox.AutoSize = true;
+            this.ReannotateBox.Location = new System.Drawing.Point(6, 334);
+            this.ReannotateBox.Name = "ReannotateBox";
+            this.ReannotateBox.Size = new System.Drawing.Size(82, 18);
+            this.ReannotateBox.TabIndex = 67;
+            this.ReannotateBox.Text = "Reannotate";
+            this.toolTip1.SetToolTip(this.ReannotateBox, "Reannotate library precursors using the FASTA database");
+            this.ReannotateBox.UseCompatibleTextRendering = true;
+            this.ReannotateBox.UseVisualStyleBackColor = true;
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
@@ -1306,6 +1323,7 @@
             this.AutoScroll = true;
             this.BackColor = System.Drawing.SystemColors.Control;
             this.ClientSize = new System.Drawing.Size(1008, 729);
+            this.Controls.Add(this.ResetButton);
             this.Controls.Add(this.SavePipelineButton);
             this.Controls.Add(this.OpenPipelineButton);
             this.Controls.Add(this.PipUpdate);
@@ -1362,8 +1380,6 @@
         private System.Windows.Forms.GroupBox LibFreeSettings;
         private System.Windows.Forms.Button OutputLibButton;
         private System.Windows.Forms.TextBox OutputLibText;
-        private System.Windows.Forms.TextBox LearnLibText;
-        private System.Windows.Forms.Button LearnLibButton;
         private System.Windows.Forms.Button FastaButton;
         private System.Windows.Forms.TextBox FastaText;
         private System.Windows.Forms.GroupBox AlgorithmSettings;
@@ -1442,7 +1458,6 @@
         private System.Windows.Forms.ColumnHeader PipHeader;
         private System.Windows.Forms.Button PipAbort;
         private System.Windows.Forms.Button PipUpdate;
-        private System.Windows.Forms.CheckBox OptimiseTrainingBox;
         private System.Windows.Forms.Button OpenPipelineButton;
         private System.Windows.Forms.Button SavePipelineButton;
         private System.Windows.Forms.ComboBox QuantBox;
@@ -1450,6 +1465,10 @@
         private System.Windows.Forms.CheckBox PDFRepBox;
         private System.Windows.Forms.CheckBox GenLibBox;
         private System.Windows.Forms.CheckBox PrositBox;
+        private System.Windows.Forms.CheckBox PredictorBox;
+        private System.Windows.Forms.Button ResetButton;
+        private System.Windows.Forms.CheckBox RAMBox;
+        private System.Windows.Forms.CheckBox ReannotateBox;
     }
 }
 

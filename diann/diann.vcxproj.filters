@@ -139,4 +139,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Resource Include="..\Predictor\x64\Deploy\Resource.res">
+      <Filter>Resource Files</Filter>
+    </Resource>
+  </ItemGroup>
 </Project>
