@@ -104,6 +104,7 @@ For a full list of supported commands see the arguments() function in /src/diann
 ### Building
 
 **Windows**: A Visual C++ solution file is provided with the source code. Changing the SDK to a Windows 10 one in the project settings might be required. Tested on Windows 7 and 10. Configuration should be set to "Release" (source code for deep learning-based generation of spectral libraries (PyTorch) is not included, so this functionality is only supported in the official DIA-NN builds).      
+
 **Linux** (GCC 7 or later required):		     		
 ```  		
 git clone https://www.github.com/vdemichev/diann  		
@@ -127,7 +128,7 @@ This is a simple tutorial which covers the generation of a spectral library from
 **Comments**:
 1. DIA-NN can create libraries from any DIA/SWATH runs (not necessarily gas-phase fractionation runs). Sometimes even a single long-gradient run might be good enough.
 2. Library-free search was used to create a spectral library. Regular spectral library-based search can also be used to generate new libraries. This is useful e.g. for refining spectra and retention times in a public library.  
-3. The peptide list (APD_Sc_all) was used primarily to speed up the analysis (as this is a tutorial), it is OK to use the full sequence library instead.     
+3. The peptide list (APD_Sc_all) was used primarily to speed up the analysis (as this is a tutorial), it is OK to use the full sequence database instead.     
 
 4. Each of the pipeline steps can be executed separately (select a step and click **Run**). Pipeline creation is also optional (can just click **Run** to execute the current configuration).  
 
