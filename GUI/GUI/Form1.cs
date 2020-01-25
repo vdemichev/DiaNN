@@ -303,7 +303,7 @@ namespace GUI
                     process.StartInfo.Arguments += " --qvalue " + Convert.ToString(0.01 * (double)S.prec_fdr_d, new System.Globalization.CultureInfo("en-US"));
 
                     if (S.ram_b) process.StartInfo.Arguments += " --min-corr 1.0 --corr-diff 1.0";
-                    if (S.pdf_rep_b)
+                    if (S.pdf_rep_b && S.files_s.Length > 0)
                     {
                         stats_file = "\"" + report + ".stats.tsv\"";
                         report_file = "\"" + S.out_s + "\"";

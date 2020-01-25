@@ -2617,7 +2617,7 @@ public:
 				else if (it->pr.qvalue < entries[pos].pr.qvalue) entries[pos].pr = it->pr;
 
 				if (decoy_list) {
-					if (pos >= tq.size()) tq.resize(tq.size() + tq.size() / 2, 1.0);
+					if (pos >= tq.size()) tq.resize(pos + 1 + pos / 2, 1.0);
 					if (it->pr.qvalue <= ReportQValue && it->pr.qvalue < tq[pos]) tq[pos] = it->pr.qvalue;
 				}
 			}
@@ -2625,7 +2625,7 @@ public:
 				for (auto it = Q->decoys.begin(); it != Q->decoys.end(); it++) {
 					auto pos = it->index;
 
-					if (pos >= dq.size()) dq.resize(dq.size() + dq.size() / 2, 1.0);
+					if (pos >= dq.size()) dq.resize(pos + 1 + pos / 2, 1.0);
 					if (it->qvalue <= ReportQValue && it->qvalue < dq[pos]) dq[pos] = it->qvalue;
 				}
 			}
@@ -8638,7 +8638,7 @@ int main(int argc, char *argv[]) {
 		ReportProteinQValue = 1.0, Time(),
 		dsout << "WARNING: protein q-values cannot be calculated without NNs when a guide library is used for FASTA search, protein q-value filter reset to 1.0\n";
 	if (!ReportOnly) lib.initialise(!QuantOnly);
-	if (!FastaSearch && !lib.from_speclib && lib.gen_decoys) lib.save(lib_file + std::string(".speclib"));
+	if (!FastaSearch && !lib.from_speclib && lib.gen_decoys && !PredictorSaved) lib.save(lib_file + std::string(".speclib"));
 
 	Library ref;
 	if (ref_file.size()) {
@@ -8787,7 +8787,7 @@ gen_spec_lib:
 		dsout << "\n";
 	}
 
-	if (IndividualReports || !(out_file.size() || out_gene_file.size())) goto gen_lib;
+	if (IndividualReports || !(out_file.size() || out_gene_file.size()) || !ms_files.size()) goto gen_lib;
 	if (Verbose >= 1) Time(), dsout << "Cross-run analysis\n";
 	if (QuantInMem) lib.info.load(&(lib), ms_files, &quants);
 	else lib.info.load(&(lib), ms_files);
@@ -8800,7 +8800,7 @@ gen_spec_lib:
 	if (out_gene_file.size()) lib.gene_report(out_gene_file);
 
 gen_lib:
-	if (out_lib_file.size()) if (FastaSearch || GenSpecLib) { // generating spectral library
+	if (out_lib_file.size() && ms_files.size()) if (FastaSearch || GenSpecLib) { // generating spectral library
 		MaxF = INF;
 		if (Verbose >= 1) Time(), dsout << "Generating spectral library:\n";
 
@@ -8874,7 +8874,7 @@ gen_lib:
 
 	remove:
 #ifdef CPP17
-	if (RemoveQuant) {
+	if (RemoveQuant & ms_files.size()) {
 		if (Verbose >= 1) Time(), dsout << "Removing .quant files\n";
 		for (auto &file : ms_files) try { std::experimental::filesystem::remove(file + std::string(".quant")); } catch (std::exception &e) { }
 	}
