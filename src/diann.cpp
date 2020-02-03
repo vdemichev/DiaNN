@@ -120,6 +120,7 @@ double PeakBoundary = 5.0;
 bool NoIfsRemoval = false;
 bool NoFragmentSelectionForQuant = false;
 bool QuantFitProfiles = false;
+bool RestrictFragments = false;
 
 bool BatchMode = true;
 int MinBatch = 2000;
@@ -259,6 +260,7 @@ bool InSilicoRTPrediction = true;
 bool ReverseDecoys = false;
 bool ForceFragRec = false;
 bool ExportRecFragOnly = true;
+bool GenFrExclusionInfo = false;
 
 bool ExportProsit = false;
 
@@ -335,7 +337,7 @@ enum {
 	libiRT, libFrMz, libFrI,
 	libPID, libPN, libGenes, libPT, libIsDecoy, 
 	libFrCharge, libFrType, libFrNumber, libFrLoss,
-	libQ, libEG, libCols
+	libQ, libEG, libFrExc, libCols
 };
 
 std::vector<std::string> library_headers = {
@@ -356,6 +358,7 @@ std::vector<std::string> library_headers = {
 	" FragmentLossType \"FragmentLossType\" ",
 	" Q.Value QValue Qvalue qvalue \"Q.Value\" \"QValue\" \"Qvalue\" \"qvalue\" ",
 	" ElutionGroup ModifiedSequence ",
+	" ExcludeFromAssay ExcludeFromQuantification "
 };
 
 const double proton = 1.007825035;
@@ -552,6 +555,8 @@ std::vector<std::string> oh = { // output headers
 double NormalisationQvalue = 0.01;
 double NormalisationPeptidesFraction = 0.4;
 bool LocalNormalisation = true;
+bool NoRTDepNorm = false;
+bool NoSigDepNorm = true;
 int LocNormRadius = 250;
 double LocNormMax = 2.0;
 
@@ -607,8 +612,8 @@ public:
 int MaxF = INF, MinF = 0;
 const int TopF = 6, auxF = 12;
 const int nnS = 2, nnW = (2 * nnS) + 1;
-const int qL = 2;
-const int QSL[qL] = { 1, 3 };
+const int qL = 3;
+const int QSL[qL] = { 1, 3, 5 };
 enum {
 	pTimeCorr,
 	pLocCorr, pMinCorr, pTotal, pCos, pCosCube, pMs1TimeCorr, pNFCorr, pdRT, pResCorr, pResCorrNorm, pTightCorrOne, pTightCorrTwo, pShadow, pHeavy,
@@ -631,7 +636,9 @@ enum {
 	pShadowCorr = pCorr + auxF,
 	pShape = pShadowCorr + TopF,
 #if Q1
-	pQPos = pShape + nnW,
+	pQLeft = pShape + nnW,
+	pQRight = pQLeft + qL,
+	pQPos = pQRight + qL,
 	pQNFCorr = pQPos + qL,
 	pQCorr = pQNFCorr + qL,
 	pN = pQCorr + qL
@@ -842,6 +849,24 @@ template <class Tx, class Ty> inline double scalar(Tx * x, Ty * y, bool * mask, 
 	double r = 0.0;
 	for (int i = 0; i < n; i++) if (mask[i]) r += x[i] * y[i];
 	return r;
+}
+
+template <class T> inline double signal_level(T * x, int center, int n) {
+	int i;
+	float noise = 0.0, signal = 0.0;
+	for (i = 0; i < center; i++) {
+		float delta = x[i + 1] - x[i], change = Abs(delta);
+		if (delta >= 0.0) signal += change;
+		else noise += change;
+	}
+	for (i = center + 1; i < n; i++) {
+		float delta = x[i] - x[i - 1], change = Abs(delta);
+		if (delta >= 0.0) noise += change;
+		else signal += change;
+	}
+	float total = signal + noise;
+	if (total > E) return signal / total;
+	else return 0.0;
 }
 
 template<class T> inline void smooth(T * dst, T * src, int n) {
@@ -1119,6 +1144,10 @@ public:
 	unsigned int hash() { return hashS(mz) ^ hashS(height); }
 #endif
 };
+
+const int fTypeB = 1 << 0;
+const int fTypeY = 1 << 1;
+const int fExclude = 1 << 6;
 
 class Product {
 public:
@@ -1545,6 +1574,8 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "verbose ", 8)) Verbose = std::stoi(args.substr(start + 8, std::string::npos));
 		else if (!memcmp(&(args[start]), "export-windows ", 15)) ExportWindows = true;
 		else if (!memcmp(&(args[start]), "export-library ", 15)) ExportLibrary = true;
+		else if (!memcmp(&(args[start]), "gen-fr-restriction ", 19)) GenFrExclusionInfo = true, 
+			dsout << "The spectral library will be annotated with information on fragment exclusion from quantification based on the runs analysed\n";
 		else if (!memcmp(&(args[start]), "export-decoys ", 14)) ExportDecoys = true;
 		else if (!memcmp(&(args[start]), "prosit ", 7)) ExportProsit = true;
 		else if (!memcmp(&(args[start]), "vis ", 4)) {
@@ -1776,6 +1807,7 @@ void arguments(int argc, char *argv[]) {
 			dsout << "Standardisation scale set to " << StandardisationScale << "\n";
 		else if (!memcmp(&(args[start]), "no-ifs-removal ", 15)) NoIfsRemoval = true, dsout << "Interference removal from fragment elution curves disabled\n";
 		else if (!memcmp(&(args[start]), "no-fr-selection ", 16)) NoFragmentSelectionForQuant = true, dsout << "Cross-run selection of fragments for quantification disabled (not recommended)\n";
+		else if (!memcmp(&(args[start]), "restrict-fr ", 12)) RestrictFragments = true, dsout << "Certain fragments (based on the library annotation) will not be used when quantifying peptides\n";
 		else if (!memcmp(&(args[start]), "no-fr-exclusion ", 16)) ExcludeSharedFragments = false, dsout << "Exclusion of fragments shared between heavy and light labelled peptides from quantification disabled\n";
 		else if (!memcmp(&(args[start]), "peak-translation ", 17)) TranslatePeaks = true, dsout << "Translation of retention times between peptides within the same elution group enabled\n";
 		else if (!memcmp(&(args[start]), "no-standardisation ", 19)) Standardise = false, dsout << "Scores will not be standardised for neural network training\n";
@@ -1814,6 +1846,8 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "norm-radius ", 12)) LocNormRadius = std::stoi(args.substr(start + 12, std::string::npos)),
 			dsout << "Local normalisation radius set to " << LocNormRadius << "\n";
 		else if (!memcmp(&(args[start]), "global-norm ", 12)) LocalNormalisation = false, dsout << "Median-based local normalisation disabled\n";
+		else if (!memcmp(&(args[start]), "no-rt-norm ", 11)) NoRTDepNorm = true, dsout << "Median-based RT-dependent local normalisation disabled\n";
+		else if (!memcmp(&(args[start]), "sig-norm ", 9)) NoSigDepNorm = false, dsout << "Median-based signal-dependent local normalisation enabled\n";
 #if Q1
 		else if (!memcmp(&(args[start]), "q1-cal ", 7)) Q1Cal = true, dsout << "Q1 calibration enabled\n";
 #endif
@@ -1993,12 +2027,7 @@ template<class F> void read_strings(F &in, std::vector<std::string> &strs) {
 	}
 }
 
-enum {
-	type_unknown, type_b, type_y,
-	type_N
-};
-
-char char_from_type[type_N] = { '?', 'b', 'y' };
+char char_from_type[3] = { '?', 'b', 'y' };
 std::string name_from_loss[loss_other + 1] = { std::string("noloss"), std::string("H2O"), std::string("NH3"), std::string("CO"), std::string("unknown"), std::string("unknown") };
 
 class Ion {
@@ -2016,7 +2045,7 @@ public:
 	}
 
 	template<class T> void init(T &other) {
-		type = other.type;
+		type = other.type & 3;
 		index = other.index;
 		loss = other.loss;
 		charge = other.charge;
@@ -2036,8 +2065,8 @@ std::vector<Ion> generate_fragments(const std::vector<double> &sequence, int cha
 		double b = curr;
 		double y = s - curr + proton + OH;
 
-		if (i + 1 >= min_aas) result.push_back(Ion(type_b, i + 1, loss, charge, (b + c * proton - Loss[loss]) / c)), (*cnt)++;
-		if (sequence.size() - i - 1 >= min_aas) result.push_back(Ion(type_y, i + 1, loss, charge, (y + c * proton - Loss[loss]) / c)), (*cnt)++;
+		if (i + 1 >= min_aas) result.push_back(Ion(fTypeB, i + 1, loss, charge, (b + c * proton - Loss[loss]) / c)), (*cnt)++;
+		if (sequence.size() - i - 1 >= min_aas) result.push_back(Ion(fTypeY, i + 1, loss, charge, (y + c * proton - Loss[loss]) / c)), (*cnt)++;
 	}
 	return result;
 }
@@ -2053,8 +2082,8 @@ std::vector<Ion> generate_all_fragments(const std::vector<double> &sequence, int
 			double b = curr;
 			double y = s - curr + proton + OH;
 
-			result.push_back(Ion(type_b, i + 1, loss, charge, (b + c * proton - Loss[loss]) / c)), (*cnt)++;
-			result.push_back(Ion(type_y, i + 1, loss, charge, (y + c * proton - Loss[loss]) / c)), (*cnt)++;
+			result.push_back(Ion(fTypeB, i + 1, loss, charge, (b + c * proton - Loss[loss]) / c)), (*cnt)++;
+			result.push_back(Ion(fTypeY, i + 1, loss, charge, (y + c * proton - Loss[loss]) / c)), (*cnt)++;
 		}
 	}
 	return result;
@@ -2076,7 +2105,7 @@ anew:
 
 start:
 	v = generate_fragments(sequence, charge, loss, &cnt);
-	if (charge == 1) v.push_back(Ion(type_y, sequence.size(), loss, pr_charge, (s + OH + (1.0 + double(pr_charge)) * proton - Loss[loss]) / double(pr_charge))); // non-fragmented
+	if (charge == 1) v.push_back(Ion(fTypeY, sequence.size(), loss, pr_charge, (s + OH + (1.0 + double(pr_charge)) * proton - Loss[loss]) / double(pr_charge))); // non-fragmented
 
 	for (i = 0; i < fragments.size(); i++) {
 		if (result[i].charge) continue;
@@ -2116,10 +2145,10 @@ stop:
 
 std::vector<Ion> recognise_fragments(const std::string &name, const std::vector<Product> &fragments, float &gen_acc, int pr_charge, bool full_spectrum = false, int max_charge = 19, int loss_cap = loss_N) {
 	int i;
-	if (fragments.size()) if (fragments[0].type > type_unknown) {
+	if (fragments.size()) if (fragments[0].type & 3) {
 		std::vector<Ion> result(fragments.size());
 		for (i = 0; i < result.size(); i++) 
-			if (fragments[i].type > type_unknown) result[i].init(fragments[i]); else break;
+			if (fragments[i].type & 3) result[i].init(fragments[i]); else break;
 		if (i == result.size()) return result;
 	}
 	auto sequence = get_sequence(name);
@@ -2135,7 +2164,7 @@ std::vector<Ion> generate_fragments(const std::vector<double> &sequence, const s
 
 start:
 	v = generate_fragments(sequence, charge, loss, &cnt); i = 0;
-	if (charge == 1) v.push_back(Ion(type_y, sequence.size(), loss, pr_charge, (s + OH + (1.0 + double(pr_charge)) * proton - Loss[loss]) / double(pr_charge))); // non-fragmented
+	if (charge == 1) v.push_back(Ion(fTypeY, sequence.size(), loss, pr_charge, (s + OH + (1.0 + double(pr_charge)) * proton - Loss[loss]) / double(pr_charge))); // non-fragmented
 
 	for (auto pos = pattern.begin(); pos != pattern.end(); pos++, i++) {
 		for (j = 0; j < v.size(); j++) if (v[j] == *pos) {
@@ -3060,11 +3089,11 @@ public:
 std::vector<float> norm_totals, norm_shares, norm_ratios, norm_saved_ratios;
 struct NormInfo {
 	int index = 0;
-	float signal = 0.0, RT = 0.0;
+	float signal = 0.0, par = 0.0;
 
 	NormInfo() {}
-	NormInfo(float _RT, int _index, float _signal) { index = _index; signal = _signal; RT = _RT; }
-	inline friend bool operator < (const NormInfo &left, const NormInfo &right) { return left.RT < right.RT; }
+	NormInfo(float _par, int _index, float _signal) { index = _index; signal = _signal; par = _par; }
+	inline friend bool operator < (const NormInfo &left, const NormInfo &right) { return left.par < right.par; }
 };
 std::vector<NormInfo> norm_ind;
 
@@ -3124,8 +3153,8 @@ public:
 		int entry_flags = 0, proteotypic = 0;
 		std::string name; // precursor id
 		std::set<PG>::iterator prot;
-		int pid_index = 0, pg_index = 0, best_run = -1, peak, apex, window;
-		float qvalue, protein_qvalue, best_fr_mz;
+		int pid_index = 0, pg_index = 0, best_run = -1, peak = 0, apex = 0, window = 0;
+		float qvalue = 0.0, protein_qvalue = 0.0, best_fr_mz = 0.0;
 
 		void init() {
 			std::sort(target.fragments.begin(), target.fragments.end(), [](const Product &left, const Product &right) { return left.height > right.height; });
@@ -3157,7 +3186,7 @@ public:
 			bool recognise = false;
 			float gen_acc = 0.0;
 			std::vector<Ion> pattern;
-			for (auto &f : decoy.fragments) if (f.type <= type_unknown || f.charge <= 0) {
+			for (auto &f : decoy.fragments) if (!(f.type & 3) || f.charge <= 0) {
 				recognise = true;
 				break;
 			}
@@ -3165,10 +3194,11 @@ public:
 				pattern = recognise_fragments(name, target.fragments, gen_acc, target.charge, false, MaxRecCharge, MaxRecLoss);
 				for (i = 0; i < pattern.size(); i++) {
 					if (lib->gen_charges) target.fragments[i].charge = pattern[i].charge;
-					target.fragments[i].type = pattern[i].type;
+					target.fragments[i].type = (target.fragments[i].type & ~3) | pattern[i].type;
 					target.fragments[i].loss = pattern[i].loss;
 					target.fragments[i].index = pattern[i].index;
 				}
+				decoy.fragments = target.fragments;
 				if (gen_acc > GeneratorAccuracy + E && ForceFragRec) {
 					decoy.fragments.clear();
 					lib->skipped++;
@@ -3195,7 +3225,7 @@ public:
 				
 				for (i = 0; i < decoy.fragments.size(); i++) {
 					double c = (double)Max(decoy.fragments[i].charge, 1);
-					if (decoy.fragments[i].type == type_y) decoy.fragments[i].mz += C_shift / c;
+					if (decoy.fragments[i].type & fTypeY) decoy.fragments[i].mz += C_shift / c;
 					else decoy.fragments[i].mz += N_shift / c;
 				}
 			} else {
@@ -3250,10 +3280,10 @@ public:
 			y_scores(scores, target.charge, aas), to_exp(scores);
 			if (AddLosses) y_loss_scores(H2O_scores, aas, false), y_loss_scores(NH3_scores, aas, true), to_exp(H2O_scores), to_exp(NH3_scores);
 			for (i = cnt = 0; i < gen.size(); i++)
-				if (gen[i].mz >= MinFrMz && gen[i].mz <= MaxFrMz) if (gen[i].type == type_y && seq.size() - gen[i].index >= MinFrAAs) cnt++;
+				if (gen[i].mz >= MinFrMz && gen[i].mz <= MaxFrMz) if ((gen[i].type & fTypeY) && seq.size() - gen[i].index >= MinFrAAs) cnt++;
 			target.fragments.resize(cnt);
 			for (i = cnt = 0; i < gen.size(); i++)
-				if (gen[i].mz >= MinFrMz && gen[i].mz <= MaxFrMz) if (gen[i].type == type_y && seq.size() - gen[i].index >= MinFrAAs) {
+				if (gen[i].mz >= MinFrMz && gen[i].mz <= MaxFrMz) if ((gen[i].type & fTypeY) && seq.size() - gen[i].index >= MinFrAAs) {
 					target.fragments[cnt].mz = gen[i].mz;
 					if (gen[i].loss == loss_none) target.fragments[cnt].height = scores[gen[i].index];
 					else if (gen[i].loss == loss_H2O) target.fragments[cnt].height = scores[gen[i].index] * H2O_scores[gen[i].index];
@@ -3398,15 +3428,15 @@ public:
 			ions.resize(tot); memset(&(ions[0]), 0, tot * sizeof(Ion));
 			for (int c = 1; c <= max_frc; c++) for (j = 0; j < L; j++) {
 				int index = L * (c - 1) + j;
-				ions[index] = Ion(type_y, j + 1, loss_none, c, sp[index]); // trick with writing intensity in the m/z field of class Ion for later sorting
+				ions[index] = Ion(fTypeY, j + 1, loss_none, c, sp[index]); // trick with writing intensity in the m/z field of class Ion for later sorting
 				index += L * max_frc;
-				ions[index] = Ion(type_b, j + 3, loss_none, c, sp[index]);
+				ions[index] = Ion(fTypeB, j + 3, loss_none, c, sp[index]);
 			}
 
 			std::sort(ions.begin(), ions.end(), [&](const Ion &x, const Ion &y) { return x.mz > y.mz; });
 			if (ions[MinGenFrNum - 1].mz - E <= E) continue;
 			double margin = Min(ions[0].mz * 0.001, ions[MinGenFrNum - 1].mz - E);
-			filtered.clear(); for (auto &ion : ions) if (ion.mz > margin && (ion.type == type_y ? (L + 3 - ion.index) : ion.index) >= MinFrAAs) filtered.push_back(ion);
+			filtered.clear(); for (auto &ion : ions) if (ion.mz > margin && (ion.type == fTypeY ? (L + 3 - ion.index) : ion.index) >= MinFrAAs) filtered.push_back(ion);
 			auto frs = generate_fragments(get_sequence(e.name), filtered, e.target.charge);
 			for (j = cnt = 0; j < frs.size(); j++) if (frs[j].mz >= MinFrMz && frs[j].mz <= MaxFrMz) cnt++;
 			e.target.fragments.resize(Min(cnt, auxF));
@@ -3577,6 +3607,8 @@ public:
 			std::vector<bool> exclude(1024);
 			for (auto it = map.begin(); it != map.end(); it++) {
 				auto v = &(it->second);
+				int pr_index = it->first;
+				auto &lib_e = lib->entries[pr_index].target;
 
 				fr_score.clear();
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) if (jt->second.pr.qvalue <= MaxQuantQvalue) {
@@ -3590,13 +3622,12 @@ public:
 				for (auto &s : fr_score) if (s.second) s.first /= (double)s.second;
 
 				if (ExcludeSharedFragments) { // exclude (from quantification) fragments shared by peptides in the same elution group
-					int pr_index = it->first;
 					int eg = lib->elution_groups[pr_index];
 					auto &ce = lib->co_elution_index[eg];
 					for (int pos = ce.first; pos < ce.first + ce.second; pos++) {
 						int next = lib->co_elution[pos];
 						if (next != pr_index && lib->entries[next].target.charge == lib->entries[pr_index].target.charge) { // difference only in the label
-							auto &lf = lib->entries[pr_index].target;
+							auto &lf = lib_e;
 							auto &ls = lib->entries[next].target;
 							for (i = 0; i < lf.fragments.size(); i++) {
 								double margin = GeneratorAccuracy * lf.fragments[i].mz;
@@ -3612,12 +3643,23 @@ public:
 					}
 				}
 
+				if (RestrictFragments) { // exclude fragments from quantification based on their library annotation
+					auto &frs = lib_e.fragments;
+					assert(fr_score.size() <= frs.size());
+					for (j = 0; j < fr_score.size(); j++) if (frs[j].type & fExclude) fr_score[j].first -= INF;
+				}
+
 				fr_ordered.resize(fr_score.size());
 				fr_ordered.assign(fr_score.begin(), fr_score.end());
 				std::sort(fr_ordered.begin(), fr_ordered.end());
 				for (pos = fr_ordered.size() - 3; pos < fr_ordered.size() - 1; pos++) if (fr_ordered[pos].first > -1.0 + E) break;
-				double margin = fr_ordered[pos].first - E;
-				if (NoFragmentSelectionForQuant) margin = -INF;
+				double margin = Max(-INF / 2.0, fr_ordered[pos].first - E);
+				if (NoFragmentSelectionForQuant) margin = -INF / 2.0;
+				if (GenFrExclusionInfo) for (j = 0; j < fr_score.size(); j++) if (fr_score[j].second) {
+					auto &fr = lib_e.fragments[j];
+					if (fr_score[j].first >= margin) fr.type &= ~fExclude;
+					else fr.type |= fExclude;
+				}
 
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
 					for (i = 0, jt->second.pr.quantity = jt->second.pr.ratio = 0.0; i < jt->second.fr_n; i++) {
@@ -3631,8 +3673,9 @@ public:
 			if (TranslatePeaks) { // calculate ratios between labelled and unlabelled peptides; requires TranslatePeaks to ensure co-elution
 				for (auto it = map.begin(); it != map.end(); it++) {
 					auto v = &(it->second);
-
 					int pr_index = it->first;
+					auto &lib_e = lib->entries[pr_index].target;
+
 					if (lib->entries[pr_index].entry_flags & fFromFasta) continue; // only spectral library entries
 
 					int eg = lib->elution_groups[pr_index];
@@ -3640,13 +3683,12 @@ public:
 
 					exclude.clear();
 					if (ExcludeSharedFragments) { // exclude (from quantification) fragments shared by peptides in the same elution group
-						int pr_index = it->first;
 						int eg = lib->elution_groups[pr_index];
 						auto &ce = lib->co_elution_index[eg];
 						for (int pos = ce.first; pos < ce.first + ce.second; pos++) {
 							int next = lib->co_elution[pos];
 							if (next != pr_index && lib->entries[next].target.charge == lib->entries[pr_index].target.charge) { // difference only in the label
-								auto &lf = lib->entries[pr_index].target;
+								auto &lf = lib_e;
 								auto &ls = lib->entries[next].target;
 								for (i = 0; i < lf.fragments.size(); i++) {
 									double margin = GeneratorAccuracy * lf.fragments[i].mz;
@@ -3820,7 +3862,10 @@ public:
 				}
 			}
 
-			if (LocalNormalisation) {
+			if (LocalNormalisation) for (int iter = 0; iter < 2; iter++) { // iter = 0: RT-dependent, iter = 1: signal-dependent normalisation
+				if (iter == 0 && NoRTDepNorm) continue;
+				if (iter == 1 && NoSigDepNorm) continue;
+
 				norm_totals.clear(), norm_shares.clear();
 				norm_totals.resize(map.size(), 0.0), norm_shares.resize(map.size(), 0.0);
 				i = 0;
@@ -3833,6 +3878,7 @@ public:
 				}
 
 				NormInfo nie;
+
 				norm_ind.resize(map.size()), norm_saved_ratios.resize(map.size());
 				norm_ratios.resize(2 * LocNormRadius + 1);
 				for (k = 0; k < ms_files.size(); k++) {
@@ -3843,7 +3889,7 @@ public:
 						for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
 							int index = jt->first;
 							if (index == k && jt->second.pr.qvalue <= NormalisationQvalue && norm_shares[i] > E) if (norm_shares[i] * (double)ms_files.size() <= 2.0)
-								norm_ind.push_back(NormInfo(jt->second.pr.RT, i, jt->second.pr.norm));
+								norm_ind.push_back(NormInfo(iter == 0 ? jt->second.pr.RT : jt->second.pr.norm, i, jt->second.pr.norm));
 						}
 					}
 					std::sort(norm_ind.begin(), norm_ind.end());
@@ -3854,7 +3900,7 @@ public:
 						for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
 							int index = jt->first;
 							if (index == k) {
-								auto pos = std::lower_bound(norm_ind.begin(), norm_ind.end(), NormInfo(jt->second.pr.RT, 0, 0.0));
+								auto pos = std::lower_bound(norm_ind.begin(), norm_ind.end(), NormInfo(iter == 0 ? jt->second.pr.RT : jt->second.pr.norm, 0, 0.0));
 								float run = 0.0, all = 0.0, ratio = 0.0, w = 0.0;
 								int ind = std::distance(norm_ind.begin(), pos), low = Max(0, ind - LocNormRadius), high = low + 2 * LocNormRadius;
 								if (high > norm_ind.size()) high = norm_ind.size(), low = Max(0, high - 2 * LocNormRadius);
@@ -4043,13 +4089,13 @@ public:
 				if (fragment_type) {
 					auto &wt = words[colInd[libFrType]];
 					if (wt.size()) {
-						if (wt[0] == 'y') p.type = type_y;
-						else if (wt[0] == 'b') p.type = type_b;
-						else if (!ftw) ftw = true, p.type = type_unknown, dsout << "WARNING: unknown fragment type " << wt << "\n";
-					} else if (!ftmw) ftmw = true, p.type = type_unknown, dsout << "WARNING: fragment type missing for row number " << cnt << "\n";
-					if (p.type > type_unknown && fragment_num_info) {
+						if (wt[0] == 'y') p.type = fTypeY;
+						else if (wt[0] == 'b') p.type = fTypeB;
+						else if (!ftw) ftw = true, p.type = 0, dsout << "WARNING: unknown fragment type " << wt << "\n";
+					} else if (!ftmw) ftmw = true, p.type = 0, dsout << "WARNING: fragment type missing for row number " << cnt << "\n";
+					if (p.type && fragment_num_info) {
 						p.index = std::stoi(words[colInd[libFrNumber]]);
-						if (p.type != type_b) p.index = peptide_length(words[colInd[libPr]]) - p.index;
+						if (p.type != fTypeB) p.index = peptide_length(words[colInd[libPr]]) - p.index;
 						if (fragment_loss_info) {
 							auto &wl = words[colInd[libFrLoss]];
 							if (wl == "noloss") p.loss = loss_none;
@@ -4059,6 +4105,10 @@ public:
 							else p.loss = loss_other;
 						} else p.loss = loss_none;
 					}
+				}
+				if (colInd[libFrExc] >= 0) {
+					auto &we = words[colInd[libFrExc]];
+					if (we.size()) if (we[0] == 'T' || we[0] == '1' || we[0] == 't') p.type |= fExclude;
 				}
 
 				bool decoy_fragment = false;
@@ -4239,7 +4289,7 @@ public:
 				cnt = 0;
 				for (auto &fr : fragments)
 					if (fr.mz >= MinFrMz && fr.mz <= MaxFrMz)
-						if (fr.type == type_y) cnt++;
+						if (fr.type & fTypeY) cnt++;
 				if (cnt >= MinGenFrNum) {
 					e.name = to_canonical(pep, charge);
 					auto pos = std::lower_bound(precursors.begin(), precursors.end(), e.name);
@@ -4294,11 +4344,12 @@ public:
 		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 		out << "FileName\tPrecursorMz\tProductMz\tTr_recalibrated\ttransition_name\tLibraryIntensity\ttransition_group_id\tdecoy\tPeptideSequence\tProteotypic\tQValue\t";
 		out << "ProteinGroup\tProteinName\tGenes\tFullUniModPeptideName\tModifiedPeptide\t";
-		out << "PrecursorCharge\tPeptideGroupLabel\tUniprotID\tFragmentType\tFragmentCharge\tFragmentSeriesNumber\tFragmentLossType\n";
-		out.precision(7);
+		out << "PrecursorCharge\tPeptideGroupLabel\tUniprotID\tFragmentType\tFragmentCharge\tFragmentSeriesNumber\tFragmentLossType\tExcludeFromAssay\n";
+		out.precision(8);
 
 		auto &prot = (InferPGs && searched) ? protein_groups : protein_ids;
 
+		bool rec_info = false;
 		int cnt = -1, skipped = 0, empty = 0, targets_written = 0, decoys_written = 0;
 		for (auto &it : entries) {
 			cnt++;
@@ -4314,21 +4365,28 @@ public:
 
 			bool recognise = false;
 			std::vector<Ion> ions;
-			for (auto &f : it.target.fragments) if (f.type <= type_unknown || f.charge <= 0) {
+			for (auto &f : it.target.fragments) if (!(f.type & 3) || f.charge <= 0) {
 				recognise = true;
+				if (!rec_info) {
+					rec_info = true;
+					if (Verbose >= 1) Time(), dsout << "Some precursors lack fragment annotation; annotating...\n";
+				}
 				break;
 			}
 			if (recognise) {
 				ions = recognise_fragments(it.name, it.target.fragments, gen_acc, it.target.charge, ExportRecFragOnly, MaxRecCharge, MaxRecLoss);
 				if (ExportRecFragOnly && !searched) {
 					int rec = 0;
-					for (int fr = 0; fr < ions.size(); fr++) if (ions[fr].charge) rec++;
+					for (int fr = 0; fr < ions.size(); fr++) {
+						ions[fr].type = it.target.fragments[fr].type;
+						if (ions[fr].charge) rec++;
+					}
 					if (rec < MinF) continue;
 				}
 			} else {
 				auto &frs = it.target.fragments;
 				ions.resize(frs.size());
-				for (int i = 0; i < ions.size(); i++) ions[i].init(frs[i]);
+				for (int i = 0; i < ions.size(); i++) ions[i].init(frs[i]), ions[i].type = frs[i].type;
 			}
 			auto &pep = it.target;
 			if (!pep.fragments.size()) {
@@ -4365,7 +4423,7 @@ public:
 					}
 					if (pep.fragments[fr].height < MinGenFrInt) continue;
 					int pg = (InferPGs && searched) ? it.pg_index : it.pid_index;
-					auto fr_name = name + std::string("_") + std::to_string(char_from_type[fr_type])
+					auto fr_name = name + std::string("_") + std::to_string(char_from_type[fr_type & 3])
 						+ std::string("_") + std::to_string(fr_charge) + std::string("_")
 						+ std::to_string(fr_loss) + std::string("_") + std::to_string(fr_num);
 					out << ((it.best_run >= 0) ? ms_files[it.best_run].c_str() : lib_file.c_str()) << '\t'
@@ -4387,10 +4445,11 @@ public:
 						<< pep.charge << '\t'
 						<< (prefix + pep_name).c_str() << '\t'
 						<< protein_ids[it.pid_index].ids.c_str() << '\t'
-						<< char_from_type[fr_type] << '\t'
+						<< char_from_type[fr_type & 3] << '\t'
 						<< fr_charge << '\t'
-						<< (fr_type == type_b ? fr_num : seq.size() - fr_num) << '\t'
-						<< name_from_loss[fr_loss].c_str() << "\n";
+						<< ((fr_type & fTypeB) ? fr_num : seq.size() - fr_num) << '\t'
+						<< name_from_loss[fr_loss].c_str() << "\t"
+						<< ((fr_type & fExclude) ? "True" : "False") << "\n";
 					fr_cnt++;
 				}
 				if (!fr_cnt) empty++;
@@ -4814,8 +4873,8 @@ public:
 					<< in << '\t'
 					<< (in ^ 1) << '\t';
 				if (xic.level == 1) out << xic.pr_mz << "\tNA\tNA\tNA\tNA";
-				else out << xic.fr_mz << '\t' << char_from_type[xic.fr.type] << '\t' << ((int)xic.fr.charge) << '\t'
-					<< (xic.fr.type == type_b ? ((int)xic.fr.index) : aas.size() - ((int)xic.fr.index)) << '\t' << name_from_loss[xic.fr.loss].c_str();
+				else out << xic.fr_mz << '\t' << char_from_type[xic.fr.type & 3] << '\t' << ((int)xic.fr.charge) << '\t'
+					<< ((xic.fr.type & fTypeB) ? ((int)xic.fr.index) : aas.size() - ((int)xic.fr.index)) << '\t' << name_from_loss[xic.fr.loss].c_str();
 
 				if (!in) { for (i = 0; i < W; i++) out << '\t' << xic.peaks[i].first; out << '\n'; }
 				if (in) { for (i = 0; i < W; i++) out << '\t' << xic.peaks[i].second; out << '\n'; }
@@ -4994,12 +5053,12 @@ void learn_from_library(const std::string &file_name) {
 		for (i = 0; i < y_index.size(); i++) y_index[i] = -1;
 		for (i = 0; i < frs.size(); i++) if (frs[i].charge) {
 			auto &fr = frs[i];
-			if (fr.charge == 1 && fr.type == type_y) if (fr.loss == loss_none) y_index[fr.index] = i;
+			if (fr.charge == 1 && (fr.type & fTypeY)) if (fr.loss == loss_none) y_index[fr.index] = i;
 		}
 
 		if (AddLosses) for (i = 0; i < frs.size(); i++) if (frs[i].charge) {
 			auto &fr = frs[i];
-			if (fr.charge == 1 && fr.type == type_y) if (y_index[fr.index] >= 0) if (fr.loss == loss_H2O || fr.loss == loss_NH3) {
+			if (fr.charge == 1 && (fr.type & fTypeY)) if (y_index[fr.index] >= 0) if (fr.loss == loss_H2O || fr.loss == loss_NH3) {
 				double ratio = log(e.target.fragments[i].height / e.target.fragments[y_index[fr.index]].height);
 				b_l.push_back(ratio);
 
@@ -5084,7 +5143,7 @@ void learn_from_library(const std::string &file_name) {
 		for (int i = 0; i < frs.size(); i++) if (frs[i].charge) {
 			auto &fr = frs[i];
 			if (fr.charge == 1 && fr.loss == loss_none)
-				if (fr.type == type_y) actual_y[fr.index] = e.target.fragments[i].height;
+				if (fr.type & fTypeY) actual_y[fr.index] = e.target.fragments[i].height;
 		}
 		y_scores(predicted_y, e.target.charge, aas);
 		for (i = 2; i < aas.size(); i++) if (actual_y[i] > E && actual_y[i - 1] > E) s2_y += Sqr(log(actual_y[i] / actual_y[i - 1]) - (predicted_y[i] - predicted_y[i - 1])), s2_cnt++;
@@ -5201,6 +5260,7 @@ public:
 		auto p_all = Parameter(1, 0);
 		auto p_end = Parameter(CalibrationIter + 2, CalibrationIter + 2);
 		auto p_fit = Parameter(CalibrationIter + 2, 0);
+		auto p_learn = Parameter(iN, CalibrationIter + 2);
 		auto p_none = Parameter(iN, iN);
 
 		pars.push_back(p_base); // pTimeCorr
@@ -5242,9 +5302,11 @@ public:
 		for (int i = 0; i < TopF; i++) pars.push_back(p_none); // pShadowCorr
 		for (int i = 0; i < nnW; i++) pars.push_back(p_none); // pShape
 #if Q1
-		for (int i = 0; i < qL; i++) pars.push_back(p_none); // pQPos
-		for (int i = 0; i < qL; i++) pars.push_back(p_end); // PQNFCorr
-		for (int i = 0; i < qL; i++) pars.push_back(p_end); // pQCorr
+		for (int i = 0; i < qL; i++) pars.push_back(p_learn); // pQLeft
+		for (int i = 0; i < qL; i++) pars.push_back(p_learn); // pQRight
+		for (int i = 0; i < qL; i++) pars.push_back(p_learn); // pQPos
+		for (int i = 0; i < qL; i++) pars.push_back(p_learn); // PQNFCorr
+		for (int i = 0; i < qL; i++) pars.push_back(p_learn); // pQCorr
 #endif
 		assert(pars.size() == pN);
 
@@ -6017,21 +6079,6 @@ public:
 				sc[pCos] /= w;
 				sc[pCosCube] /= w;
 
-#if Q1
-				if (UseQ1 && run->full_spectrum && (run->scanning || ForceQ1)) {
-					int QS = QSL[qL - 1], QW = 2 * QS + 1;
-					float *qprofile = (float*)alloca(QW * (Min(m, TopF) + 1) * sizeof(float)), *ws = (float*)alloca(QW * sizeof(float)), *fmz = (float*)alloca((Min(m, TopF) + 1) * sizeof(float));
-					float rt = run->scan_RT[apex];
-					for (i = 0; i < Min(m, TopF); i++) fmz[i] = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[i].mz, rt);
-					fmz[Min(m, TopF)] = run->predicted_mz(&(run->MassCorrection[0]), mz, rt);
-					run->q1_profiles(qprofile, ws, apex, fmz, QS, Min(m, TopF) + 1);
-					for (i = 0; i < qL; i++) sc[pQPos + i] = centroid_coo(qprofile + best_fr * QW + QS - QSL[i], ws + QS - QSL[i], 2 * QSL[i] + 1) - mz - run->Q1Correction[0] - run->Q1Correction[1] * mz;
-					for (fr = 0; fr < Min(m, TopF); fr++) if (fr != best_fr)
-						for (i = 0; i < qL; i++) sc[pQCorr + i] += corr(qprofile + fr * QW + QS - QSL[i], qprofile + best_fr * QW + QS - QSL[i], 2 * QSL[i] + 1);
-					for (i = 0; i < qL; i++) sc[pQNFCorr + i] += corr(qprofile + Min(m, TopF) * QW + QS - QSL[i], qprofile + best_fr * QW + QS - QSL[i], 2 * QSL[i] + 1);
-				}
-#endif
-
 				// time corr
 				int T = Max(S / 2, 1);
 				for (fr = 0; fr < Min(m, auxF); fr++) {
@@ -6058,6 +6105,27 @@ public:
 					}
 					sc[pCorr + fr] += u;
 				}
+
+#if Q1
+				if (UseQ1 && run->full_spectrum && (run->scanning || ForceQ1)) {
+					int QS = QSL[qL - 1], QW = 2 * QS + 1;
+					float *qprofile = (float*)alloca(QW * (Min(m, TopF) + 1) * sizeof(float)), *ws = (float*)alloca(QW * sizeof(float)), *fmz = (float*)alloca((Min(m, TopF) + 1) * sizeof(float));
+					float rt = run->scan_RT[apex];
+					for (i = 0; i < Min(m, TopF); i++) fmz[i] = run->predicted_mz(&(run->MassCorrection[0]), (*fragments)[i].mz, rt);
+					fmz[Min(m, TopF)] = run->predicted_mz(&(run->MassCorrection[0]), mz, rt);
+					run->q1_profiles(qprofile, ws, apex, fmz, QS, Min(m, TopF) + 1);
+					for (i = 0; i < qL; i++) sc[pQPos + i] = centroid_coo(qprofile + best_fr * QW + QS - QSL[i], ws + QS - QSL[i], 2 * QSL[i] + 1) - mz - run->Q1Correction[0] - run->Q1Correction[1] * mz;
+					for (fr = 0; fr < Min(m, TopF); fr++) {
+						if (fr != best_fr)
+							for (i = 0; i < qL; i++) sc[pQCorr + i] += corr(qprofile + fr * QW + QS - QSL[i], qprofile + best_fr * QW + QS - QSL[i], 2 * QSL[i] + 1);
+						for (i = 0; i < qL; i++) {
+							sc[pQLeft + i] += signal_level(qprofile + fr * QW + QS - QSL[i], QSL[i], QSL[i] + 1) * sc[pCorr + fr];
+							sc[pQRight + i] += signal_level(qprofile + fr * QW + QS, 0, QSL[i] + 1) * sc[pCorr + fr];
+						}
+					}
+					for (i = 0; i < qL; i++) sc[pQNFCorr + i] += corr(qprofile + Min(m, TopF) * QW + QS - QSL[i], qprofile + best_fr * QW + QS - QSL[i], 2 * QSL[i] + 1);
+				}
+#endif
 
 				if (m > TopF) {
 					for (fr = TopF; fr < m; fr++) {
@@ -6409,7 +6477,7 @@ public:
 				u = x[S - low];
 				if (u >= best_height * MinRelFrHeight && u >= MinGenFrInt) {
 					float c = corr(x, elution, l);
-					if (gen[fr].type == type_b) c -= FrCorrBSeriesPenalty;
+					if (gen[fr].type & fTypeB) c -= FrCorrBSeriesPenalty;
 					if (c >= MinGenFrCorr && (c >= MinRareFrCorr || ((gen[fr].charge == 1 || pep->charge >= 3) && gen[fr].loss == loss_none))) {
 						bool skip = false;
 						for (j = 0; j < cnt; j++) if (Abs(amz - actual_mz[j]) < E) {
@@ -8792,6 +8860,10 @@ gen_spec_lib:
 	if (QuantInMem) lib.info.load(&(lib), ms_files, &quants);
 	else lib.info.load(&(lib), ms_files);
 	lib.info.quantify();
+	if (GenFrExclusionInfo) {
+		auto ann_lib = remove_extension(lib_file) + std::string("_fr_exclusion.tsv");
+		lib.save(ann_lib, NULL, false, false);
+	}
 	lib.quantify_proteins(TopN, ProteinQuantQvalue);
 	if (out_file.size()) {
 		lib.report(out_file), lib.stats_report(remove_extension(out_file) + std::string(".stats.tsv"));

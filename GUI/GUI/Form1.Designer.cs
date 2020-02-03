@@ -74,6 +74,7 @@
             this.PrositBox = new System.Windows.Forms.CheckBox();
             this.PredictorBox = new System.Windows.Forms.CheckBox();
             this.RAMBox = new System.Windows.Forms.CheckBox();
+            this.ReannotateBox = new System.Windows.Forms.CheckBox();
             this.LibraryFreeBox = new System.Windows.Forms.CheckBox();
             this.VarModsUpDown = new System.Windows.Forms.NumericUpDown();
             this.LibFreeSettings = new System.Windows.Forms.GroupBox();
@@ -124,7 +125,8 @@
             this.PipHeader = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.PipAbort = new System.Windows.Forms.Button();
             this.ResetButton = new System.Windows.Forms.Button();
-            this.ReannotateBox = new System.Windows.Forms.CheckBox();
+            this.NormBox = new System.Windows.Forms.ComboBox();
+            this.NormLabel = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.WindowUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MassAccMs1UpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MassAccUpDown)).BeginInit();
@@ -476,7 +478,7 @@
             "protein names (from FASTA)",
             "genes (species-specific)",
             "genes"});
-            this.PGBox.Location = new System.Drawing.Point(131, 156);
+            this.PGBox.Location = new System.Drawing.Point(131, 151);
             this.PGBox.Name = "PGBox";
             this.PGBox.Size = new System.Drawing.Size(154, 21);
             this.PGBox.TabIndex = 49;
@@ -624,7 +626,7 @@
             "any LC (high precision)",
             "robust LC (high accuracy)",
             "robust LC (high precision)"});
-            this.QuantBox.Location = new System.Drawing.Point(131, 186);
+            this.QuantBox.Location = new System.Drawing.Point(131, 181);
             this.QuantBox.Name = "QuantBox";
             this.QuantBox.Size = new System.Drawing.Size(154, 21);
             this.QuantBox.TabIndex = 54;
@@ -681,6 +683,18 @@
             this.toolTip1.SetToolTip(this.RAMBox, "Reduce RAM usage when searching sequence databases yielding tens of millions of p" +
         "recursors; might decrease ID numbers slightly");
             this.RAMBox.UseVisualStyleBackColor = true;
+            // 
+            // ReannotateBox
+            // 
+            this.ReannotateBox.AutoSize = true;
+            this.ReannotateBox.Location = new System.Drawing.Point(6, 334);
+            this.ReannotateBox.Name = "ReannotateBox";
+            this.ReannotateBox.Size = new System.Drawing.Size(82, 18);
+            this.ReannotateBox.TabIndex = 67;
+            this.ReannotateBox.Text = "Reannotate";
+            this.toolTip1.SetToolTip(this.ReannotateBox, "Reannotate library precursors using the FASTA database");
+            this.ReannotateBox.UseCompatibleTextRendering = true;
+            this.ReannotateBox.UseVisualStyleBackColor = true;
             // 
             // LibraryFreeBox
             // 
@@ -942,6 +956,8 @@
             // 
             // AlgorithmSettings
             // 
+            this.AlgorithmSettings.Controls.Add(this.NormBox);
+            this.AlgorithmSettings.Controls.Add(this.NormLabel);
             this.AlgorithmSettings.Controls.Add(this.RAMBox);
             this.AlgorithmSettings.Controls.Add(this.QuantBox);
             this.AlgorithmSettings.Controls.Add(this.QuantLabel);
@@ -970,7 +986,7 @@
             // QuantLabel
             // 
             this.QuantLabel.AutoSize = true;
-            this.QuantLabel.Location = new System.Drawing.Point(7, 189);
+            this.QuantLabel.Location = new System.Drawing.Point(7, 184);
             this.QuantLabel.Name = "QuantLabel";
             this.QuantLabel.Size = new System.Drawing.Size(112, 13);
             this.QuantLabel.TabIndex = 53;
@@ -979,7 +995,7 @@
             // PGLabel
             // 
             this.PGLabel.AutoSize = true;
-            this.PGLabel.Location = new System.Drawing.Point(7, 159);
+            this.PGLabel.Location = new System.Drawing.Point(7, 154);
             this.PGLabel.Name = "PGLabel";
             this.PGLabel.Size = new System.Drawing.Size(118, 13);
             this.PGLabel.TabIndex = 48;
@@ -1304,17 +1320,29 @@
             this.ResetButton.UseVisualStyleBackColor = true;
             this.ResetButton.Click += new System.EventHandler(this.ResetButton_Click);
             // 
-            // ReannotateBox
+            // NormBox
             // 
-            this.ReannotateBox.AutoSize = true;
-            this.ReannotateBox.Location = new System.Drawing.Point(6, 334);
-            this.ReannotateBox.Name = "ReannotateBox";
-            this.ReannotateBox.Size = new System.Drawing.Size(82, 18);
-            this.ReannotateBox.TabIndex = 67;
-            this.ReannotateBox.Text = "Reannotate";
-            this.toolTip1.SetToolTip(this.ReannotateBox, "Reannotate library precursors using the FASTA database");
-            this.ReannotateBox.UseCompatibleTextRendering = true;
-            this.ReannotateBox.UseVisualStyleBackColor = true;
+            this.NormBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.NormBox.FormattingEnabled = true;
+            this.NormBox.Items.AddRange(new object[] {
+            "Global",
+            "RT-dependent",
+            "RT & signal-dep. (experimental)"});
+            this.NormBox.Location = new System.Drawing.Point(131, 211);
+            this.NormBox.Name = "NormBox";
+            this.NormBox.Size = new System.Drawing.Size(154, 21);
+            this.NormBox.TabIndex = 57;
+            this.toolTip1.SetToolTip(this.NormBox, "Which normalisation strategy to use? (normalised quantities are reported along wi" +
+        "th the raw quantities)");
+            // 
+            // NormLabel
+            // 
+            this.NormLabel.AutoSize = true;
+            this.NormLabel.Location = new System.Drawing.Point(7, 214);
+            this.NormLabel.Name = "NormLabel";
+            this.NormLabel.Size = new System.Drawing.Size(115, 13);
+            this.NormLabel.TabIndex = 56;
+            this.NormLabel.Text = "Cross-run normalisation";
             // 
             // Form1
             // 
@@ -1469,6 +1497,8 @@
         private System.Windows.Forms.Button ResetButton;
         private System.Windows.Forms.CheckBox RAMBox;
         private System.Windows.Forms.CheckBox ReannotateBox;
+        private System.Windows.Forms.ComboBox NormBox;
+        private System.Windows.Forms.Label NormLabel;
     }
 }
 

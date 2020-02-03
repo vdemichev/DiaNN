@@ -30,6 +30,7 @@ namespace GUI
         public bool pdf_rep_b, prosit_b, predictor_b;
         public bool ram_b;
         public bool reannotate_b;
+        public int norm_i;
     }
 
     public partial class Form1 : Form
@@ -96,6 +97,7 @@ namespace GUI
             S.predictor_b = PredictorBox.Checked;
             S.ram_b = RAMBox.Checked;
             S.reannotate_b = ReannotateBox.Checked;
+            S.norm_i = NormBox.SelectedIndex;
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -108,6 +110,7 @@ namespace GUI
             EnzymeCombo.SelectedIndex = 0;
             PGBox.SelectedIndex = 3;
             QuantBox.SelectedIndex = 0;
+            NormBox.SelectedIndex = 1;
             curr_dir = System.IO.Directory.GetCurrentDirectory();
             OutputText.Text = curr_dir + "\\report.tsv";
             SaveSettings(ref DefaultConfig);
@@ -157,6 +160,7 @@ namespace GUI
             PredictorBox.Checked = S.predictor_b;
             RAMBox.Checked = S.ram_b;
             ReannotateBox.Checked = S.reannotate_b;
+            NormBox.SelectedIndex = S.norm_i;
 
             if (!System.IO.Directory.Exists(S.temp_folder_s)) TempFolderBox.Text = S.temp_folder_s = "";
         }
@@ -386,6 +390,9 @@ namespace GUI
                     }
                     if (S.quant_i >= 2) process.StartInfo.Arguments += " --peak-center";
                     if ((S.quant_i & 1) != 0) process.StartInfo.Arguments += " --no-ifs-removal";
+
+                    if (S.norm_i == 0) process.StartInfo.Arguments += " --global-norm";
+                    else if (S.norm_i == 2) process.StartInfo.Arguments += " --sig-norm";
                 }
 
                 process.StartInfo.Arguments += " " + opts;
