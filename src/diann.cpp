@@ -1176,7 +1176,7 @@ public:
 	}
 	friend inline bool operator < (const Product &left, const Product &right) { return left.mz < right.mz; }
 
-	inline int ion_code() { return (((*((int*)&type)) * 20 + *((int*)&charge)) * loss_N + *((int*)&loss)) * 100 + *((int*)&index) + 1; }
+	inline int ion_code() { return (((int)type * 20 + (int)charge) * loss_N + (int)loss) * 100 + (int)index + 1; }
 #if (HASH > 0)
 	unsigned int hash() { return hashS(mz) ^ hashS(height); }
 #endif
