@@ -110,10 +110,10 @@
     <OutDir>$(SolutionDir)\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">
-    <IncludePath>$(MKLIncludeDir);$(IncludePath);$(SolutionDir)\mstoolkit\include</IncludePath>
+    <IncludePath>C:\diann\TDF\configuration;C:\diann\TDF\CppSQLite-master;$(MKLIncludeDir);$(IncludePath);$(SolutionDir)\mstoolkit\include;C:\diann\TDF</IncludePath>
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)\</OutDir>
-    <LibraryPath>$(SolutionDir)\x64\Deploy;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\diann\TDF;$(SolutionDir)\x64\Deploy;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>$(MKLIncludeDir);$(IncludePath);$(SolutionDir)\mstoolkit\include</IncludePath>
@@ -225,13 +225,14 @@
       <MultiProcessorCompilation>false</MultiProcessorCompilation>
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <MinimalRebuild>false</MinimalRebuild>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <OutputFile>$(SolutionDir)\DiaNN.exe</OutputFile>
       <LinkTimeCodeGeneration>UseFastLinkTimeCodeGeneration</LinkTimeCodeGeneration>
-      <AdditionalDependencies>predictor.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>predictor.lib;timsdata.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <EmbedManagedResourceFile>
       </EmbedManagedResourceFile>
     </Link>
@@ -484,6 +485,7 @@
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</CompileAsManaged>
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">false</CompileAsManaged>
     </ClCompile>
+    <ClCompile Include="..\sqlite\sqlite3.c" />
     <ClCompile Include="..\src\diann.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Disabled</Optimization>
       <FavorSizeOrSpeed Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Speed</FavorSizeOrSpeed>
@@ -499,7 +501,11 @@
       <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">MultiThreaded</RuntimeLibrary>
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</CompileAsManaged>
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">false</CompileAsManaged>
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">PREDICTOR;WIN32;_NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">PREDICTOR;TDFREADER;WIN32;_NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <DebugInformationFormat Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">ProgramDatabase</DebugInformationFormat>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">MaxSpeed</Optimization>
+      <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">true</WholeProgramOptimization>
+      <FunctionLevelLinking Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">false</FunctionLevelLinking>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

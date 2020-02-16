@@ -75,6 +75,8 @@
             this.PredictorBox = new System.Windows.Forms.CheckBox();
             this.RAMBox = new System.Windows.Forms.CheckBox();
             this.ReannotateBox = new System.Windows.Forms.CheckBox();
+            this.NormBox = new System.Windows.Forms.ComboBox();
+            this.ExperimentNameText = new System.Windows.Forms.TextBox();
             this.LibraryFreeBox = new System.Windows.Forms.CheckBox();
             this.VarModsUpDown = new System.Windows.Forms.NumericUpDown();
             this.LibFreeSettings = new System.Windows.Forms.GroupBox();
@@ -96,6 +98,7 @@
             this.OutputLibText = new System.Windows.Forms.TextBox();
             this.FastaText = new System.Windows.Forms.TextBox();
             this.AlgorithmSettings = new System.Windows.Forms.GroupBox();
+            this.NormLabel = new System.Windows.Forms.Label();
             this.QuantLabel = new System.Windows.Forms.Label();
             this.PGLabel = new System.Windows.Forms.Label();
             this.WindowLabel = new System.Windows.Forms.Label();
@@ -125,8 +128,7 @@
             this.PipHeader = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.PipAbort = new System.Windows.Forms.Button();
             this.ResetButton = new System.Windows.Forms.Button();
-            this.NormBox = new System.Windows.Forms.ComboBox();
-            this.NormLabel = new System.Windows.Forms.Label();
+            this.ExperimentNameLabel = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.WindowUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MassAccMs1UpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MassAccUpDown)).BeginInit();
@@ -149,8 +151,8 @@
             // 
             // SaveLogButton
             // 
-            this.SaveLogButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.SaveLogButton.Location = new System.Drawing.Point(899, 703);
+            this.SaveLogButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.SaveLogButton.Location = new System.Drawing.Point(899, 5);
             this.SaveLogButton.Name = "SaveLogButton";
             this.SaveLogButton.Size = new System.Drawing.Size(89, 23);
             this.SaveLogButton.TabIndex = 6;
@@ -160,8 +162,8 @@
             // 
             // LogClearButton
             // 
-            this.LogClearButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.LogClearButton.Location = new System.Drawing.Point(802, 703);
+            this.LogClearButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.LogClearButton.Location = new System.Drawing.Point(802, 5);
             this.LogClearButton.Name = "LogClearButton";
             this.LogClearButton.Size = new System.Drawing.Size(91, 23);
             this.LogClearButton.TabIndex = 24;
@@ -551,7 +553,7 @@
             // 
             // PipAdd
             // 
-            this.PipAdd.Location = new System.Drawing.Point(605, 15);
+            this.PipAdd.Location = new System.Drawing.Point(605, 45);
             this.PipAdd.Name = "PipAdd";
             this.PipAdd.Size = new System.Drawing.Size(91, 23);
             this.PipAdd.TabIndex = 39;
@@ -565,7 +567,7 @@
             // 
             this.PipName.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.PipName.Location = new System.Drawing.Point(702, 17);
+            this.PipName.Location = new System.Drawing.Point(702, 47);
             this.PipName.Name = "PipName";
             this.PipName.Size = new System.Drawing.Size(286, 20);
             this.PipName.TabIndex = 40;
@@ -574,8 +576,9 @@
             // 
             // PipExec
             // 
+            this.PipExec.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.PipExec.BackColor = System.Drawing.SystemColors.GradientInactiveCaption;
-            this.PipExec.Location = new System.Drawing.Point(802, 173);
+            this.PipExec.Location = new System.Drawing.Point(802, 203);
             this.PipExec.Name = "PipExec";
             this.PipExec.Size = new System.Drawing.Size(91, 23);
             this.PipExec.TabIndex = 44;
@@ -586,7 +589,7 @@
             // 
             // PipUpdate
             // 
-            this.PipUpdate.Location = new System.Drawing.Point(605, 72);
+            this.PipUpdate.Location = new System.Drawing.Point(605, 102);
             this.PipUpdate.Name = "PipUpdate";
             this.PipUpdate.Size = new System.Drawing.Size(91, 23);
             this.PipUpdate.TabIndex = 47;
@@ -598,7 +601,7 @@
             // OpenPipelineButton
             // 
             this.OpenPipelineButton.Image = ((System.Drawing.Image)(resources.GetObject("OpenPipelineButton.Image")));
-            this.OpenPipelineButton.Location = new System.Drawing.Point(702, 173);
+            this.OpenPipelineButton.Location = new System.Drawing.Point(702, 203);
             this.OpenPipelineButton.Name = "OpenPipelineButton";
             this.OpenPipelineButton.Size = new System.Drawing.Size(32, 23);
             this.OpenPipelineButton.TabIndex = 48;
@@ -609,7 +612,7 @@
             // SavePipelineButton
             // 
             this.SavePipelineButton.Image = ((System.Drawing.Image)(resources.GetObject("SavePipelineButton.Image")));
-            this.SavePipelineButton.Location = new System.Drawing.Point(739, 173);
+            this.SavePipelineButton.Location = new System.Drawing.Point(739, 203);
             this.SavePipelineButton.Name = "SavePipelineButton";
             this.SavePipelineButton.Size = new System.Drawing.Size(32, 23);
             this.SavePipelineButton.TabIndex = 49;
@@ -689,12 +692,37 @@
             this.ReannotateBox.AutoSize = true;
             this.ReannotateBox.Location = new System.Drawing.Point(6, 334);
             this.ReannotateBox.Name = "ReannotateBox";
-            this.ReannotateBox.Size = new System.Drawing.Size(82, 18);
+            this.ReannotateBox.Size = new System.Drawing.Size(82, 17);
             this.ReannotateBox.TabIndex = 67;
             this.ReannotateBox.Text = "Reannotate";
             this.toolTip1.SetToolTip(this.ReannotateBox, "Reannotate library precursors using the FASTA database");
-            this.ReannotateBox.UseCompatibleTextRendering = true;
             this.ReannotateBox.UseVisualStyleBackColor = true;
+            // 
+            // NormBox
+            // 
+            this.NormBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.NormBox.FormattingEnabled = true;
+            this.NormBox.Items.AddRange(new object[] {
+            "Global",
+            "RT-dependent",
+            "RT & signal-dep. (experimental)"});
+            this.NormBox.Location = new System.Drawing.Point(131, 211);
+            this.NormBox.Name = "NormBox";
+            this.NormBox.Size = new System.Drawing.Size(154, 21);
+            this.NormBox.TabIndex = 57;
+            this.toolTip1.SetToolTip(this.NormBox, "Which normalisation strategy to use? (normalised quantities are reported along wi" +
+        "th the raw quantities)");
+            // 
+            // ExperimentNameText
+            // 
+            this.ExperimentNameText.Location = new System.Drawing.Point(104, 7);
+            this.ExperimentNameText.Name = "ExperimentNameText";
+            this.ExperimentNameText.Size = new System.Drawing.Size(496, 20);
+            this.ExperimentNameText.TabIndex = 52;
+            this.ExperimentNameText.Text = "DIA-NN Experiment";
+            this.toolTip1.SetToolTip(this.ExperimentNameText, "Name of the experiment, displayed as the tab name, default name for saving log/pi" +
+        "peline");
+            this.ExperimentNameText.TextChanged += new System.EventHandler(this.ExperimentNameText_TextChanged);
             // 
             // LibraryFreeBox
             // 
@@ -744,7 +772,7 @@
             this.LibFreeSettings.Controls.Add(this.EnzymeLabel);
             this.LibFreeSettings.Controls.Add(this.EnzymeCombo);
             this.LibFreeSettings.Controls.Add(this.MissedCleavageUpDown);
-            this.LibFreeSettings.Location = new System.Drawing.Point(3, 437);
+            this.LibFreeSettings.Location = new System.Drawing.Point(3, 467);
             this.LibFreeSettings.Name = "LibFreeSettings";
             this.LibFreeSettings.Size = new System.Drawing.Size(292, 260);
             this.LibFreeSettings.TabIndex = 37;
@@ -976,12 +1004,21 @@
             this.AlgorithmSettings.Controls.Add(this.MassAccLabel);
             this.AlgorithmSettings.Controls.Add(this.NNCheck);
             this.AlgorithmSettings.Controls.Add(this.BatchModeCheck);
-            this.AlgorithmSettings.Location = new System.Drawing.Point(307, 437);
+            this.AlgorithmSettings.Location = new System.Drawing.Point(307, 467);
             this.AlgorithmSettings.Name = "AlgorithmSettings";
             this.AlgorithmSettings.Size = new System.Drawing.Size(293, 260);
             this.AlgorithmSettings.TabIndex = 38;
             this.AlgorithmSettings.TabStop = false;
             this.AlgorithmSettings.Text = "Algorithm";
+            // 
+            // NormLabel
+            // 
+            this.NormLabel.AutoSize = true;
+            this.NormLabel.Location = new System.Drawing.Point(7, 214);
+            this.NormLabel.Name = "NormLabel";
+            this.NormLabel.Size = new System.Drawing.Size(115, 13);
+            this.NormLabel.TabIndex = 56;
+            this.NormLabel.Text = "Cross-run normalisation";
             // 
             // QuantLabel
             // 
@@ -1042,7 +1079,7 @@
             this.FilesBox.Controls.Add(this.FastaButton);
             this.FilesBox.Controls.Add(this.FastaText);
             this.FilesBox.Controls.Add(this.ExeText);
-            this.FilesBox.Location = new System.Drawing.Point(3, 1);
+            this.FilesBox.Location = new System.Drawing.Point(3, 31);
             this.FilesBox.Name = "FilesBox";
             this.FilesBox.Size = new System.Drawing.Size(292, 430);
             this.FilesBox.TabIndex = 36;
@@ -1100,7 +1137,7 @@
             this.MainSettingsBox.Controls.Add(this.VerboseLabel);
             this.MainSettingsBox.Controls.Add(this.OutputLibText);
             this.MainSettingsBox.Controls.Add(this.OutputLibButton);
-            this.MainSettingsBox.Location = new System.Drawing.Point(307, 1);
+            this.MainSettingsBox.Location = new System.Drawing.Point(307, 31);
             this.MainSettingsBox.Name = "MainSettingsBox";
             this.MainSettingsBox.Size = new System.Drawing.Size(293, 430);
             this.MainSettingsBox.TabIndex = 35;
@@ -1114,10 +1151,9 @@
             this.PDFRepBox.CheckState = System.Windows.Forms.CheckState.Checked;
             this.PDFRepBox.Location = new System.Drawing.Point(5, 200);
             this.PDFRepBox.Name = "PDFRepBox";
-            this.PDFRepBox.Size = new System.Drawing.Size(129, 18);
+            this.PDFRepBox.Size = new System.Drawing.Size(124, 17);
             this.PDFRepBox.TabIndex = 53;
             this.PDFRepBox.Text = "Generate PDF report";
-            this.PDFRepBox.UseCompatibleTextRendering = true;
             this.PDFRepBox.UseVisualStyleBackColor = true;
             // 
             // TempFolderBox
@@ -1248,7 +1284,7 @@
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.LogText.Cursor = System.Windows.Forms.Cursors.IBeam;
-            this.LogText.Location = new System.Drawing.Point(606, 201);
+            this.LogText.Location = new System.Drawing.Point(606, 231);
             this.LogText.Multiline = true;
             this.LogText.Name = "LogText";
             this.LogText.ReadOnly = true;
@@ -1259,7 +1295,7 @@
             // 
             // PipClear
             // 
-            this.PipClear.Location = new System.Drawing.Point(606, 173);
+            this.PipClear.Location = new System.Drawing.Point(606, 203);
             this.PipClear.Name = "PipClear";
             this.PipClear.Size = new System.Drawing.Size(91, 23);
             this.PipClear.TabIndex = 42;
@@ -1269,7 +1305,7 @@
             // 
             // PipRemove
             // 
-            this.PipRemove.Location = new System.Drawing.Point(605, 43);
+            this.PipRemove.Location = new System.Drawing.Point(605, 73);
             this.PipRemove.Name = "PipRemove";
             this.PipRemove.Size = new System.Drawing.Size(91, 23);
             this.PipRemove.TabIndex = 43;
@@ -1284,7 +1320,7 @@
             this.PipelineList.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
             this.PipHeader});
             this.PipelineList.HideSelection = false;
-            this.PipelineList.Location = new System.Drawing.Point(702, 43);
+            this.PipelineList.Location = new System.Drawing.Point(702, 73);
             this.PipelineList.MultiSelect = false;
             this.PipelineList.Name = "PipelineList";
             this.PipelineList.Size = new System.Drawing.Size(286, 124);
@@ -1301,8 +1337,9 @@
             // 
             // PipAbort
             // 
+            this.PipAbort.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.PipAbort.BackColor = System.Drawing.Color.LightSalmon;
-            this.PipAbort.Location = new System.Drawing.Point(899, 173);
+            this.PipAbort.Location = new System.Drawing.Point(899, 203);
             this.PipAbort.Name = "PipAbort";
             this.PipAbort.Size = new System.Drawing.Size(91, 23);
             this.PipAbort.TabIndex = 46;
@@ -1312,7 +1349,7 @@
             // 
             // ResetButton
             // 
-            this.ResetButton.Location = new System.Drawing.Point(606, 144);
+            this.ResetButton.Location = new System.Drawing.Point(605, 5);
             this.ResetButton.Name = "ResetButton";
             this.ResetButton.Size = new System.Drawing.Size(90, 23);
             this.ResetButton.TabIndex = 50;
@@ -1320,37 +1357,24 @@
             this.ResetButton.UseVisualStyleBackColor = true;
             this.ResetButton.Click += new System.EventHandler(this.ResetButton_Click);
             // 
-            // NormBox
+            // ExperimentNameLabel
             // 
-            this.NormBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.NormBox.FormattingEnabled = true;
-            this.NormBox.Items.AddRange(new object[] {
-            "Global",
-            "RT-dependent",
-            "RT & signal-dep. (experimental)"});
-            this.NormBox.Location = new System.Drawing.Point(131, 211);
-            this.NormBox.Name = "NormBox";
-            this.NormBox.Size = new System.Drawing.Size(154, 21);
-            this.NormBox.TabIndex = 57;
-            this.toolTip1.SetToolTip(this.NormBox, "Which normalisation strategy to use? (normalised quantities are reported along wi" +
-        "th the raw quantities)");
-            // 
-            // NormLabel
-            // 
-            this.NormLabel.AutoSize = true;
-            this.NormLabel.Location = new System.Drawing.Point(7, 214);
-            this.NormLabel.Name = "NormLabel";
-            this.NormLabel.Size = new System.Drawing.Size(115, 13);
-            this.NormLabel.TabIndex = 56;
-            this.NormLabel.Text = "Cross-run normalisation";
+            this.ExperimentNameLabel.AutoSize = true;
+            this.ExperimentNameLabel.Location = new System.Drawing.Point(9, 10);
+            this.ExperimentNameLabel.Name = "ExperimentNameLabel";
+            this.ExperimentNameLabel.Size = new System.Drawing.Size(91, 13);
+            this.ExperimentNameLabel.TabIndex = 51;
+            this.ExperimentNameLabel.Text = "Experiment name:";
             // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Inherit;
             this.AutoScroll = true;
             this.BackColor = System.Drawing.SystemColors.Control;
             this.ClientSize = new System.Drawing.Size(1008, 729);
+            this.Controls.Add(this.ExperimentNameText);
+            this.Controls.Add(this.ExperimentNameLabel);
             this.Controls.Add(this.ResetButton);
             this.Controls.Add(this.SavePipelineButton);
             this.Controls.Add(this.OpenPipelineButton);
@@ -1499,6 +1523,8 @@
         private System.Windows.Forms.CheckBox ReannotateBox;
         private System.Windows.Forms.ComboBox NormBox;
         private System.Windows.Forms.Label NormLabel;
+        private System.Windows.Forms.Label ExperimentNameLabel;
+        private System.Windows.Forms.TextBox ExperimentNameText;
     }
 }
 

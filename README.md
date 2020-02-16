@@ -21,7 +21,11 @@ Please also check the commands listed below.
 
 1. Deep learning-based generation of high quality spectral libraries *in silico* (Windows only). This boosts library-free search efficiency.   
 
-2. Analysis logs (which also specify the DIA-NN version used and the search settings) are now saved automatically.
+2. Analysis logs (which also specify the DIA-NN version used and the search settings) are now saved automatically.  
+
+3. Multi-tab GUI, ideal for dealing with multiple experiments in parallel.  
+
+4. Experimental support for NIST .msp and SpectraST .sptxt libraries.
 
 ### Installation
 

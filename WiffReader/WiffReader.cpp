@@ -67,12 +67,6 @@ public:
 	friend inline bool operator < (const Peak &left, const Peak &right) { return left.mz < right.mz; }
 };
 
-const double qspread = 5.0;
-__forceinline double quant_func(double t) {
-	double t2 = t * t;
-	return (1.0 - t2) * exp(-0.5 * t2);
-}
-
 class Spectrum {
 public:
 	int MS_level = 0;
@@ -100,7 +94,7 @@ public:
 		int i, back, forward;
 		bool up = true;
 		double sum = 0.0, win = x[0] * scan_width, min = x[0] - win, max = x[0] + win, low, high;
-		double qwin = x[0] * quant_width, qmin = x[0] - qwin, qmax = x[0] + qwin, qlow, qhigh, qscale = 1.0 / qwin;
+		double qwin = x[0] * quant_width, qmin = x[0] - qwin, qmax = x[0] + qwin, qlow, qhigh;
 		for (i = 0; i < n; i++) {
 			if (x[i] >= max) break;
 			sum += y[i];
@@ -109,7 +103,7 @@ public:
 
 		for (i = 1; i < n; i++) {
 			low = min, high = max, qlow = qmin, qhigh = qmax;
-			win = x[i] * scan_width, qwin = x[i] * quant_width * qspread;
+			win = x[i] * scan_width, qwin = x[i] * quant_width;
 			min = x[i] - win, max = x[i] + win, qmin = x[i] - qwin, qmax = x[i] + qwin;
 
 			double delta = 0.0;
@@ -125,22 +119,21 @@ public:
 			if (delta <= 0.0) {
 				if (up) {
 					sum = 0.0;
+					double mz = 0.0, margin = y[i - 1] * 0.1;
 					for (int j = i; j < n; j++) {
 						if (x[j] >= qhigh) break;
-						sum += y[j] * quant_func((x[j] - x[i - 1]) * qscale);
+						sum += y[j];
+						mz += x[j] * y[j];
 					}
 					for (int j = i - 1; j >= 0; j--) {
 						if (x[j] <= qlow) break;
-						sum += y[j] * quant_func((x[j] - x[i - 1]) * qscale);
+						sum += y[j];
+						mz += x[j] * y[j];
 					}
-					if (sum >= MinPeakHeight) peaks.push_back(Peak(x[i - 1], sum));
+					if (sum >= MinPeakHeight) peaks.push_back(Peak(mz / sum, sum));
 				}
 				up = false;
-			} else {
-				up = true;
-				sum = Max(0.0, sum + delta);
-			}
-			qscale = 1.0 / (x[i] * quant_width);
+			} else up = true;
 		}
 	}
 
@@ -206,8 +199,8 @@ public:
 									m = x->Length;
 									X.resize(m), Y.resize(m);
 									for (int i = 0; i < m; i++) X[i] = x[i], Y[i] = y[i];
-									if (spi->MSLevel == 1) (*spectra)[pos].init(&(X[0]), &(Y[0]), m, !spi->CentroidMode, 0.6 / res, 2.0 / res, 1, 0.5 * (spi->StartRT + spi->EndRT), 0.0, 0.0);
-									else if (spi->MSLevel == 2) (*spectra)[pos].init(&(X[0]), &(Y[0]), m, !spi->CentroidMode, 0.6 / res, 2.0 / res, 2, 0.5 * (spi->StartRT + spi->EndRT), wl, wh);
+									if (spi->MSLevel == 1) (*spectra)[pos].init(&(X[0]), &(Y[0]), m, !spi->CentroidMode, 0.6 / res, 1.0 / res, 1, 0.5 * (spi->StartRT + spi->EndRT), 0.0, 0.0);
+									else if (spi->MSLevel == 2) (*spectra)[pos].init(&(X[0]), &(Y[0]), m, !spi->CentroidMode, 0.6 / res, 1.0 / res, 2, 0.5 * (spi->StartRT + spi->EndRT), wl, wh);
 								} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout);  provider->Close(); return; }
 							} else {
 								try {

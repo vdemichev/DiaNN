@@ -27,4 +27,3 @@ Eigen
  - folder within this distribution: /eigen
  - URL: http://eigen.tuxfamily.org/
  - License information: eigen/COPYING.README
-

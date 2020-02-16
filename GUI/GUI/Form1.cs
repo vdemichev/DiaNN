@@ -13,6 +13,8 @@ using System.Linq;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 
+using EasyTabs;
+
 namespace GUI
 {
     [Serializable]
@@ -35,9 +37,19 @@ namespace GUI
 
     public partial class Form1 : Form
     {
+        protected TitleBarTabs ParentTabs
+        {
+            get
+            {
+                return (ParentForm as TitleBarTabs);
+            }
+        }
+
         public Form1()
         {
             InitializeComponent();
+            this.Text = this.ExperimentNameText.Text = DateTime.Now.ToString(@"MM\/dd\/yyyy HH:mm:ss");
+            if (Program.pipeline_to_open.Length > 0) LoadPipeline(Program.pipeline_to_open); 
         }
 
         public string curr_dir;
@@ -200,14 +212,14 @@ namespace GUI
             Invoke(new Action(() => LogText.AppendText(line + Environment.NewLine)));
         }
 
-        private void ExitedHandler(object sender, System.EventArgs e)
+        private void DiaNNStopped(bool plot = true)
         {
             running = false;
             Invoke(new Action(() => LogText.Text += "DIA-NN exited" + Environment.NewLine));
             Invoke(new Action(() => StatusLabel.Text = "Finished"));
             Invoke(new Action(() => StatusIndicator.BackColor = System.Drawing.SystemColors.Control));
 
-            if (pdf_file.Length > 0)
+            if (pdf_file.Length > 0 && plot)
             {
                 bool pdf_running = false;
                 var plotter = new Process();
@@ -251,6 +263,11 @@ namespace GUI
                     finished_pipeline = true;
                 }
             }
+        }
+
+        private void ExitedHandler(object sender, System.EventArgs e)
+        {
+            DiaNNStopped();
         }
 
         private void RunProcess(bool convert, Settings S)
@@ -469,6 +486,9 @@ namespace GUI
                 case DialogResult.Yes:
                     try
                     {
+                        DiaNNStopped(false);
+                        process.OutputDataReceived -= OutputHandler;
+                        process.Exited -= ExitedHandler;
                         process.Kill();
                     }
                     catch (Exception ex) {}
@@ -551,6 +571,8 @@ namespace GUI
             outDialog.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*";
             outDialog.FilterIndex = 0;
             outDialog.RestoreDirectory = true;
+            string name = this.Text.Replace('/', '_').Replace(':', '_') + ".txt";
+            if (name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0) outDialog.FileName = name;
             if (outDialog.ShowDialog() == DialogResult.OK)
                 File.WriteAllText(outDialog.FileName, LogText.Text);
         }
@@ -585,6 +607,17 @@ namespace GUI
             if (FrMzMin.Value > FrMzMax.Value) FrMzMin.Value = FrMzMax.Value;
         }
 
+        public void kill()
+        {
+            try
+            {
+                process.OutputDataReceived -= OutputHandler;
+                process.Exited -= ExitedHandler;
+                process.Kill();
+            }
+            catch (Exception ex) { }
+        }
+
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             if (MessageBox.Show("Close DIA-NN? All progress will be lost.", "Close",
@@ -592,14 +625,7 @@ namespace GUI
             {
                 e.Cancel = true;
             }
-            else
-            {
-                try
-                {
-                    process.Kill();
-                }
-                catch (Exception ex) { }
-            }
+            else kill();
         }
 
         private void ClearFastaButton_Click(object sender, EventArgs e)
@@ -699,6 +725,10 @@ namespace GUI
                         Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.Color.LightSalmon));
                         in_pipeline = false;
                         processed = 0;
+
+                        DiaNNStopped();
+                        process.OutputDataReceived -= OutputHandler;
+                        process.Exited -= ExitedHandler;
                         process.Kill();
                     }
                     catch (Exception ex) { }
@@ -715,6 +745,8 @@ namespace GUI
             outDialog.Filter = "Pipeline files (*.pipeline)|*.pipeline|All files (*.*)|*.*";
             outDialog.FilterIndex = 0;
             outDialog.RestoreDirectory = true;
+            string name = this.Text.Replace('/', '_').Replace(':', '_') + ".pipeline";
+            if (name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0) outDialog.FileName = name;
             if (outDialog.ShowDialog() == DialogResult.OK)
             {
 
@@ -785,6 +817,25 @@ namespace GUI
             LoadSettings(DefaultConfig);
         }
 
+        private void ExperimentNameText_TextChanged(object sender, EventArgs e)
+        {
+            Text = ExperimentNameText.Text;
+        }
+
+        private void LoadPipeline(string file)
+        {
+            FileStream stream = File.Open(file, FileMode.Open);
+            var formatter = new BinaryFormatter();
+            while (stream.Position != stream.Length)
+            {
+                var p = (Settings)formatter.Deserialize(stream);
+                Pipeline.Add(p);
+                PipNames.Add(p.name);
+                PipelineList.Items.Add(p.name);
+            }
+            stream.Close();
+        }
+
         private void OpenPipelineButton_Click(object sender, EventArgs e)
         {
             OpenFileDialog openDialog = new OpenFileDialog();
@@ -792,19 +843,7 @@ namespace GUI
             openDialog.Filter = "Pipeline files (*.pipeline)|*.pipeline|All files (*.*)|*.*";
             openDialog.FilterIndex = 0;
             openDialog.RestoreDirectory = true;
-            if (openDialog.ShowDialog() == DialogResult.OK)
-            {
-                FileStream stream = File.Open(openDialog.FileName, FileMode.Open);
-                var formatter = new BinaryFormatter();
-                while (stream.Position != stream.Length)
-                {
-                    var p = (Settings)formatter.Deserialize(stream);
-                    Pipeline.Add(p);
-                    PipNames.Add(p.name);
-                    PipelineList.Items.Add(p.name);
-                }
-                stream.Close();
-            }
+            if (openDialog.ShowDialog() == DialogResult.OK) LoadPipeline(openDialog.FileName);
         }
 
         private void FDRUpDown_ValueChanged(object sender, EventArgs e)

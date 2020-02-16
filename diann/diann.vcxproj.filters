@@ -138,6 +138,9 @@
     <ClCompile Include="..\mstoolkit\src\MSToolkit\RAWReader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\sqlite\sqlite3.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Resource Include="..\Predictor\x64\Deploy\Resource.res">
