@@ -526,13 +526,6 @@ int unimod_index_number(int index) {
 #ifdef WIFFREADER
 #ifdef TDFREADER
 std::vector<std::string> MSFormatsExt = { ".dia", ".mzml", ".raw", ".tdf", ".wiff" }; // extensions must be ordered alphabetically here
-
-inline double get_mobility(float intensity) { // 1/K0 encoded as part of the intensity 32-bit float
-	int enc = *(int*)&intensity;
-	enc &= 0xFF;
-	float res = enc;
-	return (res + 0.5) / 128.0;
-}
 #else
 std::vector<std::string> MSFormatsExt = { ".dia", ".mzml", ".raw", ".wiff" };
 #endif
@@ -541,6 +534,13 @@ bool skip_wiff = false, fast_wiff = false;
 #else
 std::vector<std::string> MSFormatsExt = { ".dia", ".mzml", ".raw" };
 #endif
+
+inline double get_mobility(float intensity) { // 1/K0 encoded as part of the intensity 32-bit float
+	int enc = *(int*)&intensity;
+	enc &= 0xFF;
+	float res = enc;
+	return (res + 0.5) / 128.0;
+}
 
 enum {
 	outFile, outPG, outPID, outPNames, outGenes, outPGQ, outPGN, outGQ, outGN, outGQP, outGNP, outModSeq, outStrSeq,
