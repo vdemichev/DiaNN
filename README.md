@@ -25,7 +25,7 @@ Please also check the commands listed below.
 
 3. Multi-tab GUI, ideal for dealing with multiple experiments in parallel.  
 
-4. Experimental support for NIST .msp and SpectraST .sptxt libraries.
+4. Experimental support for NIST .msp and SpectraST .sptxt libraries (currently library retention time information is not used - support for this will be added later).
 
 ### Installation
 
