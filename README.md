@@ -38,7 +38,7 @@ Raw data files: Sciex .wiff, Thermo .raw, .mzML or .dia (format used by DIA-NN t
 Reading Thermo .raw files requires Thermo MS File Reader (https://thermo.flexnetoperations.com/control/thmo/login?nextURL=%2Fcontrol%2Fthmo%2Fdownload%3Felement%3D6306677) to be installed. It is essential to use specifically the version by the link above (3.0 SP3).     
 The .mzML files should be centroided and contain data as spectra (e.g. SWATH) and not chromatograms.  
 
-Spectral library: comma-separated (.csv) or tab-separated (.tsv, .xls or .txt) or .speclib (compact format used by DIA-NN) file.    
+Spectral library: support for comma-separated (.csv) or tab-separated (.tsv, .xls or .txt), .speclib (compact format used by DIA-NN), .sptxt (SpectraST, experimental) and .msp (NIST, experimental) files.    
 
 ### Command-line tool usage
 ```
