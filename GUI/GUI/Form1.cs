@@ -195,7 +195,7 @@ namespace GUI
         private void LibButton_Click(object sender, EventArgs e)
         {
             OpenFileDialog libDialog = new OpenFileDialog();
-            libDialog.Filter = "Spectral library files (*.txt, *.csv, *.tsv, *.xls, *.speclib)|*.txt;*.csv;*.tsv;*.xls;*.speclib|All files (*.*)|*.*";
+            libDialog.Filter = "Spectral library files (*.txt, *.csv, *.tsv, *.xls, *.speclib, *.sptxt, *.msp)|*.txt;*.csv;*.tsv;*.xls;*.speclib;*.sptxt;*.msp|All files (*.*)|*.*";
             libDialog.FilterIndex = 0;
             if (libDialog.ShowDialog() == DialogResult.OK)
                 LibText.Text = libDialog.FileName;

@@ -218,6 +218,7 @@ double CalibrationMassAccuracy = 100.0 / 1000000.0;
 double GlobalMassAccuracy = 20.0 / 1000000.0;
 double GlobalMassAccuracyMs1 = 20.0 / 1000000.0;
 double GeneratorAccuracy = 5.0 / 1000000.0;
+double SptxtMassAccuracy = 5.0 / 1000000.0;
 double MaxProfilingQvalue = 0.001;
 double MaxQuantQvalue = 0.01;
 double ProteinQuantQvalue = 0.01;
@@ -300,6 +301,7 @@ int MinPeptideLength = 7;
 int MaxPeptideLength = 30;
 bool NMetExcision = false;
 bool AddLosses = false;
+bool OriginalModNames = false;
 int MaxVarMods = 1;
 int MinFrAAs = 3;
 double MinFrMz = 200.0, MaxFrMz = 1800.0;
@@ -477,6 +479,121 @@ std::vector<MOD> Modifications = {
 
 inline char to_lower(char c) { return c + 32; }
 
+double to_double(const char * s) { // precision ~17 sig figures, locale-independent
+	const long long limit = (long long)1 << 58;
+	long long tot = 0, sep;
+	int exponent = 0;
+	bool neg = false;
+	const double exps[35] = {
+		10.0, 100.0, 1000.0, 10000.0, 100000.0,
+		1000000.0, 10000000.0, 100000000.0, 1000000000.0, 10000000000.0,
+		100000000000.0, 1000000000000.0, 10000000000000.0, 100000000000000.0, 1000000000000000.0,
+		10000000000000000.0, 100000000000000000.0, 1000000000000000000.0, 10000000000000000000.0, 100000000000000000000.0,
+		1000000000000000000000.0, 10000000000000000000000.0, 100000000000000000000000.0, 1000000000000000000000000.0, 10000000000000000000000000.0,
+		100000000000000000000000000.0, 1000000000000000000000000000.0, 10000000000000000000000000000.0, 100000000000000000000000000000.0, 1000000000000000000000000000000.0,
+		10000000000000000000000000000000.0, 100000000000000000000000000000000.0, 1000000000000000000000000000000000.0, 10000000000000000000000000000000000.0, 100000000000000000000000000000000000.0
+	};
+
+	while (*s == ' ') s++;
+	if (*s == '-') neg = true, s++;
+	else if (*s == '+') s++;
+	for (sep = -INF; *s; s++) {
+		int dig = *s - '0';
+		if (dig >= 0 && dig <= 9) {
+			tot = 10 * tot + dig, sep++;
+			if (tot >= limit) {
+				s++;
+				if (sep >= 0) goto find_e;
+				for (; *s; s++) {
+					if (*s >= '0' && *s <= '9') exponent++;
+					else if (*s == '.' || *s == ',') {
+						s++;
+						goto find_e;
+					} else if (*s == 'e' || *s == 'E') goto at_e;
+					else goto calc;
+				}
+				goto find_e;
+			}
+		} else if (*s == '.' || *s == ',') {
+			if (sep >= 0) goto calc;
+			sep = 0;
+		} else if (*s == 'e' || *s == 'E') goto at_e;
+		else goto calc;
+	}
+
+find_e:
+	for (; *s; s++) {
+		if (*s >= '0' && *s <= '9') {} else if (*s == 'e' || *s == 'E') goto at_e;
+		else goto calc;
+	}
+	goto calc;
+
+at_e:
+	s++;
+	if (*s) exponent += std::stoi(s);
+
+calc:
+	if (sep > 0) exponent -= sep;
+	double res = (neg ? -tot : tot);
+	if (exponent > 0) {
+		if (exponent <= 35) return res * exps[exponent - 1];
+		int num = exponent / 35;
+		int extra = (exponent - 35 * num);
+		for (int i = 0; i < num; i++) res *= exps[34];
+		res *= exps[extra];
+		return res;
+	} else if (exponent < 0) {
+		if (exponent >= -35) return res / exps[-1 - exponent];
+		return 0.0;
+	}
+	return res;
+}
+
+inline double to_double(const std::string &s) { return to_double(&(s[0])); }
+
+bool load_unimod() {
+	std::ifstream in("unimod.obo");
+	if (in.fail()) return false;
+
+	int id = -1, pos, next, balance, label = 0;
+	double mass = 0.0;
+	bool look = false;
+	std::string line, name, def, unimod;
+
+	while (std::getline(in, line)) if (line.size() >= 4) {
+		if (!memcmp(&line[0], "id: ", 4)) {
+			pos = line.find(':', 4) + 1;
+			id = std::stoi(&line[pos]);
+			label = 0;
+			look = true;
+		} else if (look) {
+			if (!memcmp(&line[0], "def: \"", 6)) {
+				def.clear();
+				for (pos = 6; line[pos] != '.'; pos++) def += line[pos];
+			} else if (!memcmp(&line[0], "name: ", 6)) name = trim(line.substr(6));
+			else if (!memcmp(&line[0], "xref: delta_mono_mass \"", 23)) mass = to_double(&line[23]);
+			else if (!memcmp(&line[0], "xref: delta_composition \"", 25)) {
+				balance = 0;
+				for (pos = 25; line[pos] != '\"'; pos++) {
+					char c = line[pos];
+					if (c >= 'A' && c <= 'Z') balance++;
+					else if (c == '(') {
+						balance += std::stoi(&line[pos + 1]) - 1; 
+						for (pos = pos + 1; line[pos] != ')'; pos++);
+					}
+				}
+			} else if (!memcmp(&line[0], "is_a: ", 6)) {
+				look = false;
+				unimod = "UniMod:" + std::to_string(id);
+				Modifications.push_back(MOD(unimod, mass, label));
+				Modifications.push_back(MOD(name, mass, label));
+				Modifications.push_back(MOD(def, mass, label));
+			} else if (balance == 0 && !memcmp(&line[0], "xref: spec_1_classification \"Isotopic label", 43)) label = 1;
+		}
+	}
+	in.close();
+}
+
 void init_unimod() {
 	std::set<int> indices;
 	auto &mods = Modifications;
@@ -489,13 +606,14 @@ void init_unimod() {
 		else {
 			double min = INF;
 			int min_index = 0;
-			for (int j = 0; j < mods.size(); j++) if (j != i) {
+			if (!OriginalModNames) for (int j = 0; j < mods.size(); j++) if (j != i) {
 				if (std::memcmp(&(mods[j].name[0]), "UniMod", 6)) continue;
 				double delta = Abs(((double)mods[i].mass) - (double)mods[j].mass);
 				if (delta < min) min = delta, min_index = j;
 			}
 			if (min > 0.00001) {
-				if (Verbose >= 1) dsout << "Cannot find a UniMod modification match for " << mods[i].name << ": " << min << " minimal mass discrepancy; using the original modificaiton name\n";
+				if (Verbose >= 1 && !OriginalModNames) 
+					dsout << "Cannot find a UniMod modification match for " << mods[i].name << ": " << min << " minimal mass discrepancy; using the original modificaiton name\n";
 				UniMod[i].second = UniMod[i].first;
 				indices.insert(UniModIndex[i].second = i);
 			} else {
@@ -1359,7 +1477,7 @@ inline int missed_KR_cleavages(const std::string &name) {
 	return n - last;
 }
 
-std::string get_aas(const std::string &name) {
+inline std::string get_aas(const std::string &name) {
 	int i, end, par;
 	std::string result;
 
@@ -1375,7 +1493,7 @@ std::string get_aas(const std::string &name) {
 	return result;
 }
 
-std::vector<bool> get_mod_state(const std::string &name, int length) {
+inline std::vector<bool> get_mod_state(const std::string &name, int length) {
 	int i, j;
 	std::vector<bool> result(length, false);
 
@@ -1392,7 +1510,7 @@ std::vector<bool> get_mod_state(const std::string &name, int length) {
 	return result;
 }
 
-std::vector<double> get_sequence(const std::string &name, int * no_cal = NULL) {
+inline std::vector<double> get_sequence(const std::string &name, int * no_cal = NULL) {
 	int i, j;
 	double add = 0.0;
 	std::vector<double> result;
@@ -1426,7 +1544,7 @@ std::vector<double> get_sequence(const std::string &name, int * no_cal = NULL) {
 	return result;
 }
 
-std::string to_canonical(const std::string &name) {
+inline std::string to_canonical(const std::string &name) {
 	int i, j;
 	std::string result;
 
@@ -1453,10 +1571,10 @@ std::string to_canonical(const std::string &name) {
 }
 inline std::string to_canonical(const std::string &name, int charge) { return to_canonical(name) + std::to_string(charge); }
 
-std::string to_eg(const std::string &name) {
+inline void to_eg(std::string &eg, const std::string &name) {
 	int i, j;
-	std::string result;
 
+	eg.clear();
 	for (i = 0; i < name.size(); i++) {
 		char symbol = name[i];
 		if (symbol < 'A' || symbol > 'Z') {
@@ -1468,20 +1586,25 @@ std::string to_eg(const std::string &name) {
 
 			std::string mod = name.substr(i, end - i);
 			for (j = 0; j < Modifications.size(); j++) if (Modifications[j].name == mod) {
-				if (!Modifications[j].label) result += std::string("(") + UniMod[j].second + std::string(")");
+				if (!Modifications[j].label) eg += std::string("(") + UniMod[j].second + std::string(")");
 				break;
 			}
-			if (j == Modifications.size()) result += std::string("(") + mod + std::string(")"); // no warning here
+			if (j == Modifications.size()) eg += std::string("(") + mod + std::string(")"); // no warning here
 			i = end;
 			continue;
-		} else result.push_back(symbol);
+		} else eg.push_back(symbol);
 	}
-	return result;
 }
 
-std::string to_charged_eg(const std::string &name, int charge) { return to_eg(name) + std::to_string(charge); }
+inline std::string to_eg(const std::string &name) {
+	std::string eg;
+	to_eg(eg, name);
+	return eg;
+}
 
-std::string to_prosit(const std::string &name) {
+inline std::string to_charged_eg(const std::string &name, int charge) { return to_eg(name) + std::to_string(charge); }
+
+inline std::string to_prosit(const std::string &name) {
 	int i, j;
 	std::string result;
 
@@ -1502,7 +1625,7 @@ std::string to_prosit(const std::string &name) {
 	return result;
 }
 
-std::string pep_name(const std::string &pr_name) {
+inline std::string pep_name(const std::string &pr_name) {
 	int i;
 	std::string result = pr_name;
 	for (i = result.size() - 1; i >= 0; i--) if (result[i] < '0' || result[i] > '9') break;
@@ -1559,78 +1682,6 @@ double predict_irt(const std::string &name) {
 	return iRT;
 }
 
-double to_double(const char * s) { // precision ~17 sig figures, locale-independent
-	const long long limit = (long long)1 << 58;
-	long long tot = 0, sep;
-	int exponent = 0;
-	bool neg = false;
-	const double exps[35] = {
-		10.0, 100.0, 1000.0, 10000.0, 100000.0,
-		1000000.0, 10000000.0, 100000000.0, 1000000000.0, 10000000000.0,
-		100000000000.0, 1000000000000.0, 10000000000000.0, 100000000000000.0, 1000000000000000.0,
-		10000000000000000.0, 100000000000000000.0, 1000000000000000000.0, 10000000000000000000.0, 100000000000000000000.0,
-		1000000000000000000000.0, 10000000000000000000000.0, 100000000000000000000000.0, 1000000000000000000000000.0, 10000000000000000000000000.0,
-		100000000000000000000000000.0, 1000000000000000000000000000.0, 10000000000000000000000000000.0, 100000000000000000000000000000.0, 1000000000000000000000000000000.0,
-		10000000000000000000000000000000.0, 100000000000000000000000000000000.0, 1000000000000000000000000000000000.0, 10000000000000000000000000000000000.0, 100000000000000000000000000000000000.0
-	};
-
-	while (*s == ' ') s++;
-	if (*s == '-') neg = true, s++;
-	else if (*s == '+') s++;
-	for (sep = -INF; *s; s++) {
-		int dig = *s - '0';
-		if (dig >= 0 && dig <= 9) {
-			tot = 10 * tot + dig, sep++;
-			if (tot >= limit) {
-				s++;
-				if (sep >= 0) goto find_e;
-				for (; *s; s++) {
-					if (*s >= '0' && *s <= '9') exponent++;
-					else if (*s == '.' || *s == ',') {
-						s++;
-						goto find_e;
-					} else if (*s == 'e' || *s == 'E') goto at_e;
-					else goto calc;
-				}
-				goto find_e;
-			}
-		} else if (*s == '.' || *s == ',') {
-			if (sep >= 0) goto calc;
-			sep = 0;
-		} else if (*s == 'e' || *s == 'E') goto at_e;
-		else goto calc;
-	}
-
-find_e:
-	for (; *s; s++) {
-		if (*s >= '0' && *s <= '9') {} else if (*s == 'e' || *s == 'E') goto at_e;
-		else goto calc;
-	}
-	goto calc;
-
-at_e:
-	s++;
-	if (*s) exponent += std::stoi(s);
-
-calc:
-	if (sep > 0) exponent -= sep;
-	double res = (neg ? -tot : tot);
-	if (exponent > 0) {
-		if (exponent <= 35) return res * exps[exponent - 1];
-		int num = exponent / 35;
-		int extra = (exponent - 35 * num);
-		for (int i = 0; i < num; i++) res *= exps[34];
-		res *= exps[extra];
-		return res;
-	} else if (exponent < 0) {
-		if (exponent >= -35) return res / exps[-1 - exponent];
-		return 0.0;
-	}
-	return res;
-}
-
-inline double to_double(const std::string &s) { return to_double(&(s[0])); }
-
 void arguments(int argc, char *argv[]) {
 	int i, start, next, end, cleared_mods = false;
 	std::string prefix, ext;
@@ -1640,6 +1691,14 @@ void arguments(int argc, char *argv[]) {
 	args = std::regex_replace(args, std::regex("\n|\r"), " ");
 	if (args.find("--clear-mods") != std::string::npos) Modifications.clear(), cleared_mods = true,
 		dsout << "Modification names specified in the spectral library will be used for annotating output. Only suitable for library-based analysis.\n";
+	if (args.find("--full-unimod") != std::string::npos) {
+		bool loaded = load_unimod();
+		if (!loaded) dsout << "WARNING: failed to open unimod.obo - place http://www.unimod.org/obo/unimod.obo to the DIA-NN installation folder\n";
+		else {
+			OriginalModNames = true;
+			dsout << "Full UniMod modification database loaded; DIA-NN will not attempt to convert library modifications to the UniMod format\n";
+		}
+	}
 	start = args.find("--", 0);
 	dsout.s << args << "\n\n";
 	while (start != std::string::npos) {
@@ -1662,7 +1721,10 @@ void arguments(int argc, char *argv[]) {
 				start = args.find("--", 0);
 				continue;
 			} else dsout << "WARNING: failed to open cfg file\n";
-		} else if (!memcmp(&(args[start]), "clear-mods ", 11)) {} else if (!memcmp(&(args[start]), "threads ", 8)) Threads = std::stoi(args.substr(start + 8, std::string::npos)), dsout << "Thread number set to " << Threads << "\n";
+		} else if (!memcmp(&(args[start]), "clear-mods ", 11)) {} 
+		else if (!memcmp(&(args[start]), "full-unimod ", 12)) {}
+		else if (!memcmp(&(args[start]), "original-mods ", 14)) OriginalModNames = true, dsout << "DIA-NN will not attempt to convert library modifications to the UniMod format\n";
+		else if (!memcmp(&(args[start]), "threads ", 8)) Threads = std::stoi(args.substr(start + 8, std::string::npos)), dsout << "Thread number set to " << Threads << "\n";
 		else if (!memcmp(&(args[start]), "fasta-search ", 13)) FastaSearch = true, dsout << "Library-free search enabled\n";
 		else if (!memcmp(&(args[start]), "pg-level ", 9)) PGLevelSet = PGLevel = std::stoi(args.substr(start + 9, std::string::npos)),
 			dsout << "Implicit protein grouping: " << ImplicitProteinGrouping[PGLevel]
@@ -1784,7 +1846,9 @@ void arguments(int argc, char *argv[]) {
 				if (std::getline(list, l, ',')) if (l.find("label") != std::string::npos) label = 1;
 				Modifications.push_back(MOD(name, (float)to_double(mass), label));
 			}
-			dsout << "Modification " << name << " with mass delta " << (float)to_double(mass) << " added to the list of recognised modifications for spectral library-based search";
+			if (label) dsout << "Label ";
+			else dsout << "Modification ";
+			dsout << name << " with mass delta " << (float)to_double(mass) << " added to the list of recognised modifications for spectral library-based search";
 			if (label) dsout << " (as label)\n";
 			else dsout << "\n";
 		} else if (!memcmp(&(args[start]), "fixed-mod ", 10)) {
@@ -1799,7 +1863,9 @@ void arguments(int argc, char *argv[]) {
 				Modifications.push_back(MOD(name, (float)to_double(mass), label));
 				FixedMods.resize(FixedMods.size() + 1);
 				FixedMods[FixedMods.size() - 1].init(name, aas, (float)to_double(mass));
-				dsout << "Modification " << name << " with mass delta " << (float)to_double(mass) << " at " << aas << " will be considered as fixed\n";
+				dsout << "Modification " << name << " with mass delta " << (float)to_double(mass) << " at " << aas << " will be considered as fixed";
+				if (label) dsout << " label\n";
+				else dsout << "\n";
 			}
 		} else if (!memcmp(&(args[start]), "var-mod ", 8)) {
 			int label = 0;
@@ -1813,7 +1879,9 @@ void arguments(int argc, char *argv[]) {
 				Modifications.push_back(MOD(name, (float)to_double(mass), label));
 				VarMods.resize(VarMods.size() + 1);
 				VarMods[VarMods.size() - 1].init(name, aas, (float)to_double(mass));
-				dsout << "Modification " << name << " with mass delta " << (float)to_double(mass) << " at " << aas << " will be considered as variable\n";
+				dsout << "Modification " << name << " with mass delta " << (float)to_double(mass) << " at " << aas << " will be considered as variable";
+				if (label) dsout << " label\n";
+				else dsout << "\n";
 			}
 		} else if (!memcmp(&(args[start]), "ref-cal ", 8)) RefCal = true, dsout << "Reference peptides will be used for calibration\n";
 		else if (!memcmp(&(args[start]), "gen-ref ", 8)) GenRef = true, gen_ref_file = trim(args.substr(start + 8, end - start - 8)),
@@ -1929,6 +1997,8 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "mass-acc-ms1 ", 13)) GlobalMassAccuracyMs1 = to_double(args.substr(start + 13, std::string::npos)) / 1000000.0, ForceMassAcc = true;
 		else if (!memcmp(&(args[start]), "gen-acc ", 8)) GeneratorAccuracy = to_double(args.substr(start + 8, std::string::npos)) / 1000000.0,
 			dsout << "Fragmentation spectrum generator accuracy set to " << GeneratorAccuracy << "\n";
+		else if (!memcmp(&(args[start]), "sptxt-acc ", 10)) SptxtMassAccuracy = to_double(args.substr(start + 10, std::string::npos)) / 1000000.0,
+			dsout << "Fragment filtering for .sptxt/.msp spectral libraries set to " << SptxtMassAccuracy * 1000000.0 << " ppm\n";
 		else if (!memcmp(&(args[start]), "min-corr ", 9)) MinCorrScore = Min(to_double(args.substr(start + 9, std::string::npos)), -1.1 + (double)TopF),
 			dsout << "Only peaks with correlation sum exceeding " << MinCorrScore << " will be considered\n";
 		else if (!memcmp(&(args[start]), "min-ms1-corr ", 13)) MinMs1Corr = Min(to_double(args.substr(start + 13, std::string::npos)), 0.99),
@@ -2060,6 +2130,11 @@ void arguments(int argc, char *argv[]) {
 	if (Reannotate && !Convert) {
 		if (!lib_file.size()) Reannotate = false;
 		if (!fasta_files.size() && lib_file.size()) Reannotate = false, dsout << "WARNING: no FASTA, cannot reannotate the library\n";
+	}
+
+	if (FastaSearch && OriginalModNames) {
+		if (lib_file.size())
+			dsout << "WARNING: FASTA digest is enabled while conversion of modifications to the UniMod format is disabled - this might lead to duplicate precursors being generated\n";
 	}
 
 	QFilter = Max(Max(Max(ReportQValue, MaxQuantQvalue), Max(ProteinQuantQvalue, MaxProfilingQvalue)), Max(NormalisationQvalue, ProteinIDQvalue));
@@ -2536,7 +2611,7 @@ public:
 	mutable int apex, peak, best_fragment, peak_width;
 	mutable float RT, iRT, predicted_RT, predicted_iRT, one_over_K0, best_fr_mz, profile_qvalue, qvalue, decoy_qvalue, protein_qvalue, quantity, ratio, level, norm;
 	mutable float pg_quantity, pg_norm, gene_quantity, gene_norm, gene_quantity_u, gene_norm_u;
-	mutable float evidence, decoy_evidence, ms1_corr, cscore, decoy_cscore;
+	mutable float evidence, decoy_evidence, ms1_corr, ms1_area, cscore, decoy_cscore;
 #if REPORT_SCORES
 	float scores[pN], decoy_scores[pN];
 #endif
@@ -3392,6 +3467,9 @@ public:
 	std::vector<Entry> entries;
 
 	template<class F> void write(F &out) {
+		int version = -1;
+		out.write((char*)&version, sizeof(int));
+
 		int gd = gen_decoys, gc = gen_charges, ip = infer_proteotypicity;
 		out.write((char*)&gd, sizeof(int));
 		out.write((char*)&gc, sizeof(int));
@@ -3407,11 +3485,16 @@ public:
 		out.write((char*)&iRT_min, sizeof(double));
 		out.write((char*)&iRT_max, sizeof(double));
 		write_array(out, entries);
+		write_vector(out, elution_groups);
 	}
 
 	template<class F> void read(F &in) {
-		int gd = 0, gc = 0, ip = 0;
-		in.read((char*)&gd, sizeof(int));
+		int gd = 0, gc = 0, ip = 0, version = 0;
+
+		in.read((char*)&version, sizeof(int));
+		if (version >= 0) gd = version;
+		else in.read((char*)&gd, sizeof(int));
+
 		in.read((char*)&gc, sizeof(int));
 		in.read((char*)&ip, sizeof(int));
 		gen_decoys = gd, gen_charges = gc, infer_proteotypicity = ip;
@@ -3427,6 +3510,7 @@ public:
 		in.read((char*)&iRT_max, sizeof(double));
 		read_array(in, entries);
 		for (auto &e : entries) e.lib = this;
+		if (version <= -1 && in.peek() != std::char_traits<char>::eof()) read_vector(in, elution_groups);
 	}
 
 	void generate_spectra() {
@@ -4012,7 +4096,7 @@ public:
 
 	void assemble_elution_groups() {
 		if (Verbose >= 1) Time(), dsout << "Assembling elution groups\n";
-		eg.clear(), elution_groups.clear();
+		eg.clear(), elution_groups.clear(), elution_groups.reserve(entries.size());
 		for (auto &e : entries) {
 			auto name = to_eg(e.name);
 			auto egp = eg.insert(std::pair<std::string, int>(name, eg.size()));
@@ -4039,16 +4123,17 @@ public:
 	}
 
 	bool load_sptxt(const char * file_name, double acc = 0.000005) {
-		std::string line, pep_name, name, ann;
+		std::string line, aas, spectrum_name, pep_name, name, ann, mod_name, comment;
 		std::map<std::string, Entry> map;
 		std::set<PG> prot; prot.insert(PG(""));
 		Entry e; e.lib = this;
-		float pr_mz = 0.0;
-		bool first = false, skip = true, omit = true;
-		int charge;
+		float pr_mz = 0.0, pr_rt = 0.0;
+		bool first = false, skip = true, omit = true, no_rt = true;
+		int i, j, charge = 0, no_rt_cnt = 0;
 		gen_charges = false;
 
-		dsout << "WARNING: support for .msp/.sptxt spectral libraries is experimental; fragment ions must be annotated; 5ppm mass accuracy filtering will be used\n";
+		dsout << "WARNING: support for .sptxt/.msp spectral libraries is experimental; fragment ions must be annotated; " 
+			<< acc * 1000000.0 << " ppm mass accuracy filtering will be used; use --sptxt-acc <ppm> to change this setting\n";
 
 		auto ins = map.insert(std::pair<std::string, Entry>("", e)).first;
 		map.clear();
@@ -4057,25 +4142,71 @@ public:
 		while (std::getline(sp, line)) {
 			if (line.size() >= 6 && (line[0] < '0' || line[0] > '9')) {
 				if (!memcmp(&(line[0]), "Name:", 5)) {
-					name = trim(line.substr(5));
-					auto cpos = name.find_last_of('/');
+					spectrum_name = trim(line.substr(5));
+					auto cpos = spectrum_name.find_last_of('/');
 					if (cpos == std::string::npos) omit = true;
 					else {
-						pep_name = name.substr(0, cpos);
-						charge = std::stoi(&(name[cpos + 1]));
+						pep_name = spectrum_name.substr(0, cpos);
+						charge = std::stoi(&(spectrum_name[cpos + 1]));
 						name = to_canonical(pep_name, charge);
 						omit = false;
 					}
 				} else if (line.size() >= 15 && !omit) {
 					if (!memcmp(&(line[0]), "PrecursorMZ:", 12))
 						pr_mz = to_double(&(line[12])), first = true, skip = false;
-					else {
+					else if (!memcmp(&(line[0]), "Comment", 7)) {
+						comment = line;
 						int ppos = line.find("Parent=");
-						if (ppos != std::string::npos)
-							pr_mz = to_double(&(line[ppos + 7])), first = true, skip = false;
+						if (ppos != std::string::npos) {
+							pr_mz = to_double(&(line[ppos + 7])), first = true, skip = false, pr_rt = 0.0, no_rt = true;
+
+							int rtpos = line.find("RT=");
+							if (rtpos != std::string::npos) pr_rt = to_double(&(line[rtpos + 3])), no_rt = false;
+							else {
+								rtpos = line.find("RetentionTime=");
+								if (rtpos != std::string::npos) pr_rt = to_double(&(line[rtpos + 14])), no_rt = false;
+							}
+							if (no_rt) no_rt_cnt++;
+
+							int mpos = line.find("Mods=");
+							if (mpos != std::string::npos) if (line[mpos + 5] != '0') {
+								aas = get_aas(pep_name); name.clear();
+								int mods = std::stoi(&(line[mpos + 5])), curr_aa = 0, nterm = 0;
+								auto pos = line.find('/', mpos + 5) + 1;
+								for (i = 0; i < mods; i++) {
+									int mod_pos = std::stoi(&(line[pos]));
+									if (mod_pos == -1) mod_pos = 0, nterm = 1;
+									if (aas.size() <= mod_pos) {
+										dsout << "ERROR: modification position " << mod_pos << " exceeds the number of amino acids in the precursor " << spectrum_name << ", see \"" << line << "\"\n";
+										return false;
+									}
+									pos = line.find(',', pos + 1) + 1;
+									if (aas[mod_pos] != line[pos]) {
+										dsout << "ERROR: amino acid mismatch at modification position " << mod_pos << " in " << spectrum_name << ": expected " << aas[mod_pos] << ", got " << line[pos] << ", see \"" << line << "\"\n";
+										return false;
+									}
+									mod_name.clear();
+									pos = line.find(',', pos + 1) + 1;
+									for (j = pos; line[j] && line[j] != '/' && line[j] != ' '; j++) mod_name += line[j];
+									if (i < mods - 1) if (line[j] != '/') {
+										dsout << "ERROR: '/' symbol absent after modification description at position " << mod_pos << " in " << spectrum_name << ", see \"" << line << "\"\n";
+										return false;
+									}
+									pos = j + 1;
+									
+									if (curr_aa) nterm = 0;
+									if (nterm) name += '(' + mod_name + ')';
+									for (; curr_aa <= mod_pos; curr_aa++) name += aas[curr_aa];
+									if (!nterm) name += '(' + mod_name + ')';
+								}
+								for (; curr_aa < aas.size(); curr_aa++) name += aas[curr_aa];
+								name += std::to_string(charge);
+							}
+						}
 					}
 				}
 			}
+
 			if (!skip) if (line.size() >= 4) {
 				if (line[0] >= '0' && line[0] <= '9') {
 					float mz = to_double(line), ref = 0.0;
@@ -4116,12 +4247,15 @@ public:
 												ins = inserted.first;
 												ins->second.name = ins->first;
 												ins->second.prot = prot.begin();
-											} else skip = true;
+											} else {
+												skip = true;
+												dsout << "WARNING: duplicate precursor " << name << " with 'Name' " << spectrum_name << " and annotation " << comment << "\n";
+											}
 										}
 
 										auto pep = &(ins->second.target);
 										pep->mz = pr_mz;
-										pep->iRT = 0.0;
+										pep->iRT = no_rt ? 0.0 : pr_rt;
 										pep->charge = charge;
 										pep->fragments.push_back(p);
 									}
@@ -4135,9 +4269,11 @@ public:
 		sp.close();
 		eg.clear();
 
+		if (no_rt_cnt) dsout << "WARNING: " << no_rt_cnt << " precursors without retention time information\n";
+
 		entries.resize(map.size());
 		precursors.resize(map.size());
-		int i = 0;
+		i = 0;
 		for (auto it = map.begin(); it != map.end(); it++, i++) {
 			precursors[i] = it->first;
 			entries[i] = it->second;
@@ -4173,9 +4309,16 @@ public:
 			}
 			if (fasta_names.size()) if (Verbose >= 1) Time(), dsout << "Library annotated with sequence database(s): " << fasta_names << "\n";
 			if (!fasta_files.size() && (genes.size() >= 2 || names.size() >= 2)) library_protein_stats();
-			assemble_elution_groups();
+			if (!elution_groups.size()) assemble_elution_groups();
+
+			int gc = gen_charges;
+			gen_charges = false;
+			for (auto &e : entries) {
+				e.entry_flags &= ~fFromFasta;
+				if (gc) for (auto &f : e.target.fragments) if (!(int)f.charge) gen_charges = true, gc = 0;
+			}
 		} else if (get_extension(name) == std::string(".sptxt") || get_extension(name) == std::string(".msp")) {
-			load_sptxt(file_name);
+			load_sptxt(file_name, SptxtMassAccuracy);
 			assemble_elution_groups();
 		} else {
 			std::ifstream csv(file_name, std::ifstream::in);
@@ -4238,6 +4381,13 @@ public:
 							}
 					}
 					for (i = 0; i < libCols; i++) if (colInd[i] < 0 && i < libPID) {
+						if (i == 0) {
+							for (int j = 0; j < nw; j++) if (trim(words[j]) == std::string("ModifiedPeptideSequence")) {
+								colInd[0] = j;
+								break;
+							}
+							if (colInd[0] >= 0) continue;
+						}
 						if (Verbose >= 1) dsout << "WARNING: cannot find column " + library_headers[i] << "\n";
 						csv.close();
 						return false;
@@ -4521,6 +4671,8 @@ public:
 		out.precision(8);
 
 		auto &prot = (InferPGs && searched) ? protein_groups : protein_ids;
+		if (!protein_ids.size()) protein_ids.resize(1);
+		if (!prot.size()) prot.resize(1);
 
 		bool rec_info = false;
 		int cnt = -1, skipped = 0, empty = 0, targets_written = 0, decoys_written = 0;
@@ -4849,6 +5001,8 @@ public:
 	void report(const std::string &file_name) {
 		if (Verbose >= 1) Time(), dsout << "Writing report\n";
 		auto &prot = InferPGs ? protein_groups : protein_ids;
+		if (!protein_ids.size()) protein_ids.resize(1);
+		if (!prot.size()) prot.resize(1);
 
 		std::ofstream out(file_name, std::ofstream::out);
 		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
@@ -4858,7 +5012,7 @@ public:
 			<< oh[outPrQ] << '\t' << oh[outPrN] << '\t' << oh[outPrLR] << '\t'
 			<< oh[outRT] << '\t' << oh[outiRT] << '\t' << oh[outpRT] << '\t' << oh[outpiRT];
 		if (ExtendedReport) {
-			out << (fasta_files.size() ? "\tFirst.Protein.Description\t" : "\t") << "Lib.Q.Value\tMs1.Profile.Corr\tEvidence\tCScore\tDecoy.Evidence\tDecoy.CScore\tFragment.Quant.Raw\tFragment.Quant.Corrected\tFragment.Correlations";
+			out << (fasta_files.size() ? "\tFirst.Protein.Description\t" : "\t") << "Lib.Q.Value\tMs1.Profile.Corr\tMs1.Area\tEvidence\tCScore\tDecoy.Evidence\tDecoy.CScore\tFragment.Quant.Raw\tFragment.Quant.Corrected\tFragment.Correlations";
 #ifdef TDFREADER
 			if (MobilityReport) out << "\t1/K0";
 #endif
@@ -4918,6 +5072,7 @@ public:
 					}
 					out << entry->target.lib_qvalue << '\t'
 						<< jt->second.pr.ms1_corr << '\t'
+						<< jt->second.pr.ms1_area << '\t'
 						<< jt->second.pr.evidence << '\t'
 						<< jt->second.pr.cscore << '\t'
 						<< jt->second.pr.decoy_evidence << '\t'
@@ -5374,6 +5529,7 @@ public:
 	std::vector<Scan> ms1h, ms2h; // headers
 	std::vector<Peak> peaks;
 	std::list<std::vector<Peak> > peak_lists;
+	std::vector<std::pair<float, float> > ms1mob, ms2mob;
 
 	std::vector<std::vector<int> > IDs;
 	std::vector<std::pair<int, float> > best_egs;
@@ -5631,6 +5787,24 @@ public:
 		return xic;
 	}
 
+	double ms1_area(double rt_from, double rt_to, double mz) { // integrate MS1 signal
+		if (!ms1h.size()) return 0.0;
+		rt_to = Min(rt_to, ms1h[ms1h.size() - 1].RT - E);
+		rt_from = Max(rt_from, ms1h[0].RT + E);
+		if (rt_to - rt_from < E) return 0.0;
+
+		int pos = std::distance(ms1_RT.begin(), std::lower_bound(ms1_RT.begin(), ms1_RT.end(), (float)rt_from));
+		if (pos >= ms1h.size()) return 0.0;
+
+		double area = 0.0;
+		for (int i = pos; i < ms1h.size(); i++) {
+			if (ms1h[i].RT >= rt_to) break;
+			area += ms1h[i].level<false>(mz, MassAccuracyMs1);
+		}
+			 
+		return area;
+	}
+
 	class Search {
 	public:
 		std::vector<Elution> peaks;
@@ -5641,7 +5815,7 @@ public:
 		float best_corr_sum = 0.0, total_corr_sum = 0.0;
 
 		std::vector<Fragment> quant;
-		float RT, RT_start, RT_stop, one_over_K0, evidence, ms1_corr, cscore, quantity, qvalue = 1.0, protein_qvalue = 0.0, best_fr_mz, q1_shift = 0.0;
+		float RT, RT_start, RT_stop, one_over_K0, evidence, ms1_corr, ms1_area, cscore, quantity, qvalue = 1.0, protein_qvalue = 0.0, best_fr_mz, q1_shift = 0.0;
 		int apex, peak_width, best_peak, nn_index, nn_inc;
 		int peak_pos, best_fragment;
 		float mass_delta = 0.0, mass_delta_mz = 0.0, mass_delta_ms1 = 0.0;
@@ -6461,8 +6635,10 @@ public:
 				}
 			}
 			width = stop - start + 1;
-			info[0].RT_start = run->ms2h[(*searcher.scan_index)[start]].RT;
-			info[0].RT_stop = run->ms2h[(*searcher.scan_index)[stop]].RT;
+			info[0].RT_start = run->ms2h[(*searcher.scan_index)[start + low]].RT;
+			info[0].RT_stop = run->ms2h[(*searcher.scan_index)[stop + low]].RT;
+			if (stage >= 2) 
+				info[0].ms1_area = run->ms1_area(info[0].RT_start - E, info[0].RT_stop + E, run->predicted_mz_ms1(&(run->MassCorrectionMs1[0]), searcher.mz, info[0].RT));
 #if Q1
 			float bmz = run->predicted_mz(&(run->MassCorrection[0]), info[0].best_fr_mz, info[0].RT);
 			info[0].q1_shift = run->q1_delta(info[0].apex, pep->mz, bmz, QSL[qL - 1]);
@@ -6614,8 +6790,9 @@ public:
 			smooth(elution, x, l);
 			float best_height = elution[S - low];
 
-			Peak * new_fr = (Peak*)alloca(gen.size() * sizeof(Peak));
-			float * actual_mz = (float*)alloca(gen.size() * sizeof(float)), *err_mz = (float*)alloca(gen.size() * sizeof(float));;
+			Product * new_fr = (Product*)alloca(gen.size() * sizeof(Product));
+			float * actual_mz = (float*)alloca(gen.size() * sizeof(float)), *err_mz = (float*)alloca(gen.size() * sizeof(float));
+			for (fr = 0; fr < gen.size(); fr++) actual_mz[fr] = err_mz[fr] = 0.0;
 			for (fr = cnt = 0, max = 0.0; fr < gen.size(); fr++) {
 				float fmz = gen[fr].mz, amz = 0.0;
 				if (fmz < MinFrMz || fmz > MaxFrMz) continue;
@@ -6634,7 +6811,8 @@ public:
 							if (Abs(amz - query_mz) < err_mz[j]) new_fr[j].mz = fmz, err_mz[j] = Abs(amz - query_mz);
 						}
 						if (skip) continue;
-						new_fr[cnt].mz = fmz, new_fr[cnt].height = u;
+						new_fr[cnt].mz = fmz, new_fr[cnt].height = u, new_fr[cnt].charge = gen[fr].charge, new_fr[cnt].type = gen[fr].type & 3;
+						new_fr[cnt].index = gen[fr].index, new_fr[cnt].loss = gen[fr].loss;
 						actual_mz[cnt] = amz, err_mz[cnt] = Abs(amz - query_mz);
 						if (u > max) max = u;
 						cnt++;
@@ -6644,7 +6822,8 @@ public:
 			if (cnt < MinOutFrNum) run->lib->entries[pep->index].best_run = -1;
 			else {
 				pep->fragments.resize(cnt);
-				for (fr = 0; fr < cnt; fr++) pep->fragments[fr].mz = new_fr[fr].mz, pep->fragments[fr].height = new_fr[fr].height / max;
+				memcpy(&pep->fragments[0], new_fr, cnt * sizeof(Product));
+				if (max > E) for (fr = 0; fr < cnt; fr++) pep->fragments[fr].height /= max;
 			}
 		}
 
@@ -6767,7 +6946,7 @@ public:
 		std::ofstream out(file_name, std::ofstream::binary);
 		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 
-		int size = -3; // third version of the .dia file format
+		int size = -4; // 4th version of the .dia file format
 		out.write((char*)&size, sizeof(int));
 		int size_ms1 = ms1h.size();
 		out.write((char*)&size_ms1, sizeof(int));
@@ -6796,6 +6975,9 @@ public:
 		out.write((char*)&is_scanning, sizeof(int));
 		out.write((char*)&is_tims, sizeof(int));
 
+		write_vector(out, ms1mob);
+		write_vector(out, ms2mob);
+
 		out.close();
 	}
 
@@ -6820,7 +7002,7 @@ public:
 
 		int size; in.read((char*)&size, sizeof(int));
 		if (size == 0) { dsout << "ERROR: no MS2 spectra in the file\n"; return false; }
-		if (size > 0) { // first version of the .dia format
+		if (size > 0) { // 1st version of the .dia format
 			const int Block = 5;
 			std::vector<std::vector<Peak> > S(Block);
 			ms2h.resize(size);
@@ -6849,7 +7031,7 @@ public:
 					for (j = tot = 0; j <= ind; j++) memcpy(&(pl[tot]), &(S[j][0]), S[j].size() * sizeof(Peak)), ms1h[i - ind + j].peaks = &(pl[tot]), ms1h[i - ind + j].n = S[j].size(), tot += S[j].size();
 				}
 			}
-		} else if (size <= -2) { // second version of the .dia format
+		} else if (size <= -2) { // 2nd version of the .dia format
 			int size_ms1 = 0, size_ms2 = 0;
 			long long size_peaks = 0;
 			in.read((char*)&size_ms1, sizeof(int));
@@ -6863,11 +7045,16 @@ public:
 			if (size_ms2) in.read((char*)&(ms2h[0]), size_ms2 * sizeof(Scan));
 			if (size_peaks) in.read((char*)&(peaks[0]), size_peaks * sizeof(Peak));
 
-			if (size <= -3) { // third version of the .dia format
+			if (size <= -3) { // 3rd version of the .dia format
 				int is_scanning, is_tims;
 				in.read((char*)&is_scanning, sizeof(int));
 				in.read((char*)&is_tims, sizeof(int));
 				scanning = is_scanning, tims = is_tims;
+
+				if (size <= -4) { // 4th version of the .dia format
+					read_vector(in, ms1mob);
+					read_vector(in, ms2mob);
+				}
 			}
 
 			for (int i = 0; i < ms1h.size(); i++) ms1h[i].peaks = &(peaks[(long long)ms1h[i].peaks]);
@@ -7135,6 +7322,7 @@ public:
 		std::vector<int> mobility;
 		std::vector<double> mzi, mobi, mz, oneoverk0;
 		std::vector<Peak> peak_list;
+		double scn[2], ok0[2];
 
 		tims_set_num_threads(1);
 		for (long long frame = 0; frame < frames.size(); frame++) if (locks[frame].set()) {
@@ -7160,11 +7348,12 @@ public:
 
 				while (!lock.set()) {}
 				scan_list.push_back(peak_list); auto &peaks = scan_list.back();
-				int ims1 = ms1h.size(); ms1h.resize(ims1 + 1);
+				int ims1 = ms1h.size(); ms1h.resize(ims1 + 1), ms1mob.resize(ims1 + 1);
 				lock.free();
 
 				peaks.resize(mz.size());
 				ms1h[ims1].peaks = (peaks.size() ? &(peaks[0]) : NULL), ms1h[ims1].n = mz.size(), ms1h[ims1].RT = frames[frame].rt / 60.0;
+				ms1mob[ims1].first = -INF, ms1mob[ims1].second = INF;
 				if (peaks.size()) for (i = cnt = 0; i < spectrum.size(); i++) if (spectrum[i] >= margin) {
 					ms1h[ims1].peaks[cnt].mz = mz[cnt];
 					float intensity = spectrum[i];
@@ -7189,15 +7378,17 @@ public:
 					mz.resize(mzi.size()), oneoverk0.resize(mzi.size());
 					tims_index_to_mz(handle, frame, &(mzi[0]), &(mz[0]), mz.size());
 					tims_scannum_to_oneoverk0(handle, frame, &(mobi[0]), &(oneoverk0[0]), oneoverk0.size());
+					scn[0] = windows[w].from, scn[1] = windows[w].to + 1; tims_scannum_to_oneoverk0(handle, frame, scn, ok0, 2);
 
 					while (!lock.set()) {}
 					scan_list.push_back(peak_list); auto &peaks = scan_list.back();
-					int ims2 = ms2h.size(); ms2h.resize(ims2 + 1);
+					int ims2 = ms2h.size(); ms2h.resize(ims2 + 1), ms2mob.resize(ims2 + 1);
 					lock.free();
 
 					peaks.resize(mz.size());
 					ms2h[ims2].peaks = (peaks.size() ? &(peaks[0]) : NULL), ms2h[ims2].n = mz.size(), ms2h[ims2].RT = frames[frame].rt / 60.0;
 					ms2h[ims2].window_low = windows[w].low, ms2h[ims2].window_high = windows[w].high;
+					ms2mob[ims2].first = ok0[0], ms2mob[ims2].second = ok0[1];
 					if (peaks.size()) for (i = cnt = 0; i < spectrum.size(); i++) if (spectrum[i] >= margin) {
 						ms2h[ims2].peaks[cnt].mz = mz[cnt];
 						float intensity = spectrum[i];
@@ -8852,6 +9043,7 @@ public:
 			qe.pr.one_over_K0 = tims ? it->target.info[0].one_over_K0 : 0.0;
 			qe.pr.evidence = it->target.info[0].evidence;
 			qe.pr.ms1_corr = it->target.info[0].ms1_corr;
+			qe.pr.ms1_area = it->target.info[0].ms1_area;
 			qe.pr.cscore = it->target.info[0].cscore;
 			qe.pr.decoy_evidence = (it->decoy.flags & fFound) ? it->decoy.info[0].evidence : 0.0;
 			qe.pr.decoy_cscore = (it->decoy.flags & fFound) ? it->decoy.info[0].cscore : -INF;
