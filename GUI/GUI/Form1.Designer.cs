@@ -129,6 +129,7 @@
             this.PipAbort = new System.Windows.Forms.Button();
             this.ResetButton = new System.Windows.Forms.Button();
             this.ExperimentNameLabel = new System.Windows.Forms.Label();
+            this.MatricesBox = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.WindowUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MassAccMs1UpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MassAccUpDown)).BeginInit();
@@ -1115,6 +1116,7 @@
             // 
             // MainSettingsBox
             // 
+            this.MainSettingsBox.Controls.Add(this.MatricesBox);
             this.MainSettingsBox.Controls.Add(this.PrositBox);
             this.MainSettingsBox.Controls.Add(this.GenLibBox);
             this.MainSettingsBox.Controls.Add(this.UseQuantCheck);
@@ -1366,9 +1368,20 @@
             this.ExperimentNameLabel.TabIndex = 51;
             this.ExperimentNameLabel.Text = "Experiment name:";
             // 
+            // MatricesBox
+            // 
+            this.MatricesBox.AutoSize = true;
+            this.MatricesBox.Location = new System.Drawing.Point(172, 102);
+            this.MatricesBox.Name = "MatricesBox";
+            this.MatricesBox.Size = new System.Drawing.Size(115, 17);
+            this.MatricesBox.TabIndex = 67;
+            this.MatricesBox.Text = "Quantities matrices";
+            this.toolTip1.SetToolTip(this.MatricesBox, "Generate precursor/protein x samples quantification matrices at a fixed FDR cutof" +
+        "f");
+            this.MatricesBox.UseVisualStyleBackColor = true;
+            // 
             // Form1
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Inherit;
             this.AutoScroll = true;
             this.BackColor = System.Drawing.SystemColors.Control;
@@ -1525,6 +1538,7 @@
         private System.Windows.Forms.Label NormLabel;
         private System.Windows.Forms.Label ExperimentNameLabel;
         private System.Windows.Forms.TextBox ExperimentNameText;
+        private System.Windows.Forms.CheckBox MatricesBox;
     }
 }
 

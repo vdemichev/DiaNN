@@ -229,6 +229,7 @@ double MinMs1Corr = -INF;
 double MaxCorrDiff = 2.0;
 bool ForceMs1 = false;
 bool MS1PeakSelection = true;
+bool MaxLFQ = true;
 int TopN = 1;
 
 bool TranslatePeaks = false; // translate peaks between precursors belonging to the same elution group
@@ -279,6 +280,8 @@ bool ExportProsit = false;
 
 int VisWindowRadius = 8;
 std::vector<std::string> Visualise;
+bool SaveXICs = false;
+int XICRadius = 20;
 
 enum {
 	loss_none, loss_H2O, loss_NH3, loss_CO,
@@ -326,6 +329,7 @@ bool PGsInferred = false;
 
 double ReportQValue = 0.01;
 double ReportProteinQValue = 1.0;
+double MatrixQValue = 0.01;
 int PGLevel = 2, PGLevelSet = PGLevel; // 0 - ids, 1 - names, 2 - genes
 std::vector<std::string> ImplicitProteinGrouping = { "isoform IDs", "protein names", "genes" };
 bool IndividualReports = false;
@@ -335,7 +339,9 @@ bool FastaProtDuplicates = false;
 bool SpeciesGenes = false;
 
 bool ExtendedReport = true;
+bool ReportLibraryInfo = false;
 bool MobilityReport = false;
+bool SaveMatrices = false;
 
 bool RemoveQuant = false;
 bool QuantInMem = false;
@@ -661,9 +667,9 @@ inline double get_mobility(float intensity) { // 1/K0 encoded as part of the int
 }
 
 enum {
-	outFile, outPG, outPID, outPNames, outGenes, outPGQ, outPGN, outGQ, outGN, outGQP, outGNP, outModSeq, outStrSeq,
-	outPrId, outCharge, outQv, outPQv, outPPt, outPrQ, outPrN, outPrLR,
-	outRT, outiRT, outpRT, outpiRT,
+	outFile, outPG, outPID, outPNames, outGenes, outPGQ, outPGN, outGQ, outGN, outGMQ, outGMQU, outModSeq, outStrSeq,
+	outPrId, outCharge, outQv, outPQv, outPGQv, outGGQv, outPPt, outPrQ, outPrN, outPrLR,
+	outRT, outiRT, outpRT, outpRTf, outpRTt, outpiRT,
 	outCols
 };
 
@@ -675,21 +681,25 @@ std::vector<std::string> oh = { // output headers
 	"Genes",
 	"PG.Quantity",
 	"PG.Normalised",
-	"Gene.Group.Quantity",
-	"Gene.Group.Normalised",
-	"Gene.Quantity.Unique",
-	"Gene.Normalised.Unique",
+	"Genes.Quantity",
+	"Genes.Normalised",
+	"Genes.MaxLFQ",
+	"Genes.MaxLFQ.Unique",
 	"Modified.Sequence",
 	"Stripped.Sequence",
 	"Precursor.Id",
 	"Precursor.Charge",
 	"Q.Value",
 	"Protein.Q.Value",
+	"PG.Q.Value",
+	"GG.Q.Value",
 	"Proteotypic",
 	"Precursor.Quantity",
 	"Precursor.Normalised",
 	"Label.Ratio",
 	"RT",
+	"RT.Start",
+	"RT.Stop",
 	"iRT",
 	"Predicted.RT",
 	"Predicted.iRT",
@@ -1737,6 +1747,10 @@ void arguments(int argc, char *argv[]) {
 			dsout << "The spectral library will be annotated with information on fragment exclusion from quantification based on the runs analysed\n";
 		else if (!memcmp(&(args[start]), "export-decoys ", 14)) ExportDecoys = true;
 		else if (!memcmp(&(args[start]), "prosit ", 7)) ExportProsit = true;
+		else if (!memcmp(&(args[start]), "xic ", 4)) {
+			if (args[start + 4] >= '1' && args[start + 4] <= '9') XICRadius = std::stoi(args.substr(start + 4, std::string::npos)) / 2;
+			SaveXICs = true, dsout << "XICs of length " << XICRadius * 2 + 1 << " will be extracted for each precursor and saved in binary format\n";
+		}
 		else if (!memcmp(&(args[start]), "vis ", 4)) {
 			std::string word;
 			std::stringstream list(trim(args.substr(start + 4, end - start - 4)));
@@ -1750,6 +1764,8 @@ void arguments(int argc, char *argv[]) {
 			dsout << "XICs for precursors corresponding to " << Visualise.size() << " peptides will be saved\n";
 		} else if (!memcmp(&(args[start]), "cal-info ", 9)) SaveCalInfo = true;
 		else if (!memcmp(&(args[start]), "compact-report ", 15)) ExtendedReport = false;
+		else if (!memcmp(&(args[start]), "report-lib-info ", 16)) ReportLibraryInfo = true;
+		else if (!memcmp(&(args[start]), "matrices ", 9)) SaveMatrices =  true, dsout << "Precursor/protein x samples expression level matrices will be saved along with the main report\n";
 		else if (!memcmp(&(args[start]), "no-isotopes ", 12)) UseIsotopes = false, dsout << "Isotopologue chromatograms will not be used\n";
 		else if (!memcmp(&(args[start]), "no-ms2-range ", 13)) MS2Range = false, dsout << "MS2 range inference will not be performed\n";
 		else if (!memcmp(&(args[start]), "min-peak ", 9)) MinPeakHeight = to_double(args.substr(start + 9, std::string::npos)), dsout << "Minimum peak height set to " << MinPeakHeight << "\n";
@@ -1800,6 +1816,8 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "qvalue ", 7)) ReportQValue = to_double(args.substr(start + 7, std::string::npos)), dsout << "Output will be filtered at " << ReportQValue << " FDR\n";
 		else if (!memcmp(&(args[start]), "protein-qvalue ", 15)) ReportProteinQValue = to_double(args.substr(start + 15, std::string::npos)),
 			dsout << "Output will be filtered at " << ReportProteinQValue << " protein-level FDR\n";
+		else if (!memcmp(&(args[start]), "matrix-qvalue ", 14)) MatrixQValue = Max(0.001, Min(0.05, to_double(args.substr(start + 14, std::string::npos)))),
+			dsout << "Precursor/protein x sample matrices will be filtered at " << MatrixQValue << " precursor & protein-level FDR\n";
 		else if (!memcmp(&(args[start]), "no-prot-inf ", 12)) InferPGs = false, dsout << "Protein inference will not be performed\n";
 		else if (!memcmp(&(args[start]), "no-swissprot ", 13)) SwissProtPriority = false, dsout << "SwissProt proteins will not be prioritised for protein inference\n";
 		else if (!memcmp(&(args[start]), "force-swissprot ", 16)) ForceSwissProt = true, dsout << "Only SwissProt proteins will be considered in library-free search\n";
@@ -1957,6 +1975,7 @@ void arguments(int argc, char *argv[]) {
 			dsout << "Q-value threshold for cross-run quantification set to " << MaxQuantQvalue << "\n";
 		else if (!memcmp(&(args[start]), "protein-quant-qvalue ", 21)) ProteinQuantQvalue = to_double(args.substr(start + 21, std::string::npos)),
 			dsout << "Precursor Q-value threshold for protein quantification set to " << ProteinQuantQvalue << "\n";
+		else if (!memcmp(&(args[start]), "no-maxlfq ", 10)) MaxLFQ = false, dsout << "MaxLFQ-based gene quantification disabled\n";
 		else if (!memcmp(&(args[start]), "top ", 4)) TopN = std::stoi(args.substr(start + 4, std::string::npos)),
 			dsout << "Top " << TopN << " precursors will be used for protein quantification in each run\n";
 		else if (!memcmp(&(args[start]), "out-lib-qvalue ", 15)) ReportQValue = to_double(args.substr(start + 15, std::string::npos)),
@@ -2137,7 +2156,7 @@ void arguments(int argc, char *argv[]) {
 			dsout << "WARNING: FASTA digest is enabled while conversion of modifications to the UniMod format is disabled - this might lead to duplicate precursors being generated\n";
 	}
 
-	QFilter = Max(Max(Max(ReportQValue, MaxQuantQvalue), Max(ProteinQuantQvalue, MaxProfilingQvalue)), Max(NormalisationQvalue, ProteinIDQvalue));
+	QFilter = Max(MatrixQValue, Max(Max(Max(ReportQValue, MaxQuantQvalue), Max(ProteinQuantQvalue, MaxProfilingQvalue)), Max(NormalisationQvalue, ProteinIDQvalue)));
 
 	init_unimod();
 	init_prediction();
@@ -2609,8 +2628,8 @@ public:
 	int run_index;
 	mutable bool decoy_found;
 	mutable int apex, peak, best_fragment, peak_width;
-	mutable float RT, iRT, predicted_RT, predicted_iRT, one_over_K0, best_fr_mz, profile_qvalue, qvalue, decoy_qvalue, protein_qvalue, quantity, ratio, level, norm;
-	mutable float pg_quantity, pg_norm, gene_quantity, gene_norm, gene_quantity_u, gene_norm_u;
+	mutable float RT, RT_start, RT_stop, iRT, predicted_RT, predicted_iRT, one_over_K0, best_fr_mz, profile_qvalue, qvalue, decoy_qvalue, protein_qvalue, pg_qvalue, gg_qvalue, quantity, ratio, level, norm;
+	mutable float pg_quantity, pg_norm, gene_quantity, gene_norm, max_lfq, max_lfq_unique;
 	mutable float evidence, decoy_evidence, ms1_corr, ms1_area, cscore, decoy_cscore;
 #if REPORT_SCORES
 	float scores[pN], decoy_scores[pN];
@@ -2620,14 +2639,14 @@ public:
 
 class QuantEntry {
 public:
-	int index = -1, window, fr_n = 0;
+	int index = -1, window, fr_n = 0; // index must be initialised with -1
     mutable PrecursorEntry pr;
     mutable Fragment fr[TopF];
 #if ELUTION_PROFILE
 	mutable std::pair<float, float> ms1_elution_profile[2 * ElutionProfileRadius + 1]; // (retention time, intensity) pairs
 #endif
 
-	QuantEntry() {  }
+	QuantEntry() { memset(&pr, 0, sizeof(PrecursorEntry)); memset(fr, 0, TopF * sizeof(Fragment)); }
 
 	template <class F> void write(F &out) { out.write((char*)this, sizeof(QuantEntry)); }
 
@@ -2639,9 +2658,10 @@ public:
 class DecoyEntry {
 public:
 	int index = -1;
-	float qvalue;
+	float qvalue = 1.0, cscore = 0.0;
 
 	DecoyEntry() {  }
+	DecoyEntry(int _index, float _qvalue, float _cscore) { index = _index; qvalue = _qvalue; cscore = _cscore; }
 
 	template <class F> void write(F &out) {
 		out.write((char*)this, sizeof(DecoyEntry));
@@ -2747,81 +2767,6 @@ public:
 };
 
 std::vector<Quant> quants;
-
-class Profile {
-public:
-	std::vector<QuantEntry> entries;
-
-	Profile(std::vector<std::string> &files, int lib_size = 0) {
-		std::vector<float> tq, dq;
-		entries.resize(MaxLibSize);
-
-		bool decoy_list = FastaSearch || GenSpecLib;
-		if (decoy_list) dq.resize(MaxLibSize, 1.0), tq.resize(MaxLibSize, 1.0);
-
-		for (int i = 0; i < files.size(); i++) {
-			Quant Qt;
-			auto Q = &Qt;
-			if (!QuantInMem) {
-				std::ifstream in(files[i] + std::string(".quant"), std::ifstream::binary);
-				if (in.fail() || temp_folder.size()) in = std::ifstream(location_to_file_name(files[i]) + std::string(".quant"), std::ifstream::binary);
-				Q->read(in, lib_size);
-				in.close();
-			} else Q = &(quants[i]);
-
-			for (auto it = Q->entries.begin(); it != Q->entries.end(); it++) {
-				auto pos = it->pr.index;
-				if (pos >= entries.size()) entries.resize(entries.size() + entries.size() / 2);
-				if (entries[pos].index < 0) entries[pos] = *it;
-				else if (it->pr.qvalue < entries[pos].pr.qvalue) entries[pos].pr = it->pr;
-
-				if (decoy_list) {
-					if (pos >= tq.size()) tq.resize(pos + 1 + pos / 2, 1.0);
-					if (it->pr.qvalue <= ReportQValue && it->pr.qvalue < tq[pos]) tq[pos] = it->pr.qvalue;
-				}
-			}
-			if (decoy_list) {
-				for (auto it = Q->decoys.begin(); it != Q->decoys.end(); it++) {
-					auto pos = it->index;
-
-					if (pos >= dq.size()) dq.resize(pos + 1 + pos / 2, 1.0);
-					if (it->qvalue <= ReportQValue && it->qvalue < dq[pos]) dq[pos] = it->qvalue;
-				}
-			}
-			if (!QuantInMem) std::vector<QuantEntry>().swap(Q->entries), std::vector<DecoyEntry>().swap(Q->decoys);
-		}
-		if (decoy_list) {
-			std::sort(dq.begin(), dq.end());
-			auto pos = std::lower_bound(dq.begin(), dq.end(), ReportQValue);
-			dq.resize(std::distance(dq.begin(), pos));
-			std::sort(tq.begin(), tq.end());
-			pos = std::lower_bound(tq.begin(), tq.end(), ReportQValue);
-			tq.resize(std::distance(tq.begin(), pos));
-
-			std::map<float, float> cs_qv;
-
-			for (int i = 0; i < tq.size(); i++) {
-				int n_targets = i + 1;
-				int n_decoys = std::distance(dq.begin(), std::lower_bound(dq.begin(), dq.end(), tq[i]));
-				float q = Min(1.0, ((double)Max(1, n_decoys)) / (double)Max(1, n_targets));
-
-				auto pair = std::pair<float, float>(-tq[i], q);
-				auto pos = cs_qv.insert(pair);
-				if (pos.second) {
-					if (pos.first != cs_qv.begin() && std::prev(pos.first)->second < pair.second) pos.first->second = std::prev(pos.first)->second;
-					else for (auto jt = std::next(pos.first); jt != cs_qv.end() && jt->second > pair.second; jt++) jt->second = pair.second;
-				}
-			}
-
-			for (auto &e : entries) {
-				if (e.index < 0) continue;
-				auto pos = cs_qv.lower_bound(-e.pr.qvalue);
-				if (pos == cs_qv.end()) e.pr.profile_qvalue = 1.0;
-				else e.pr.profile_qvalue = pos->second;
-			}
-		}
-	}
-};
 
 struct Elution {
 	int peak, apex, best_fragment;
@@ -3246,9 +3191,46 @@ struct XIC { // for visualisation
 	inline friend bool operator == (const XIC& left, const XIC& right) { 
 		return (left.pr == right.pr && left.run == right.run && !(left.fr < right.fr) && !(right.fr < left.fr)); 
 	}
+
+	inline int size_in_bytes() { return ((char*)&peaks) - ((char*)&RT) + sizeof(int) + peaks.size() * sizeof(std::pair<float, float>); }
 };
 
 std::set<XIC> XICs;
+
+struct XICGroup {
+	int N = 0; // length of the chromatogram
+	int has_ms1 = 0; 
+	long long address = 0; // XIC address in the file (in bytes)
+	float qvalue = 0.0;
+	float pr_mz = 0.0; // mass used for extraction (i.e. mass corrected), not reference mass
+	int run = -1, pr = -1; // run index, precursor index in the library
+
+	std::string id; // precursor id
+	std::vector<Ion> fr; // library fragment info
+
+	std::vector<float> values; // this is not saved to the header
+
+	inline int size_in_bytes() {
+		return ((char*)&id) - ((char*)&N)  + sizeof(int) * 2 + id.size() + fr.size() * sizeof(Ion);
+	}
+
+	inline int xic_size_in_bytes() { // == values.size() 
+		return sizeof(float) * (N * has_ms1 // MS1 RTs
+			+ N * has_ms1 // MS1 chromatogram
+			+ N // MS2 RTs
+			+ (N + 1) * fr.size()); // MS2 chromatograms, each preceded by the extraction mass for the fragment
+	}
+
+	template <class F> void write_header(F &out) {
+		out.write((char*)&N, ((char*)&id) - (char*)&N);
+		write_string(out, id);
+		write_vector(out, fr);
+	}
+
+	template <class F> void write_values(F &out) {
+		write_vector(out, values);
+	}
+};
 
 const int fFromFasta = 1 << 0;
 const int fPredictedSpectrum = 1 << 1;
@@ -3260,11 +3242,12 @@ public:
 	std::vector<Isoform> proteins;
 	std::vector<PG> protein_ids;
 	std::vector<PG> protein_groups;
-	std::vector<std::string> gene_groups;
+	std::vector<PG> gene_groups;
 	std::vector<int> gg_index;
 	std::vector<std::string> precursors; // precursor IDs in canonical format; library-based entries only
 	std::vector<std::string> names;
 	std::vector<std::string> genes;
+
 	int skipped = 0;
 	double iRT_min = 0.0, iRT_max = 0.0;
 	bool gen_decoys = true, gen_charges = true, infer_proteotypicity = true, from_speclib = false;
@@ -3283,7 +3266,7 @@ public:
 		std::string name; // precursor id
 		std::set<PG>::iterator prot;
 		int pid_index = 0, pg_index = 0, eg_id, best_run = -1, peak = 0, apex = 0, window = 0;
-		float qvalue = 0.0, protein_qvalue = 0.0, best_fr_mz = 0.0;
+		float qvalue = 0.0, pg_qvalue = 0.0, best_fr_mz = 0.0;
 
 		void init() {
 			std::sort(target.fragments.begin(), target.fragments.end(), [](const Product &left, const Product &right) { return left.height > right.height; });
@@ -3667,20 +3650,43 @@ public:
 		Library * lib;
 		int n_s; // number of samples (runs)
 		int n_entries; // total number of entries
+		int n_decoys; // total number of decoy entries
 		std::map<int, std::vector<std::pair<int, QuantEntry> > > map;
+		std::map<int, std::vector<std::pair<int, DecoyEntry> > > decoy_map;
 		std::vector<std::vector<int> > proteins;
 		std::vector<RunStats> RS;
+		std::vector<std::vector<QuantEntry*> > runs;
 
 		Info() { }
 
-		void clear() { map.clear(); std::vector<std::vector<int> >().swap(proteins); }
+		void clear() { 
+			map.clear(); 
+			decoy_map.clear(); 
+			std::vector<std::vector<int> >().swap(proteins); 
+			std::vector<RunStats>().swap(RS); 
+			std::vector<std::vector<QuantEntry*> >().swap(runs);
+		}
 
-		void load(Library * parent, std::vector<std::string> &files, std::vector<Quant> * _quants = NULL) {
+		void index() {
+			runs.clear(); runs.resize(Max(n_s, ms_files.size()));
+
+			for (auto it = map.begin(); it != map.end(); it++) {
+				auto v = &(it->second);
+
+				for (auto jt = v->begin(); jt != v->end(); jt++) {
+					int s = jt->first;
+					auto qe = &(jt->second);
+					runs[s].push_back(qe);
+				}
+			}
+		}
+
+		void load(Library * parent, std::vector<std::string> &files, std::vector<Quant> * _quants = NULL) { // files currently must be the same as ms_files
 			if (Verbose >= 1) Time(), dsout << "Reading quantification information: " << (n_s = files.size()) << " files\n";
 			clear();
 
 			lib = parent;
-			n_entries = 0;
+			n_entries = n_decoys = 0;
 			proteins.clear();
 			proteins.resize(n_s);
 			RS.resize(n_s);
@@ -3708,7 +3714,22 @@ public:
 					}
 				}
 				if (_quants == NULL || !QuantInMem) std::vector<QuantEntry>().swap(Q->entries);
+
+				for (auto it = Q->decoys.begin(); it != Q->decoys.end(); it++) {
+					n_decoys++;
+					int index = it->index;
+					auto pos = decoy_map.find(index);
+					if (pos != decoy_map.end())
+						pos->second.push_back(std::pair<int, DecoyEntry>(i, DecoyEntry(index, it->qvalue, it->cscore)));
+					else {
+						std::vector<std::pair<int, DecoyEntry> > v;
+						v.push_back(std::pair<int, DecoyEntry>(i, DecoyEntry(index, it->qvalue, it->cscore)));
+						decoy_map.insert(std::pair<int, std::vector<std::pair<int, DecoyEntry> > >(index, v));
+					}
+				}
 			}
+
+			index();
 		}
 
 		void load(Library * parent, Quant &quant) {
@@ -3733,6 +3754,21 @@ public:
 					map.insert(std::pair<int, std::vector<std::pair<int, QuantEntry> > >(index, v));
 				}
 			}
+
+			for (auto it = Q.decoys.begin(); it != Q.decoys.end(); it++) {
+				n_decoys++;
+				int index = it->index;
+				auto pos = decoy_map.find(index);
+				if (pos != decoy_map.end())
+					pos->second.push_back(std::pair<int, DecoyEntry>(0, DecoyEntry(index, it->qvalue, it->cscore)));
+				else {
+					std::vector<std::pair<int, DecoyEntry> > v;
+					v.push_back(std::pair<int, DecoyEntry>(0, DecoyEntry(index, it->qvalue, it->cscore)));
+					decoy_map.insert(std::pair<int, std::vector<std::pair<int, DecoyEntry> > >(index, v));
+				}
+			}
+
+			index();
 		}
 
 		void quantify() {
@@ -3916,7 +3952,7 @@ public:
 			// simple normalisation by the total signal first
 			double av = 0.0;
 			std::vector<float> sums(ms_files.size());
-			for (auto it = map.begin(); it != map.end(); it++, i++) {
+			for (auto it = map.begin(); it != map.end(); it++) {
 				auto v = &(it->second);
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
 					int index = jt->first;
@@ -3947,10 +3983,10 @@ public:
 				auto v = &(it->second);
 
 				k = 0;
+				memset(&x[0], 0, x.size() * sizeof(float));
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
 					int index = jt->first;
 					if (jt->second.pr.qvalue <= NormalisationQvalue) x[index] = jt->second.pr.level, k++, m++;
-					else x[index] = 0.0;
 				}
 				if (k >= 2) {
 					double u = mean(&(x[0]), x.size());
@@ -4004,58 +4040,57 @@ public:
 
 				norm_totals.clear(), norm_shares.clear();
 				norm_totals.resize(map.size(), 0.0), norm_shares.resize(map.size(), 0.0);
+				std::vector<int> map_index(lib->entries.size(), 0);
+				
 				i = 0;
 				for (auto it = map.begin(); it != map.end(); it++, i++) {
 					auto v = &(it->second);
 					int cnt = 0;
+					map_index[it->first] = i;
 					for (auto jt = (*v).begin(); jt != (*v).end(); jt++)
 						if (jt->second.pr.qvalue <= NormalisationQvalue) norm_totals[i] += jt->second.pr.norm, cnt++;
 					if (cnt) norm_shares[i] = 1.0 / (double)cnt;
 				}
 
-				NormInfo nie;
-
 				norm_ind.resize(map.size()), norm_saved_ratios.resize(map.size());
 				norm_ratios.resize(2 * LocNormRadius + 1);
+
 				for (k = 0; k < ms_files.size(); k++) {
-					i = 0;
 					norm_ind.clear(), norm_saved_ratios.clear();
-					for (auto it = map.begin(); it != map.end(); it++, i++) {
-						auto v = &(it->second);
-						for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
-							int index = jt->first;
-							if (index == k && jt->second.pr.qvalue <= NormalisationQvalue && norm_shares[i] > E) if (norm_shares[i] * (double)ms_files.size() <= 2.0)
-								norm_ind.push_back(NormInfo(iter == 0 ? jt->second.pr.RT : jt->second.pr.norm, i, jt->second.pr.norm));
-						}
+
+					assert(runs.size() > k);
+					for (auto it = runs[k].begin(); it != runs[k].end(); it++) {
+						auto jt = *it;
+						i = map_index[jt->pr.index]; 
+						if (jt->pr.qvalue <= NormalisationQvalue && norm_shares[i] > E) if (norm_shares[i] * (double)ms_files.size() <= 2.0)
+							norm_ind.push_back(NormInfo(iter == 0 ? jt->pr.RT : jt->pr.norm, i, jt->pr.norm));
 					}
+
 					std::sort(norm_ind.begin(), norm_ind.end());
 					norm_saved_ratios.resize(norm_ind.size(), 0.0);
 
-					for (auto it = map.begin(); it != map.end(); it++, i++) {
-						auto v = &(it->second);
-						for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
-							int index = jt->first;
-							if (index == k) {
-								auto pos = std::lower_bound(norm_ind.begin(), norm_ind.end(), NormInfo(iter == 0 ? jt->second.pr.RT : jt->second.pr.norm, 0, 0.0));
-								float run = 0.0, all = 0.0, ratio = 0.0, w = 0.0;
-								int ind = std::distance(norm_ind.begin(), pos), low = Max(0, ind - LocNormRadius), high = low + 2 * LocNormRadius;
-								if (high > norm_ind.size()) high = norm_ind.size(), low = Max(0, high - 2 * LocNormRadius);
-								if (norm_saved_ratios[Min(ind, norm_ind.size() - 1)] > E) ratio = norm_saved_ratios[Min(ind, norm_ind.size() - 1)];
-								else {
-									norm_ratios.clear();
-									for (j = low; j < high; j++) {
-										float tot = norm_totals[norm_ind[j].index] * norm_shares[norm_ind[j].index];
-										float r = tot / Max(E, norm_ind[j].signal);
-										run += norm_ind[j].signal, all += tot, ratio += r, w += 1.0;
-										norm_ratios.push_back(r);
-									}
-									std::sort(norm_ratios.begin(), norm_ratios.end());
-									ratio = 0.5 * (norm_ratios[norm_ratios.size() / 2] + norm_ratios[(norm_ratios.size() / 2) + 1]);
-									norm_saved_ratios[Min(ind, norm_ind.size() - 1)] = ratio = Min(LocNormMax, Max(1.0 / LocNormMax, ratio));
-								}
-								jt->second.pr.norm *= ratio;
+					for (auto it = runs[k].begin(); it != runs[k].end(); it++) {
+						auto jt = *it;
+
+						float ratio = 1.0;
+						auto pos = std::lower_bound(norm_ind.begin(), norm_ind.end(), NormInfo(iter == 0 ? jt->pr.RT : jt->pr.norm, 0, 0.0));
+						int ind = std::distance(norm_ind.begin(), pos), low = Max(0, ind - LocNormRadius), high = low + 2 * LocNormRadius;
+						if (high > norm_ind.size()) high = norm_ind.size(), low = Max(0, high - 2 * LocNormRadius);
+						if (norm_saved_ratios[Min(ind, norm_ind.size() - 1)] > E) ratio = norm_saved_ratios[Min(ind, norm_ind.size() - 1)];
+						else if (high - low <= Max(16, LocNormRadius / 16)) ratio = 1.0;
+						else {
+							norm_ratios.clear();
+							for (j = low; j < high; j++) {
+								float tot = norm_totals[norm_ind[j].index] * norm_shares[norm_ind[j].index];
+								float r = tot / Max(E, norm_ind[j].signal);
+								norm_ratios.push_back(r);
 							}
+							std::sort(norm_ratios.begin(), norm_ratios.end());
+							if (norm_ratios.size() & 1) ratio = norm_ratios[norm_ratios.size() / 2];
+							else ratio = 0.5 * (norm_ratios[(norm_ratios.size() / 2) - 1] + norm_ratios[norm_ratios.size() / 2]);
+							norm_saved_ratios[Min(ind, norm_ind.size() - 1)] = ratio = Min(LocNormMax, Max(1.0 / LocNormMax, ratio));
 						}
+						jt->pr.norm *= ratio;
 					}
 				}
 			}
@@ -4496,6 +4531,17 @@ public:
 					entries[*it].pid_index = i;
 
 			extract_proteins();
+
+			if (!gen_decoys) {
+				dsout << "WARNING: the library contains decoy precursors, DIA-NN's built-in decoy generation algorithm will be turned off (not recommended); performance is likely to be suboptimal\n";
+				int dwt = 0, twd = 0;
+				for (auto &e : entries) {
+					if (!e.target.fragments.size() && e.decoy.fragments.size()) dwt++;
+					if (e.target.fragments.size() && !e.decoy.fragments.size()) twd++;
+				}
+				if (dwt) dsout << "WARNING: " << dwt << " decoy precursors don't have matching target precursors; each decoy supplied in the library must correspond to a target with the same modified sequence and charge\n";
+				if (twd) dsout << "WARNING: " << twd << " target precursors don't have matching decoy precursors; is this intended?\n";
+			}
 		}
 
 		int ps = proteins.size(), pis = protein_ids.size();
@@ -4665,7 +4711,7 @@ public:
 		if (Verbose >= 1) Time(), dsout << "Saving spectral library to " << file_name << "\n";
 		std::ofstream out(file_name, std::ofstream::out);
 		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
-		out << "FileName\tPrecursorMz\tProductMz\tTr_recalibrated\ttransition_name\tLibraryIntensity\ttransition_group_id\tdecoy\tPeptideSequence\tProteotypic\tQValue\t";
+		out << "FileName\tPrecursorMz\tProductMz\tTr_recalibrated\ttransition_name\tLibraryIntensity\ttransition_group_id\tdecoy\tPeptideSequence\tProteotypic\tQValue\tPGQValue\t";
 		out << "ProteinGroup\tProteinName\tGenes\tFullUniModPeptideName\tModifiedPeptide\t";
 		out << "PrecursorCharge\tPeptideGroupLabel\tUniprotID\tFragmentType\tFragmentCharge\tFragmentSeriesNumber\tFragmentLossType\tExcludeFromAssay\n";
 		out.precision(8);
@@ -4762,6 +4808,7 @@ public:
 						<< seq << '\t'
 						<< (int)it.proteotypic << '\t'
 						<< it.qvalue << '\t'
+						<< it.pg_qvalue << '\t'
 						<< (prefix + prot[pg].ids).c_str() << '\t'
 						<< prot[pg].names.c_str() << '\t'
 						<< prot[pg].genes.c_str() << '\t'
@@ -4853,6 +4900,9 @@ public:
 		// get IDs
 		std::vector<std::pair<int, int> > IDs;
 		std::vector<std::vector<int> > sets(proteins.size());
+		std::vector<int> id_class;
+		std::vector<int> max_protein_score(proteins.size(), (int)-INF);
+
 		for (auto it = info.map.begin(); it != info.map.end(); it++) {
 			auto v = &(it->second);
 
@@ -4861,21 +4911,32 @@ public:
 				auto pr = &(jt->second.pr);
 				if (pr->qvalue <= ProteinIDQvalue) {
 					auto &pid = protein_ids[entries[pr->index].pid_index];
-					bool first = true, swissprot = false;
-					if (SwissProtPriority) for (auto &p : pid.proteins) if (proteins[p].swissprot) swissprot = true;
+
+					bool first = true;
+					id_class.clear(); id_class.resize(pid.proteins.size(), 0);
+					int i = -1, max_class = -1;
 					for (auto &p : pid.proteins) {
-						if (PGLevel == 0) if (!proteins[p].id.size()) continue;
-						if (PGLevel == 1) if (!proteins[p].name.size()) continue;
-						if (PGLevel == 2) if (!proteins[p].gene.size()) continue;
-						if (swissprot && !proteins[p].swissprot) continue;
+						i++;
+						if (SwissProtPriority) if (proteins[p].swissprot) id_class[i] += 1;
 						auto pos = std::lower_bound(info.proteins[s].begin(), info.proteins[s].end(), p);
-						if (pos != info.proteins[s].end()) if (*pos == p) {
-							if (first) {
-								sets[p].push_back(IDs.size());
-								IDs.push_back(std::pair<int, int>(pr->index, s));
-							} else sets[p].push_back(IDs.size() - 1);
-							first = false;
-						}
+						if (pos != info.proteins[s].end()) if (*pos == p) id_class[i] += 10;
+						if (PGLevel == 0) if (!proteins[p].id.size()) id_class[i] -= 100;
+						if (PGLevel == 1) if (!proteins[p].name.size()) id_class[i] -= 100;
+						if (PGLevel == 2) if (!proteins[p].gene.size()) id_class[i] -= 100;
+						if (id_class[i] > max_class) max_class = id_class[i];
+						if (id_class[i] > max_protein_score[p]) max_protein_score[p] = id_class[i];
+					}
+
+					i = -1;
+					if (max_class >= 0) for (auto &p : pid.proteins) {
+						i++;
+						if (id_class[i] < max_class) continue;
+
+						if (first) {
+							sets[p].push_back(IDs.size());
+							IDs.push_back(std::pair<int, int>(pr->index, s));
+						} else sets[p].push_back(IDs.size() - 1);
+						first = false;
 					}
 				}
 			}
@@ -4891,12 +4952,26 @@ public:
 				pr.insert(s);
 		}
 
+		// remove proteins for which there is less evidence than for other proteins in the same group
+		for (auto &pr : pgs) {
+			int max = -INF;
+			for (auto &prot : pr) if (max_protein_score[prot] > max) max = max_protein_score[prot];
+			for (auto &prot : pr) if (max_protein_score[prot] < max) pr.erase(prot);
+		}
+
 		std::set<PG> pg;
 		std::string name;
 		for (i = 0; i < entries.size(); i++) {
 			auto &pid = protein_ids[entries[i].pid_index];
-			if (!pgs[i].size()) name = pid.ids;
-			else {
+			if (!pgs[i].size()) {
+				if (!pid.proteins.size()) name = pid.ids;
+				else {
+					auto it = pid.proteins.begin();
+					name = proteins[*it].id;
+					for (it++; it != pid.proteins.end(); it++)
+						name += ';' + proteins[*it].id;
+				}
+			} else {
 				auto it = pgs[i].begin();
 				name = proteins[*it].id;
 				for (it++; it != pgs[i].end(); it++)
@@ -4920,30 +4995,241 @@ public:
 		if (annotate) annotate_pgs(protein_groups);
 	}
 
+	int generate_gene_groups() {
+		std::set<std::string> gg;
+		std::vector<std::string> ggs;
+		gg_index.clear(); gg_index.resize(entries.size(), 0);
+		auto &prot = (InferPGs ? protein_groups : protein_ids);
+
+		for (auto &pg : prot) gg.insert(pg.genes);
+		ggs.clear();  ggs.insert(ggs.begin(), gg.begin(), gg.end()); gg.clear();
+		if (!ggs.size()) ggs.resize(1);
+		int n = ggs.size();
+
+		for (auto &pg : prot) {
+			int ind = std::distance(ggs.begin(), std::lower_bound(ggs.begin(), ggs.end(), pg.genes));
+			for (auto &pr : pg.precursors) gg_index[pr] = ind;
+		}
+
+		gene_groups.clear(), gene_groups.resize(n);
+		for (int i = 0; i < n; i++) gene_groups[i].ids = ggs[i];
+		for (int i = 0; i < gg_index.size(); i++) gene_groups[gg_index[i]].precursors.push_back(i);
+		return n;
+	}
+
+	void max_lfq_quant(std::vector<PG> * _proteins, std::vector<Lock> * _locks, double q_cutoff, bool unique = false) {
+		int i, j, k, cnt = 0;
+		auto &proteins = *_proteins;
+		auto &locks = *_locks;
+
+		const double lfq_mar = -10.0;
+		int n_s = info.n_s;
+		std::vector<double> quantities, ratios, reference(n_s);
+		Eigen::VectorXd B;
+		Eigen::MatrixXd A;
+		std::vector<int> indices, prn;
+
+		for (auto &pg : proteins) if (locks[cnt++].set()) {
+			if (!pg.ids.size()) continue;
+			quantities.clear(); indices.clear(); prn.clear();
+
+			int prs_n = pg.precursors.size();
+			if (!prs_n || !n_s) continue;
+			quantities.resize(prs_n * n_s, -INF);
+			prn.resize(prs_n, 0);
+
+			for (i = 0; i < prs_n; i++) {
+				int pr = pg.precursors[i];
+				auto pos = info.map.find(pr);
+				if (pos != info.map.end()) {
+					auto v = &(pos->second);
+					for (auto jt = v->begin(); jt != v->end(); jt++) {
+						int s = jt->first;
+						auto prp = &(jt->second.pr);
+						if (unique && !entries[prp->index].proteotypic) continue;
+						if (prp->qvalue <= q_cutoff && prp->norm > E) quantities[s * prs_n + i] = log(prp->norm), prn[i]++;
+					}
+				}
+			}
+
+			for (i = 0; i < n_s; i++) {
+				double max = -INF;
+				auto pi = &quantities[i * prs_n];
+				for (k = 0; k < prs_n; k++) if (pi[k] > max) max = pi[k];
+				if (max > lfq_mar) reference[i] = max, indices.push_back(i);
+				else reference[i] = -INF;
+			}
+
+			int tot_pr = 0; for (i = 0; i < prs_n; i++) if (prn[i]) tot_pr++;
+			if (tot_pr < 2) {
+				for (i = 0; i < n_s; i++) quantities[i] = reference[i];
+				goto save;
+			}
+
+			int ni = indices.size();
+			B.resize(ni); A.resize(ni, ni);
+			for (i = 0; i < ni; i++) {
+				B(i) = 0.0;
+				for (j = i; j < ni; j++) A(i, j) = A(j, i) = 0.0;
+			}
+
+			for (i = 0; i < ni; i++) {
+				for (j = i + 1; j < ni; j++) {
+					ratios.clear();
+					auto pi = &quantities[indices[i] * prs_n];
+					auto pj = &quantities[indices[j] * prs_n];
+
+					for (k = 0; k < prs_n; k++) if (pi[k] > lfq_mar && pj[k] > lfq_mar) ratios.push_back(pi[k] - pj[k]);
+					if (ratios.size()) {
+						double median;
+						if (ratios.size() >= 2) {
+							std::sort(ratios.begin(), ratios.end());
+							if (ratios.size() & 1) median = ratios[ratios.size() / 2];
+							else median = 0.5 * (ratios[(ratios.size() / 2) - 1] + ratios[ratios.size() / 2]);
+						} else median = ratios[0];
+
+						A(i, i) += 1.0;
+						A(j, j) += 1.0;
+						A(i, j) = A(j, i) = -1.0;
+						B(i) += median;
+						B(j) -= median;
+					}
+				}
+			}
+
+			for (i = 0; i < ni; i++) {
+				double reg = 0.0001 * Max(1.0, A(i, i));
+				A(i, i) += reg;
+				B(i) += reference[indices[i]] * reg;
+			}
+
+			{
+				Eigen::VectorXd X = A.llt().solve(B);
+				for (i = 0; i < n_s; i++) quantities[i] = -INF;
+				for (i = 0; i < ni; i++) quantities[indices[i]] = X[i];
+				A.resize(0, 0);
+			}
+
+			save:
+			for (i = 0; i < prs_n; i++) {
+				int pr = pg.precursors[i];
+				auto pos = info.map.find(pr);
+				if (pos != info.map.end()) {
+					auto v = &(pos->second);
+					for (auto jt = v->begin(); jt != v->end(); jt++) {
+						int s = jt->first;
+						auto prp = &(jt->second.pr);
+						if (unique && !entries[prp->index].proteotypic) continue;
+						if (reference[s] > lfq_mar) {
+							if (!unique) prp->max_lfq = exp(quantities[s]);
+							else prp->max_lfq_unique = exp(quantities[s]);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	void group_qvalues(int stage = 0) {
+		auto &prot = stage ? gene_groups : (InferPGs ? protein_groups : protein_ids);
+		int i, s, n_s = info.n_s, n_p = prot.size();
+		std::vector<float> ts(n_s * n_p, -INF), ds(n_s * n_p, -INF), qvalue(n_s * n_p, 1.0), targets(n_p), decoys(n_p);
+
+		if (Verbose >= 1 && stage == 0) Time(), dsout << "Calculating q-values for protein and gene groups\n";
+
+		for (auto it = info.map.begin(); it != info.map.end(); it++) {
+			auto v = &(it->second);
+
+			for (auto jt = v->begin(); jt != v->end(); jt++) {
+				int s = jt->first;
+				auto pr = &(jt->second.pr);
+				int p = stage ? gg_index[pr->index] : (InferPGs ? entries[pr->index].pg_index : entries[pr->index].pid_index);
+				if (!prot[p].ids.size()) continue;
+				float sc = pr->cscore;
+				if (sc > ts[s * n_p + p]) ts[s * n_p + p] = sc;
+			}
+		}
+
+		for (auto it = info.decoy_map.begin(); it != info.decoy_map.end(); it++) {
+			auto v = &(it->second);
+
+			for (auto jt = v->begin(); jt != v->end(); jt++) {
+				int s = jt->first;
+				auto pr = &(jt->second);
+				int p = stage ? gg_index[pr->index] : (InferPGs ? entries[pr->index].pg_index : entries[pr->index].pid_index);
+				if (!prot[p].ids.size()) continue;
+				float sc = pr->cscore;
+				if (sc > ds[s * n_p + p]) ds[s * n_p + p] = sc;
+			}
+		}
+
+
+		for (s = 0; s < n_s; s++) {
+			auto tsc = &ts[s * n_p];
+			auto dsc = &ds[s * n_p];
+			auto q = &qvalue[s * n_p];
+			memcpy(&targets[0], tsc, n_p * sizeof(float));
+			memcpy(&decoys[0], dsc, n_p * sizeof(float));
+
+			std::sort(targets.begin(), targets.end());
+			std::sort(decoys.begin(), decoys.end());
+
+			std::map<float, float> cs_qv;
+			for (i = 0; i < n_p; i++) {
+				if (tsc[i] < -INF * 0.5) continue;
+				float sc = tsc[i];
+				auto pD = std::lower_bound(decoys.begin(), decoys.end(), sc);
+				if (pD > decoys.begin()) sc = *(--pD);
+				auto pT = std::lower_bound(targets.begin(), targets.end(), sc);
+
+				q[i] = Min(1.0, ((double)std::distance(pD, decoys.end())) / Max(1.0, (double)std::distance(pT, targets.end())));
+
+				auto pair = std::pair<float, float>(tsc[i], q[i]);
+				auto pos = cs_qv.insert(pair);
+				if (pos.second) {
+					if (pos.first != cs_qv.begin() && std::prev(pos.first)->second < pair.second) pos.first->second = std::prev(pos.first)->second;
+					else for (auto jt = std::next(pos.first); jt != cs_qv.end() && jt->second > pair.second; jt++) jt->second = pair.second;
+				}
+			}
+
+			for (i = 0; i < n_p; i++) {
+				if (q[i] < 1.0) {
+					auto pos = cs_qv.lower_bound(tsc[i]);
+					q[i] = pos->second;
+				}
+			}
+		}
+
+		for (auto it = info.map.begin(); it != info.map.end(); it++) {
+			auto v = &(it->second);
+
+			for (auto jt = v->begin(); jt != v->end(); jt++) {
+				int s = jt->first;
+				auto pr = &(jt->second.pr);
+				int p = stage ? gg_index[pr->index] : (InferPGs ? entries[pr->index].pg_index : entries[pr->index].pid_index);
+				float qv = qvalue[s * n_p + p];
+				if (stage == 0) pr->pg_qvalue = qv;
+				else pr->gg_qvalue = qv;
+			}
+		}
+
+		if (stage < 1) group_qvalues(stage + 1);
+	}
+
 	void quantify_proteins(int N, double q_cutoff, int stage = 0) { // top N method for protein quantification
 		if (InferPGs && !stage) infer_proteins();
 		auto &prot = (InferPGs ? protein_groups : protein_ids);
-		int i, j, pass, n = stage ? genes.size() : prot.size();
-
-		if (stage == 2) {
-			gg_index.clear(); gg_index.resize(entries.size(), 0);
-			std::set<std::string> gg;
-			for (auto &pg : prot) gg.insert(pg.genes);
-			gene_groups.clear();  gene_groups.insert(gene_groups.begin(), gg.begin(), gg.end()); gg.clear();
-			if (!gene_groups.size()) gene_groups.resize(1);
-
-			for (auto &pg : prot) {
-				int ind = std::distance(gene_groups.begin(), std::lower_bound(gene_groups.begin(), gene_groups.end(), pg.genes));
-				for (auto &pr : pg.precursors) gg_index[pr] = ind;
-			}
-			n = gene_groups.size();
-		}
-		if (!n) {
-			if (stage < 2) quantify_proteins(N, q_cutoff, stage + 1);
-			return;
-		}
+		int i, j, k, pass, n = stage ? genes.size() : prot.size();
 
 		if (Verbose >= 1 && stage == 0) Time(), dsout << "Quantifying proteins\n";
+
+		if (stage == 1) n = generate_gene_groups();
+		if (!n) {
+			if (stage < 1) quantify_proteins(N, q_cutoff, stage + 1);
+			return;
+		}
+		auto &proteins = stage ? gene_groups : prot;
+
 		std::vector<float> max_q(n * info.n_s, 1.0), top_l(n * info.n_s * N, 0.0), quant(n * info.n_s, 0.0), norm(n * info.n_s, 0.0);
 
 		for (pass = 0; pass <= 3; pass++) {
@@ -4954,26 +5240,19 @@ public:
 					int s = jt->first;
 					auto pr = &(jt->second.pr);
 
-					int ggi = (stage == 2) ? gg_index[pr->index] : 0;
-					if (stage == 2) if (!gene_groups[gg_index[pr->index]].size()) {
+					if (pass == 0) pr->max_lfq = pr->max_lfq_unique = 0.0;
+					int ggi = (stage == 1) ? gg_index[pr->index] : 0;
+					if (stage == 1) if (!gene_groups[gg_index[pr->index]].ids.size()) {
 						if (pass == 0) pr->gene_quantity = pr->gene_norm = 0.0;
 						continue;
 					}
-					if (stage == 1 && protein_ids[entries[pr->index].pid_index].gene_indices.size() != 1) {
-						if (pass == 0) pr->gene_quantity_u = pr->gene_norm_u = 0.0;
-						continue;
-					}
 					int pg = InferPGs ? entries[pr->index].pg_index : entries[pr->index].pid_index;
-					int gi = (stage == 1) ? protein_ids[entries[pr->index].pid_index].gene_indices[0] : 0;
-					if (stage == 1 && !genes[gi].size()) {
-						if (pass == 0) pr->gene_quantity_u = pr->gene_norm_u = 0.0;
-						continue;
-					}
+					int gi = 0;
 
 					float quantity = pr->norm;
 					float q = pr->qvalue;
 
-					int index = (stage == 2 ? ggi : (stage == 1 ? gi : pg)) * info.n_s + s;
+					int index = (stage == 1 ? ggi : pg) * info.n_s + s;
 					auto pos_q = &(max_q[index]);
 					auto pos_l = &(top_l[index * N]);
 
@@ -4988,14 +5267,149 @@ public:
 					} else if (pass == 2) {
 						if (q <= *pos_q && quantity >= pos_l[N - 1]) quant[index] += pr->quantity, norm[index] += pr->norm;
 					} else if (pass == 3) {
-						if (stage == 1) pr->gene_quantity_u = quant[index], pr->gene_norm_u = norm[index];
-						else if (stage == 2) pr->gene_quantity = quant[index], pr->gene_norm = norm[index];
+						if (stage == 1) pr->gene_quantity = quant[index], pr->gene_norm = norm[index];
 						else pr->pg_quantity = quant[index], pr->pg_norm = norm[index];
 					}
 				}
 			}
 		}
-		if (stage < 2) quantify_proteins(N, q_cutoff, stage + 1);
+
+		if (stage == 1 && MaxLFQ) { // gene groups
+			if (Verbose >= 1 && ms_files.size() > 2000)
+				Time(), dsout << "MaxLFQ protein quantification can be slow for very large experiments; if it's taking too long, consider stopping DIA-NN and rerunning with --no-maxlfq and --use-quant options - the latter to reuse the existing .quant files\n";
+
+			std::vector<Lock> locks(proteins.size());
+			std::vector<std::thread> thr;
+			for (i = 0; i < Threads; i++) thr.push_back(std::thread(&Library::max_lfq_quant, this, &proteins, &locks, q_cutoff, false));
+			for (i = 0; i < Threads; i++) thr[i].join();
+		}
+
+		if (stage == 1 && MaxLFQ) { // unique genes
+			std::vector<Lock> locks(proteins.size());
+			std::vector<std::thread> thr;
+			for (i = 0; i < Threads; i++) thr.push_back(std::thread(&Library::max_lfq_quant, this, &proteins, &locks, q_cutoff, true));
+			for (i = 0; i < Threads; i++) thr[i].join();
+		}
+
+		if (stage < 1) quantify_proteins(N, q_cutoff, stage + 1);
+		else group_qvalues();
+	}
+
+	void report_pr_matrix(const std::string &file_name) { // must only be called after the regular report() below
+		if (Verbose >= 1) Time(), dsout << "Saving precursor levels matrix\n";
+		std::ofstream out(file_name, std::ofstream::out);
+		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
+
+		out << "Protein.Group\tProtein.Ids\tProtein.Names\tGenes\tFirst.Protein.Description\tProteotypic\tStripped.Sequence\tModified.Sequence\tPrecursor.Charge\tPrecursor.Id";
+		for (auto &f : ms_files) out << '\t' << f; out << '\n';
+
+		auto &prot = InferPGs ? protein_groups : protein_ids;
+		std::vector<std::pair<int, float> > quants;
+
+		for (auto it = info.map.begin(); it != info.map.end(); it++) {
+			auto v = &(it->second);
+			auto entry = &(entries[it->first]);
+			int pg = InferPGs ? entry->pg_index : entry->pid_index;
+
+			quants.clear();
+			for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
+				double q = Max(jt->second.pr.qvalue, jt->second.pr.pg_qvalue);
+				if (q <= MatrixQValue) quants.push_back(std::pair<int, float>(jt->first, jt->second.pr.norm));
+			}
+			if (!quants.size()) continue;
+
+			out << prot[pg].ids.c_str() << '\t'
+				<< protein_ids[entry->pid_index].ids.c_str() << '\t'
+				<< prot[pg].names.c_str() << '\t'
+				<< prot[pg].genes.c_str() << '\t';
+			if (prot[pg].proteins.size()) out << proteins[*(prot[pg].proteins.begin())].description.c_str() << '\t';
+			else out << '\t';
+			out << (int)entry->proteotypic << '\t'
+				<< get_aas(entry->name).c_str() << '\t'
+				<< pep_name(entry->name).c_str() << '\t'
+				<< entry->target.charge << '\t'
+				<< entry->name.c_str();
+
+			int pos = 0;
+			std::sort(quants.begin(), quants.end());
+			for (auto &q : quants) {
+				for (; pos < q.first; pos++) out << '\t'; pos++;
+				out << '\t' << q.second;
+			}
+			for (; pos < ms_files.size(); pos++) out << '\t';
+			out << '\n';
+		}
+
+		out.close();
+
+		if (Verbose >= 1) Time(), dsout << "Precursor levels matrix (" << MatrixQValue * 100.0 << "% precursor and protein group FDR) saved to " << file_name << ".\n";
+	}
+
+	void report_pg_matrix(const std::string &file_name, bool genes = false, bool unique = false) { // must only be called after the regular report() below
+		if (Verbose >= 1) {
+			if (!genes) Time(), dsout << "Saving protein group levels matrix\n";
+			else if (!unique) Time(), dsout << "Saving gene group levels matrix\n";
+			else Time(), dsout << "Saving unique genes levels matrix\n";
+		}
+		std::ofstream out(file_name, std::ofstream::out);
+		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
+
+		out << "Protein.Group\tProtein.Ids\tProtein.Names\tGenes\tFirst.Protein.Description";
+		for (auto &f : ms_files) out << '\t' << f; out << '\n';
+
+		double q, qt;
+		auto &prot = InferPGs ? protein_groups : protein_ids;
+		std::vector<std::pair<int, float> > quants(ms_files.size());
+		std::set<std::string> groups;
+
+		for (auto it = info.map.begin(); it != info.map.end(); it++) {
+			auto v = &(it->second);
+			auto entry = &(entries[it->first]);
+			int pg = InferPGs ? entry->pg_index : entry->pid_index;
+
+			if (genes && unique) if (!entry->proteotypic) continue;
+			if (!genes) {
+				auto ins = groups.insert(prot[pg].ids);
+				if (!ins.second) continue;
+			} else {
+				auto ins = groups.insert(prot[pg].genes);
+				if (!ins.second) continue;
+			}
+
+			double best_qvalue = 1.0;
+			quants.clear();
+			for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
+				if (!genes) q = Max(jt->second.pr.qvalue, jt->second.pr.pg_qvalue), qt = jt->second.pr.pg_norm;
+				else if (!unique) q = Max(jt->second.pr.qvalue, jt->second.pr.gg_qvalue), qt = jt->second.pr.max_lfq;
+				else q = Max(jt->second.pr.qvalue, jt->second.pr.protein_qvalue), qt = jt->second.pr.max_lfq_unique;
+				
+				if (q <= MatrixQValue) quants.push_back(std::pair<int, float>(jt->first, qt));
+			}
+			if (!quants.size()) continue;
+
+			out << prot[pg].ids.c_str() << '\t'
+				<< protein_ids[entry->pid_index].ids.c_str() << '\t'
+				<< prot[pg].names.c_str() << '\t'
+				<< prot[pg].genes.c_str() << '\t';
+			if (prot[pg].proteins.size()) out << proteins[*(prot[pg].proteins.begin())].description.c_str();
+
+			int pos = 0;
+			std::sort(quants.begin(), quants.end());
+			for (auto &q : quants) {
+				for (; pos < q.first; pos++) out << '\t'; pos++;
+				out << '\t' << q.second;
+			}
+			for (; pos < ms_files.size(); pos++) out << '\t';
+			out << '\n';
+		}
+
+		out.close();
+
+		if (Verbose >= 1) {
+			if (!genes) Time(), dsout << "Protein group levels matrix (" << MatrixQValue * 100.0 << "% precursor FDR and protein group FDR) saved to " << file_name << ".\n";
+			else if (!unique) Time(), dsout << "Gene groups levels matrix (" << MatrixQValue * 100.0 << "% precursor FDR and gene group FDR) saved to " << file_name << ".\n";
+			else Time(), dsout << "Unique genes levels matrix (" << MatrixQValue * 100.0 << "% precursor FDR and unique protein FDR) saved to " << file_name << ".\n";
+		}
 	}
 
 	void report(const std::string &file_name) {
@@ -5007,12 +5421,16 @@ public:
 		std::ofstream out(file_name, std::ofstream::out);
 		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
 		out << oh[outFile] << '\t' << oh[outPG] << '\t' << oh[outPID] << '\t' << oh[outPNames] << '\t' << oh[outGenes] << '\t'
-			<< oh[outPGQ] << '\t' << oh[outPGN] << '\t' << oh[outGQ] << '\t' << oh[outGN] << '\t' << oh[outGQP] << '\t' << oh[outGNP] << '\t' << oh[outModSeq] << '\t' << oh[outStrSeq] << '\t'
-			<< oh[outPrId] << '\t' << oh[outCharge] << '\t' << oh[outQv] << '\t' << oh[outPQv] << '\t' << oh[outPPt] << '\t'
+			<< oh[outPGQ] << '\t' << oh[outPGN] << '\t' << oh[outGQ] << '\t' << oh[outGN] << '\t' << oh[outGMQ] << '\t' << oh[outGMQU] << '\t' << oh[outModSeq] << '\t' << oh[outStrSeq] << '\t'
+			<< oh[outPrId] << '\t' << oh[outCharge] << '\t' << oh[outQv] << '\t' << oh[outPQv] << '\t' << oh[outPGQv] << '\t' << oh[outGGQv] << '\t' << oh[outPPt] << '\t'
 			<< oh[outPrQ] << '\t' << oh[outPrN] << '\t' << oh[outPrLR] << '\t'
-			<< oh[outRT] << '\t' << oh[outiRT] << '\t' << oh[outpRT] << '\t' << oh[outpiRT];
+			<< oh[outRT] << '\t' << oh[outiRT] << '\t' << oh[outpRT] << '\t' << oh[outpRTf] << '\t' << oh[outpRTt] << '\t' << oh[outpiRT];
 		if (ExtendedReport) {
 			out << (fasta_files.size() ? "\tFirst.Protein.Description\t" : "\t") << "Lib.Q.Value\tMs1.Profile.Corr\tMs1.Area\tEvidence\tCScore\tDecoy.Evidence\tDecoy.CScore\tFragment.Quant.Raw\tFragment.Quant.Corrected\tFragment.Correlations";
+			if (ReportLibraryInfo) {
+				out << "\tPrecursor.Mz\tFragment.Info";
+				out.precision(10.0);
+			}
 #ifdef TDFREADER
 			if (MobilityReport) out << "\t1/K0";
 #endif
@@ -5030,7 +5448,7 @@ public:
 
 			for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
 				if (jt->second.pr.qvalue > ReportQValue) continue;
-				if (jt->second.pr.protein_qvalue > ReportProteinQValue) continue;
+				if (jt->second.pr.pg_qvalue > ReportProteinQValue) continue;
 
 				out << ms_files[jt->first].c_str() << '\t'
 					<< prot[pg].ids.c_str() << '\t'
@@ -5042,25 +5460,30 @@ public:
 				if (jt->second.pr.gene_quantity > E) {
 					out << jt->second.pr.gene_quantity << '\t'
 						<< jt->second.pr.gene_norm << '\t';
-					if (jt->second.pr.gene_quantity_u > E) {
-						out << jt->second.pr.gene_quantity_u << '\t'
-							<< jt->second.pr.gene_norm_u << '\t';
-					} else out << "\t\t";
+					if (jt->second.pr.max_lfq > E) out << jt->second.pr.max_lfq << '\t';
+					else out << '\t';
+					if (jt->second.pr.max_lfq_unique > E) out << jt->second.pr.max_lfq_unique << '\t';
+					else out << '\t';
 				} else out << "\t\t\t\t";
+				auto aas = get_aas(entry->name);
 				out << pep_name(entry->name).c_str() << '\t'
-					<< get_aas(entry->name).c_str() << '\t'
+					<< aas.c_str() << '\t'
 					<< entry->name.c_str() << '\t'
 					<< entry->target.charge << '\t'
 					<< jt->second.pr.qvalue << '\t'
 					<< jt->second.pr.protein_qvalue << '\t'
+					<< jt->second.pr.pg_qvalue << '\t'
+					<< jt->second.pr.gg_qvalue << '\t'
 					<< (int)entry->proteotypic << '\t'
 					<< jt->second.pr.quantity << '\t'
 					<< jt->second.pr.norm << '\t';
 				
 				if (jt->second.pr.ratio >= 0.0) out << jt->second.pr.ratio << '\t';
-				else out << "NA\t";
+				else out << "\t";
 
 				out << jt->second.pr.RT << '\t'
+					<< jt->second.pr.RT_start << '\t'
+					<< jt->second.pr.RT_stop << '\t'
 					<< jt->second.pr.iRT << '\t'
 					<< jt->second.pr.predicted_RT << '\t'
 					<< jt->second.pr.predicted_iRT;
@@ -5080,6 +5503,17 @@ public:
 					out << '\t'; for (int fr = 0; fr < jt->second.fr_n; fr++) out << jt->second.fr[fr].quantity[qTotal] << ";";
 					out << '\t'; for (int fr = 0; fr < jt->second.fr_n; fr++) out << jt->second.fr[fr].quantity[qFiltered] << ";";
 					out << '\t'; for (int fr = 0; fr < jt->second.fr_n; fr++) out << jt->second.fr[fr].corr << ";";
+
+					if (ReportLibraryInfo) {
+						if ((entry->entry_flags & fFromFasta) && !entry->target.fragments.size()) entry->generate();
+						out << '\t' << entry->target.mz << '\t';
+						for (int fr = 0; fr < jt->second.fr_n; fr++) {
+							auto &cfr = entry->target.fragments[jt->second.fr[fr].index];
+							out << char_from_type[(int)cfr.type] << ((cfr.type & fTypeB) ? ((int)cfr.index) : aas.size() - ((int)cfr.index));
+							if (cfr.loss != loss_none) out << '-' << name_from_loss[cfr.loss].c_str();
+							out << '^' << (int)cfr.charge << '/' << cfr.mz << ';';
+						}
+					}
 #ifdef TDFREADER
 					if (MobilityReport) out << '\t' << jt->second.pr.one_over_K0;
 #endif
@@ -5094,11 +5528,18 @@ public:
 
 		out.close();
 		if (Verbose >= 1) Time(), dsout << "Report saved to " << file_name << ".\n";
+
+		if (SaveMatrices && !IndividualReports) {
+			report_pr_matrix(remove_extension(file_name) + ".pr_matrix.tsv");
+			report_pg_matrix(remove_extension(file_name) + ".pg_matrix.tsv");
+			report_pg_matrix(remove_extension(file_name) + ".gg_matrix.tsv", true);
+			report_pg_matrix(remove_extension(file_name) + ".unique_genes_matrix.tsv", true, true);
+		}
 	}
 
 	void gene_report(const std::string &file_name) {
 		int s = ms_files.size(), size = gene_groups.size() * s;
-		std::vector<float> gq(size), gn(size), gqu(size), gnu(size);
+		std::vector<float> gq(size), gn(size), gmq(size), gmqu(size), ggq(size, 1.0);
 		if (!size || !gg_index.size()) return;
 
 		if (Verbose >= 1) Time(), dsout << "Writing gene report\n";
@@ -5109,30 +5550,33 @@ public:
 
 			for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
 				if (jt->second.pr.qvalue > ReportQValue) continue;
-				if (jt->second.pr.protein_qvalue > ReportProteinQValue) continue;
+				if (jt->second.pr.pg_qvalue > ReportProteinQValue) continue;
 				int index = gg_index[it->first] * s + jt->first;
 				gq[index] = jt->second.pr.gene_quantity;
 				gn[index] = jt->second.pr.gene_norm;
-				gqu[index] = jt->second.pr.gene_quantity_u;
-				gnu[index] = jt->second.pr.gene_norm_u;
+				gmq[index] = jt->second.pr.max_lfq;
+				gmqu[index] = jt->second.pr.max_lfq_unique;
+				ggq[index] = jt->second.pr.gg_qvalue;
 			}
 		}
 
 		std::ofstream out(file_name, std::ofstream::out);
 		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
-		out << "File.Name\tGenes\tGene.Group.Quantity\tGene.Group.Normalised\tGene.Quantity.Unique\tGene.Normalised.Unique\n";
+		out << "File.Name\tGenes\tGenes.Quantity\tGenes.Normalised\tGenes.MaxLFQ\tGenes.MaxLFQ.Unique\tGG.Q.Value\n";
 
 		for (int i = 0; i < gene_groups.size(); i++) for (int j = 0; j < s; j++) {
 			int index = i * s + j;
 			if (gq[index] > E) {
 				out << ms_files[j].c_str() << '\t'
-					<< gene_groups[i] << '\t'
+					<< gene_groups[i].ids << '\t'
 					<< gq[index] << '\t'
 					<< gn[index] << '\t';
-				if (gqu[index] > E) {
-					out << gqu[index] << '\t'
-						<< gnu[index] << '\n';
-				} else out << "\t\n";
+				if (gmq[index] > E) out << gmq[index] << '\t';
+				else 
+					out << '\t';
+				if (gmqu[index] > E) out << gmqu[index] << '\t';
+				else out << '\t';
+				out << ggq[index] << '\n';
 			}
 		}
 
@@ -5229,6 +5673,129 @@ public:
 		return res;
 	}
 #endif
+};
+
+class Profile {
+public:
+	std::vector<QuantEntry> entries;
+	std::vector<float> tq, dq;
+
+	void gen_decoy_list() {
+		std::sort(dq.begin(), dq.end());
+		auto pos = std::lower_bound(dq.begin(), dq.end(), ReportQValue);
+		dq.resize(std::distance(dq.begin(), pos));
+		std::sort(tq.begin(), tq.end());
+		pos = std::lower_bound(tq.begin(), tq.end(), ReportQValue);
+		tq.resize(std::distance(tq.begin(), pos));
+
+		std::map<float, float> cs_qv;
+
+		for (int i = 0; i < tq.size(); i++) {
+			int n_targets = i + 1;
+			int n_decoys = std::distance(dq.begin(), std::lower_bound(dq.begin(), dq.end(), tq[i]));
+			float q = Min(1.0, ((double)Max(1, n_decoys)) / (double)Max(1, n_targets));
+
+			auto pair = std::pair<float, float>(-tq[i], q);
+			auto pos = cs_qv.insert(pair);
+			if (pos.second) {
+				if (pos.first != cs_qv.begin() && std::prev(pos.first)->second < pair.second) pos.first->second = std::prev(pos.first)->second;
+				else for (auto jt = std::next(pos.first); jt != cs_qv.end() && jt->second > pair.second; jt++) jt->second = pair.second;
+			}
+		}
+
+		for (auto &e : entries) {
+			if (e.index < 0) continue;
+			auto pos = cs_qv.lower_bound(-e.pr.qvalue);
+			if (pos == cs_qv.end()) e.pr.profile_qvalue = 1.0;
+			else e.pr.profile_qvalue = pos->second;
+		}
+	}
+
+	Profile(std::vector<std::string> &files, int lib_size = 0) {
+		entries.resize(MaxLibSize);
+
+		bool decoy_list = FastaSearch || GenSpecLib;
+		if (decoy_list) dq.resize(MaxLibSize, 1.0), tq.resize(MaxLibSize, 1.0);
+
+		for (int i = 0; i < files.size(); i++) {
+			Quant Qt;
+			auto Q = &Qt;
+			if (!QuantInMem) {
+				std::ifstream in(files[i] + std::string(".quant"), std::ifstream::binary);
+				if (in.fail() || temp_folder.size()) in = std::ifstream(location_to_file_name(files[i]) + std::string(".quant"), std::ifstream::binary);
+				Q->read(in, lib_size);
+				in.close();
+			} else Q = &(quants[i]);
+
+			for (auto it = Q->entries.begin(); it != Q->entries.end(); it++) {
+				auto pos = it->pr.index;
+				if (pos >= entries.size()) entries.resize(pos + 1 + pos / 2);
+				if (entries[pos].index < 0) entries[pos] = *it;
+				else if (it->pr.qvalue < entries[pos].pr.qvalue) entries[pos].pr = it->pr;
+
+				if (decoy_list) {
+					if (pos >= tq.size()) tq.resize(pos + 1 + pos / 2, 1.0);
+					if (it->pr.qvalue <= ReportQValue && it->pr.qvalue < tq[pos]) tq[pos] = it->pr.qvalue;
+				}
+			}
+			if (decoy_list) {
+				for (auto it = Q->decoys.begin(); it != Q->decoys.end(); it++) {
+					auto pos = it->index;
+
+					if (pos >= dq.size()) dq.resize(pos + 1 + pos / 2, 1.0);
+					if (it->qvalue <= ReportQValue && it->qvalue < dq[pos]) dq[pos] = it->qvalue;
+				}
+			}
+			if (!QuantInMem) std::vector<QuantEntry>().swap(Q->entries), std::vector<DecoyEntry>().swap(Q->decoys);
+		}
+
+		if (decoy_list) gen_decoy_list();
+		std::vector<float>().swap(tq); std::vector<float>().swap(dq);
+	}
+
+	Profile(Library * lib) {
+		entries.resize(MaxLibSize);
+
+		bool decoy_list = FastaSearch || GenSpecLib;
+		if (decoy_list) dq.resize(MaxLibSize, 1.0), tq.resize(MaxLibSize, 1.0);
+
+		auto &info = lib->info;
+		for (auto it = info.map.begin(); it != info.map.end(); it++) {
+			auto v = &(it->second);
+
+			for (auto jt = v->begin(); jt != v->end(); jt++) {
+				int s = jt->first;
+				auto &qr = jt->second;
+				auto pos = qr.pr.index;
+				if (pos >= entries.size()) entries.resize(pos + 1 + pos / 2);
+				if (entries[pos].index < 0) entries[pos] = qr;
+				else if (qr.pr.qvalue < entries[pos].pr.qvalue) entries[pos] = qr;
+
+				if (decoy_list) {
+					if (pos >= tq.size()) tq.resize(pos + 1 + pos / 2, 1.0);
+					if (qr.pr.qvalue <= ReportQValue && qr.pr.qvalue < tq[pos]) tq[pos] = qr.pr.qvalue;
+				}
+			}
+		}
+
+		if (decoy_list) {
+			for (auto it = info.decoy_map.begin(); it != info.decoy_map.end(); it++) {
+				auto v = &(it->second);
+
+				for (auto jt = v->begin(); jt != v->end(); jt++) {
+					int s = jt->first;
+					auto pr = &(jt->second);
+					int pos = pr->index;
+					
+					if (pos >= dq.size()) dq.resize(pos + 1 + pos / 2, 1.0);
+					if (pr->qvalue <= ReportQValue && pr->qvalue < dq[pos]) dq[pos] = pr->qvalue;
+				}
+			}
+		}
+
+		if (decoy_list) gen_decoy_list();
+		std::vector<float>().swap(tq); std::vector<float>().swap(dq);
+	}
 };
 
 void annotate_library(Library &lib, Fasta &fasta) {
@@ -5533,6 +6100,7 @@ public:
 
 	std::vector<std::vector<int> > IDs;
 	std::vector<std::pair<int, float> > best_egs;
+	std::list<XICGroup> XIC_list;
 
 	Library * lib;
 
@@ -5750,7 +6318,7 @@ public:
 	}
 #endif
 
-	XIC ms1_XIC(float mz, float RT, int S) {
+	inline XIC ms1_XIC(float mz, float RT, int S) {
 		XIC xic;
 		xic.pr_mz = mz, xic.RT = RT, xic.level = 1;
 		if (!ms1h.size()) return xic;
@@ -5768,7 +6336,7 @@ public:
 		return xic;
 	}
 
-	XIC ms2_XIC(float pr_mz, float fr_mz, int apex, int S) {
+	inline XIC ms2_XIC(float pr_mz, float fr_mz, int apex, int S) {
 		XIC xic;
 		int cnt, j, W = 2 * S + 1, n = ms2h.size();
 
@@ -6748,14 +7316,56 @@ public:
 				if (std::find(Visualise.begin(), Visualise.end(), aas) != Visualise.end()) {
 					if (run->ms1h.size()) {
 						auto xic = run->ms1_XIC(pep->mz, info[0].RT, VisWindowRadius); 
-						xic.qvalue = info[0].qvalue, xic.run = run->run_index, xic.pr = pep->index; XICs.insert(xic);
+						xic.qvalue = info[0].qvalue, xic.run = run->run_index, xic.pr = pep->index; 
+						while (!run->lock.set()) {}
+						XICs.insert(xic);
+						run->lock.free();
 					}
 					for (auto& fr : pep->fragments) {
 						auto xic = run->ms2_XIC(pep->mz, fr.mz, (*searcher.scan_index)[peak], VisWindowRadius); 
 						xic.qvalue = info[0].qvalue, xic.run = run->run_index, xic.pr = pep->index;
-						xic.fr = fr; XICs.insert(xic);
+						xic.fr = fr; 
+						while (!run->lock.set()) {}
+						XICs.insert(xic);
+						run->lock.free();
 					}
 				}
+			}
+
+			if (stage == 2 && SaveXICs) {
+				auto &le = run->lib->entries[pep->index];
+
+				XICGroup xg;
+				xg.N = 2 * XICRadius, xg.qvalue = info[0].qvalue, xg.run = run->run_index, xg.pr = pep->index;
+				if (run->ms1h.size()) xg.has_ms1 = 1;
+
+				xg.values.resize(xg.xic_size_in_bytes());
+
+				xg.id = run->lib->entries[pep->index].name;
+				xg.fr.resize(pep->fragments.size());
+				for (int i = 0; i < xg.fr.size(); i++) xg.fr[i].init(pep->fragments[i]);
+
+				XIC xic; pos = 0;
+				if (run->ms1h.size()) {
+					xic = run->ms1_XIC(pep->mz, info[0].RT, XICRadius);
+					for (int i = 0; i < xg.N; i++) {
+						xg.values[pos] = xic.peaks[i].first;
+						xg.values[pos + xg.N] = xic.peaks[i].second;
+						pos++;
+					}
+					xg.pr_mz = xic.pr_mz;
+				}
+				int cnt = 0;
+				for (auto& fr : pep->fragments) {
+					xic = run->ms2_XIC(pep->mz, fr.mz, (*searcher.scan_index)[peak], XICRadius);
+					if (cnt == 0) for (int i = 0; i < xg.N; i++) xg.values[pos++] = xic.peaks[i].first;
+					xg.values[pos++] = xic.fr_mz;
+					for (int i = 0; i < xg.N; i++) xg.values[pos++] = xic.peaks[i].second;
+					cnt++;
+				}
+				while (!run->lock.set()) {}
+				run->XIC_list.push_back(xg);
+				run->lock.free();
 			}
         }
 
@@ -7566,7 +8176,7 @@ public:
 				}
 			if (i < max) has[pos] = true, cnt++;
 		}
-		entries.resize(cnt);
+		entries.clear(); entries.resize(cnt);
 		if (Verbose >= 1) Time(), dsout << cnt << " library precursors are potentially detectable\n";
 		cnt = pos = 0;
 		for (auto it = lib->entries.begin(); it != lib->entries.end(); it++, pos++) {
@@ -8748,7 +9358,7 @@ public:
 			calculate_qvalues();
 		}
 		update(RTWindowedSearch, RefCal && InferWindow, RefCal && Calibrate, Q1Cal && scanning, false);
-		free_precursors();
+		reset_precursors();
 		in_ref_run = false;
 
 		return true;
@@ -9007,7 +9617,7 @@ public:
 		quant.MassCorrection = MassCorrection, quant.MassCorrectionMs1 = MassCorrectionMs1;
 		quant.MassCalSplit = MassCalSplit, quant.MassCalSplitMs1 = MassCalSplitMs1, quant.MassCalCenter = MassCalCenter, quant.MassCalCenterMs1 = MassCalCenterMs1;
 
-		double q_threshold = (result == NULL ? QFilter : q_filtering);
+		double q_threshold = (result == NULL ? QFilter : q_filtering);	
 		if (result != NULL) {
 			int tot_entries = 0;
 			for (auto it = entries.begin(); it != entries.end(); it++) if (it->target.flags & fFound) if (it->target.info[0].qvalue <= q_threshold) tot_entries++;
@@ -9017,6 +9627,7 @@ public:
 			if (result == NULL) if (it->decoy.flags & fFound) if (it->decoy.info[0].qvalue <= QFilter) {
 				de.index = it->target.pep->index;
 				de.qvalue = it->decoy.info[0].qvalue;
+				de.cscore = it->decoy.info[0].cscore;
 				quant.decoys.push_back(de);
 			}
 
@@ -9039,6 +9650,8 @@ public:
 			qe.pr.qvalue = it->target.info[0].qvalue;
 			qe.pr.protein_qvalue = it->target.info[0].protein_qvalue;
 			qe.pr.RT = scan_RT[it->target.info[0].apex];
+			qe.pr.RT_start = it->target.info[0].RT_start;
+			qe.pr.RT_stop = it->target.info[0].RT_stop;
 			qe.pr.predicted_iRT = calc_spline(iRT_coeff, iRT_points, qe.pr.RT);
 			qe.pr.one_over_K0 = tims ? it->target.info[0].one_over_K0 : 0.0;
 			qe.pr.evidence = it->target.info[0].evidence;
@@ -9113,6 +9726,41 @@ public:
 			lib->quantify_proteins(TopN, ProteinQuantQvalue);
 			lib->report(ms_files[run_index] + std::string(".tsv"));
 			if (lib->genes.size()) lib->gene_report(ms_files[run_index] + std::string(".genes.tsv"));
+			dsout << '\n';
+		}
+
+		if (SaveXICs) {
+			std::ofstream out;
+			std::string out_xic;
+			if (temp_folder.size()) out = std::ofstream(out_xic = location_to_file_name(name) + std::string(".xic"), std::ofstream::binary);
+			else {
+				out = std::ofstream(out_xic = name + std::string(".xic"), std::ofstream::binary);
+				if (out.fail()) {
+					dsout << "WARNING: cannot save the .xic file to the raw data folder; using the current working folder instead\n";
+					out = std::ofstream(out_xic = location_to_file_name(name) + std::string(".xic"), std::ofstream::binary);
+				}
+			}
+			if (out.fail()) dsout << "ERROR: cannot save the .xic file to " << out_xic << ". Check if the destination folder is write-protected or the file is in use\n";
+			else {
+				long long tot = 2 * sizeof(int); // first int - total number of XICs, second - total header size
+				int n = XIC_list.size(), cnt = 0;;
+
+				for (auto &x : XIC_list) tot += x.size_in_bytes(); // now tot stores the total header size
+				int header_size = tot;
+
+				for (auto &x : XIC_list) {
+					x.address = tot;
+					tot += x.values.size() * sizeof(float);
+					cnt++;
+				}
+
+				// now start writing to the file
+				out.write((char*)&n, sizeof(int)); // write the total number of XICs
+				out.write((char*)&header_size, sizeof(int)); // write the header size
+				for (auto &x : XIC_list) x.write_header(out);
+				for (auto &x : XIC_list) x.write_values(out);
+			}
+			XIC_list.clear();
 		}
     }
 
@@ -9120,7 +9768,7 @@ public:
 		int cnt = 0;
 		for (auto &e : entries) {
 			auto &le = lib->entries[e.target.pep->index];
-			if (le.best_run != run_index || le.qvalue > ReportQValue || le.protein_qvalue > ReportProteinQValue) continue;
+			if (le.best_run != run_index || le.qvalue > ReportQValue || le.pg_qvalue > ReportProteinQValue) continue;
 			e.target.thread_id = 0;
 			auto gen = le.fragment();
 			e.target.intensities(le.apex, gen);
@@ -9228,7 +9876,7 @@ int main(int argc, char *argv[]) {
 #endif
 	std::cout.setf(std::ios::unitbuf);
 	auto curr_time = time(0);
-	dsout << std::ctime(&curr_time) << "DIA-NN (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\n";
+	dsout << "DIA-NN 1.7.10 (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\nCurrent date and time: " << std::ctime(&curr_time);
 #ifdef _MSC_VER
 	cpu_info(dsout);
 #endif
@@ -9417,7 +10065,7 @@ quant_only:
 				lib.entries[jt->pr.index].target.iRT = lib.entries[jt->pr.index].decoy.iRT = (!FastaSearch || GuideLibrary || RTLearnLib) ? jt->pr.predicted_iRT : jt->pr.RT;
 				lib.entries[jt->pr.index].best_run = jt->pr.run_index;
 				lib.entries[jt->pr.index].qvalue = jt->pr.qvalue;
-				lib.entries[jt->pr.index].protein_qvalue = jt->pr.protein_qvalue;
+				lib.entries[jt->pr.index].pg_qvalue = jt->pr.pg_qvalue;
 			}
 
 		for (auto it = ms_files.begin(); it != ms_files.end(); it++) {
@@ -9467,7 +10115,7 @@ gen_spec_lib:
 		dsout << "\n";
 	}
 
-	if (IndividualReports || !(out_file.size() || out_gene_file.size()) || !ms_files.size()) goto gen_lib;
+	if (!ms_files.size()) goto remove;
 	if (Verbose >= 1) Time(), dsout << "Cross-run analysis\n";
 	if (QuantInMem) lib.info.load(&(lib), ms_files, &quants);
 	else lib.info.load(&(lib), ms_files);
@@ -9477,13 +10125,12 @@ gen_spec_lib:
 		lib.save(ann_lib, NULL, false, false);
 	}
 	lib.quantify_proteins(TopN, ProteinQuantQvalue);
-	if (out_file.size()) {
+	if (out_file.size() && !IndividualReports) {
 		lib.report(out_file), lib.stats_report(remove_extension(out_file) + std::string(".stats.tsv"));
 		if (Visualise.size()) lib.XIC_report(remove_extension(out_file) + std::string(".XIC.tsv"));
 	}
-	if (out_gene_file.size()) lib.gene_report(out_gene_file);
+	if (out_gene_file.size() && !IndividualReports) lib.gene_report(out_gene_file);
 
-gen_lib:
 	if (out_lib_file.size() && ms_files.size()) if (FastaSearch || GenSpecLib) { // generating spectral library
 		MaxF = INF;
 		if (Verbose >= 1) Time(), dsout << "Generating spectral library:\n";
@@ -9491,7 +10138,7 @@ gen_lib:
 		for (auto &le : lib.entries) le.best_run = -1;
 		// determine the best run for each precursor and collect information from this run
 		{
-			Profile profile(ms_files);
+			Profile profile(&lib);
 			for (auto jt = profile.entries.begin(); jt != profile.entries.end(); jt++) if (jt->index >= 0) {
 				if (jt->pr.qvalue <= ReportQValue) {
 					lib.entries[jt->pr.index].qvalue = jt->pr.qvalue;
@@ -9502,7 +10149,7 @@ gen_lib:
 						lib.entries[jt->pr.index].target.iRT = (GuideLibrary || (GenSpecLib && !FastaSearch) || RTLearnLib) ? jt->pr.predicted_iRT : jt->pr.RT;
 						lib.entries[jt->pr.index].peak = jt->pr.peak;
 						lib.entries[jt->pr.index].apex = jt->pr.apex;
-						lib.entries[jt->pr.index].protein_qvalue = jt->pr.protein_qvalue;
+						lib.entries[jt->pr.index].pg_qvalue = jt->pr.pg_qvalue;
 						lib.entries[jt->pr.index].best_fr_mz = jt->pr.best_fr_mz;
 						lib.entries[jt->pr.index].window = jt->window;
 					}

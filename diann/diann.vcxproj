@@ -217,7 +217,7 @@
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
       <FloatingPointModel>Precise</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
-      <AdditionalOptions>/we4146    /we4308 	/we4532	/we4533	/we4700	/we4703	/we4789	/we4995 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/we4146    /we4308 	/we4532	/we4533	/we4700	/we4703	/we4789	/we4995 /bigobj %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Sync</ExceptionHandling>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <LanguageStandard>stdcpp14</LanguageStandard>

@@ -33,6 +33,7 @@ namespace GUI
         public bool ram_b;
         public bool reannotate_b;
         public int norm_i;
+        public bool matrices_b;
     }
 
     public partial class Form1 : Form
@@ -110,6 +111,7 @@ namespace GUI
             S.ram_b = RAMBox.Checked;
             S.reannotate_b = ReannotateBox.Checked;
             S.norm_i = NormBox.SelectedIndex;
+            S.matrices_b = MatricesBox.Checked;
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -173,6 +175,7 @@ namespace GUI
             RAMBox.Checked = S.ram_b;
             ReannotateBox.Checked = S.reannotate_b;
             NormBox.SelectedIndex = S.norm_i;
+            MatricesBox.Checked = S.matrices_b;
 
             if (!System.IO.Directory.Exists(S.temp_folder_s)) TempFolderBox.Text = S.temp_folder_s = "";
         }
@@ -322,6 +325,7 @@ namespace GUI
                     var report = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(S.out_s), System.IO.Path.GetFileNameWithoutExtension(S.out_s));
                     process.StartInfo.Arguments += " --out-gene \"" + report + ".genes.tsv\"";
                     process.StartInfo.Arguments += " --qvalue " + Convert.ToString(0.01 * (double)S.prec_fdr_d, new System.Globalization.CultureInfo("en-US"));
+                    if (S.matrices_b) process.StartInfo.Arguments += " --matrices ";
 
                     if (S.ram_b) process.StartInfo.Arguments += " --min-corr 1.0 --corr-diff 1.0";
                     if (S.pdf_rep_b && S.files_s.Length > 0)
@@ -358,7 +362,7 @@ namespace GUI
                             if (S.opt_training_b) process.StartInfo.Arguments += " --min-fr-corr 0.9 --min-gen-fr 2";
                         }
                         if (S.met_exc_b) process.StartInfo.Arguments += " --met-excision";
-                        if (S.use_lib_free_b || S.prosit_b)
+                        if (S.use_lib_free_b || S.prosit_b || S.reannotate_b)
                         {
                             if (S.protease_i == 0) process.StartInfo.Arguments += " --cut-after KR";
                             if (S.protease_i == 1) process.StartInfo.Arguments += " --cut-after KR --no-cut-before P";

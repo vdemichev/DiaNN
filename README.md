@@ -1,4 +1,5 @@
-﻿### DIA-NN
+
+### DIA-NN
 
 DIA-NN - a fast and easy to use tool for processing data-independent acquisition (DIA) proteomics data.  
 DIA-NN implements deep neural networks to improve precursor ion identification.  
@@ -26,6 +27,8 @@ Please also check the commands listed below.
 3. Multi-tab GUI, ideal for dealing with multiple experiments in parallel.  
 
 4. Experimental support for NIST .msp and SpectraST .sptxt libraries.   
+
+5. MaxLFQ-based protein quantification and improved protein grouping
 
 ### Installation
 
@@ -119,7 +122,7 @@ Bash scripts for building without .mzML support (for this, uncomment "//#undef M
 
 ### Tutorial
 
-This is a simple tutorial which covers the generation of a spectral library from gas-phase fractionated DIA data and its use to analyse other DIA runs (using DIA-NN 1.7.9).  
+This is a simple tutorial which covers the generation of a spectral library from gas-phase fractionated DIA data and its use to analyse other DIA runs (using DIA-NN 1.7.10).  
 1. Download all the files from https://osf.io/w5dr6/files/?view_only=00c8a68bfb824835b7fa304e31922ffa - these are 9 yeast runs on TripleTOF 6600 converted to .dia format: select "OSF Storage (Germany - Frankfurt)" and then choose "Download as zip" above (7.6 Gb total). Unpack the zip file.
 2. Download the UniProt canonical *S.cerevisiae* proteome from https://www.uniprot.org/proteomes/UP000002311 (Under "Components" click "Download" and then "Go").  
 3. Download the collection of peptides known to be detectable in yeast samples from http://www.peptideatlas.org/builds/: find the Yeast ("Build name" column) Mar 2013 ("Date" column) entry, right click on "APD_Sc_all.fasta" in the "Peptide Sequences" column and choose "Save link as".  
@@ -140,3 +143,5 @@ This is a simple tutorial which covers the generation of a spectral library from
 Many thanks to Christoph Messner, Spyros Vernardis, Kathryn Lilley and Markus Ralser as well as to the members of the Ralser lab (Francis Crick Institute and Charité - Universitätsmedizin Berlin) for their continuous support in improving DIA-NN and expanding its functionality.
 
 Prosit https://www.nature.com/articles/s41592-019-0426-7 online service (part of ProteomeTools) https://www.proteomicsdb.org/prosit/ has been utilised when developing DIA-NN versions uploaded after 24/01/2020.
+
+MaxLFQ https://doi.org/10.1074/mcp.M113.031591 protein quantification algorithm is used in DIA-NN versions uploaded after 02/04/2020.  
