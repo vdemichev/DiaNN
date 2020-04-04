@@ -20,6 +20,8 @@ A report with protein and precursor ion quantities is produced.
 **DIA-NN manual**: https://github.com/vdemichev/DiaNN/blob/master/DIA-NN%20GUI%20manual.pdf  
 Please also check the commands listed below.   
 
+**R package** with some useful functions for dealing with DIA-NN's reports: https://github.com/vdemichev/diann-rpackage 
+
 ### New since version 1.7.0  
 
 1. Deep learning-based generation of high quality spectral libraries *in silico* (Windows only). This boosts library-free search efficiency.   
