@@ -5356,50 +5356,66 @@ public:
 
 		out << "Protein.Group\tProtein.Ids\tProtein.Names\tGenes\tFirst.Protein.Description";
 		for (auto &f : ms_files) out << '\t' << f; out << '\n';
+		if (ms_files.size() != info.n_s) {
+			dsout << "ERROR: algorithmic error: info.n_s == " << info.n_s << ", while ms_files.size() == " << ms_files.size() << "\n";
+			assert(ms_files.size() == info.n_s);
+		}
 
 		double q, qt;
 		auto &prot = InferPGs ? protein_groups : protein_ids;
 		std::vector<std::pair<int, float> > quants(ms_files.size());
-		std::set<std::string> groups;
+
+		int i, j, n_pg = 0;
+		for (auto it = info.map.begin(); it != info.map.end(); it++) {
+			auto entry = &(entries[it->first]);
+			int pg = InferPGs ? entry->pg_index : entry->pid_index;
+			if (pg >= n_pg) n_pg = pg + 1;
+		}
+		if (!n_pg) {
+			out.close();
+			return;
+		}
+		std::vector<float> PG(n_pg * info.n_s, 0.0);
+		std::vector<int> pid_index(n_pg, 0);
 
 		for (auto it = info.map.begin(); it != info.map.end(); it++) {
 			auto v = &(it->second);
 			auto entry = &(entries[it->first]);
 			int pg = InferPGs ? entry->pg_index : entry->pid_index;
+			pid_index[pg] = entry->pid_index;
+			int shift = pg * info.n_s;
 
 			if (genes && unique) if (!entry->proteotypic) continue;
-			if (!genes) {
-				auto ins = groups.insert(prot[pg].ids);
-				if (!ins.second) continue;
-			} else {
-				auto ins = groups.insert(prot[pg].genes);
-				if (!ins.second) continue;
-			}
 
-			double best_qvalue = 1.0;
-			quants.clear();
 			for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
+				if (PG[shift + jt->first] > E) continue;
 				if (!genes) q = Max(jt->second.pr.qvalue, jt->second.pr.pg_qvalue), qt = jt->second.pr.pg_norm;
 				else if (!unique) q = Max(jt->second.pr.qvalue, jt->second.pr.gg_qvalue), qt = jt->second.pr.max_lfq;
 				else q = Max(jt->second.pr.qvalue, jt->second.pr.protein_qvalue), qt = jt->second.pr.max_lfq_unique;
-				
-				if (q <= MatrixQValue) quants.push_back(std::pair<int, float>(jt->first, qt));
+				if (q <= MatrixQValue) PG[shift + jt->first] = qt;
 			}
-			if (!quants.size()) continue;
+		}
 
-			out << prot[pg].ids.c_str() << '\t'
-				<< protein_ids[entry->pid_index].ids.c_str() << '\t'
-				<< prot[pg].names.c_str() << '\t'
-				<< prot[pg].genes.c_str() << '\t';
-			if (prot[pg].proteins.size()) out << proteins[*(prot[pg].proteins.begin())].description.c_str();
-
-			int pos = 0;
-			std::sort(quants.begin(), quants.end());
-			for (auto &q : quants) {
-				for (; pos < q.first; pos++) out << '\t'; pos++;
-				out << '\t' << q.second;
+		for (i = 0; i < n_pg; i++) {
+			bool found = false;
+			int shift = i * info.n_s;
+			for (j = 0; j < info.n_s; j++) if (PG[shift + j] > E) {
+				found = true;
+				break;
 			}
-			for (; pos < ms_files.size(); pos++) out << '\t';
+			if (!found) continue;
+
+			out << prot[i].ids.c_str() << '\t'
+				<< protein_ids[pid_index[i]].ids.c_str() << '\t'
+				<< prot[i].names.c_str() << '\t'
+				<< prot[i].genes.c_str();
+			if (prot[i].proteins.size()) out << '\t' << proteins[*(prot[i].proteins.begin())].description.c_str();
+			else out << '\t';
+
+			for (j = 0; j < info.n_s; j++) {
+				if (PG[shift + j] > E) out << '\t' << PG[shift + j];
+				else out << '\t';
+			}
 			out << '\n';
 		}
 
@@ -5426,7 +5442,7 @@ public:
 			<< oh[outPrQ] << '\t' << oh[outPrN] << '\t' << oh[outPrLR] << '\t'
 			<< oh[outRT] << '\t' << oh[outiRT] << '\t' << oh[outpRT] << '\t' << oh[outpRTf] << '\t' << oh[outpRTt] << '\t' << oh[outpiRT];
 		if (ExtendedReport) {
-			out << (fasta_files.size() ? "\tFirst.Protein.Description\t" : "\t") << "Lib.Q.Value\tMs1.Profile.Corr\tMs1.Area\tEvidence\tCScore\tDecoy.Evidence\tDecoy.CScore\tFragment.Quant.Raw\tFragment.Quant.Corrected\tFragment.Correlations";
+			out << (fasta_files.size() ? "\tFirst.Protein.Description\t" : "\t") << "Lib.Q.Value\tMs1.Profile.Corr\tMs1.Area\tEvidence\tCScore\tDecoy.Evidence\tDecoy.CScore\tFragment.Quant.Raw\tFragment.Quant.Corrected\tFragment.Correlations\tMS2.Scan";
 			if (ReportLibraryInfo) {
 				out << "\tPrecursor.Mz\tFragment.Info";
 				out.precision(10.0);
@@ -5503,6 +5519,7 @@ public:
 					out << '\t'; for (int fr = 0; fr < jt->second.fr_n; fr++) out << jt->second.fr[fr].quantity[qTotal] << ";";
 					out << '\t'; for (int fr = 0; fr < jt->second.fr_n; fr++) out << jt->second.fr[fr].quantity[qFiltered] << ";";
 					out << '\t'; for (int fr = 0; fr < jt->second.fr_n; fr++) out << jt->second.fr[fr].corr << ";";
+					out << '\t' << jt->second.pr.apex;
 
 					if (ReportLibraryInfo) {
 						if ((entry->entry_flags & fFromFasta) && !entry->target.fragments.size()) entry->generate();

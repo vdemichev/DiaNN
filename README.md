@@ -1,4 +1,4 @@
-
+﻿
 ### DIA-NN
 
 DIA-NN - a fast and easy to use tool for processing data-independent acquisition (DIA) proteomics data.  
@@ -15,7 +15,7 @@ As input it takes raw data files and a spectral library / FASTA database.
 A report with protein and precursor ion quantities is produced.
 
 **Download**: https://github.com/vdemichev/DiaNN/releases  
-(it's recommended to use the latest version - DIA-NN 1.7.10)  
+(it's recommended to use the latest version - DIA-NN 1.7.11)  
 
 **DIA-NN manual**: https://github.com/vdemichev/DiaNN/blob/master/DIA-NN%20GUI%20manual.pdf  
 Please also check the commands listed below.   
@@ -32,7 +32,7 @@ Please also check the commands listed below.
 
 4. Experimental support for NIST .msp and SpectraST .sptxt libraries.   
 
-5. MaxLFQ-based protein quantification and improved protein grouping
+5. MaxLFQ-based protein quantification and improved protein grouping.
 
 ### Installation
 
@@ -126,7 +126,7 @@ Bash scripts for building without .mzML support (for this, uncomment "//#undef M
 
 ### Tutorial
 
-This is a simple tutorial which covers the generation of a spectral library from gas-phase fractionated DIA data and its use to analyse other DIA runs (using DIA-NN 1.7.10).  
+This is a simple tutorial which covers the generation of a spectral library from gas-phase fractionated DIA data and its use to analyse other DIA runs (using DIA-NN 1.7.11).  
 1. Download all the files from https://osf.io/w5dr6/files/?view_only=00c8a68bfb824835b7fa304e31922ffa - these are 9 yeast runs on TripleTOF 6600 converted to .dia format: select "OSF Storage (Germany - Frankfurt)" and then choose "Download as zip" above (7.6 Gb total). Unpack the zip file.
 2. Download the UniProt canonical *S.cerevisiae* proteome from https://www.uniprot.org/proteomes/UP000002311 (Under "Components" click "Download" and then "Go").  
 3. Download the collection of peptides known to be detectable in yeast samples from http://www.peptideatlas.org/builds/: find the Yeast ("Build name" column) Mar 2013 ("Date" column) entry, right click on "APD_Sc_all.fasta" in the "Peptide Sequences" column and choose "Save link as".  
