@@ -9893,7 +9893,7 @@ int main(int argc, char *argv[]) {
 #endif
 	std::cout.setf(std::ios::unitbuf);
 	auto curr_time = time(0);
-	dsout << "DIA-NN 1.7.10 (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\nCurrent date and time: " << std::ctime(&curr_time);
+	dsout << "DIA-NN 1.7.11 (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\nCurrent date and time: " << std::ctime(&curr_time);
 #ifdef _MSC_VER
 	cpu_info(dsout);
 #endif
