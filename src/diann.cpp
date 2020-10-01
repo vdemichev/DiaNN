@@ -10314,7 +10314,7 @@ public:
 		out.close();
 	}
 
-	void extraction(std::string &file) {
+	void extraction(std::string file) {
 		int i, k, N = Extract.size();
 		std::vector<std::vector<float> > chr(N);
 		std::vector<int> cnt(N + 1, 0);
