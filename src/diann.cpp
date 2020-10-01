@@ -223,6 +223,7 @@ double MaxProfilingQvalue = 0.001;
 double MaxQuantQvalue = 0.01;
 double ProteinQuantQvalue = 0.01;
 double ProteinIDQvalue = 0.01;
+double ProteinQCalcQvalue = 0.02; // must be 0.01 or greater
 double PeakApexEvidence = 0.99; // force peak apexes to be close to the detection evidence maxima
 double MinCorrScore = 0.5;
 double MinMs1Corr = -INF;
@@ -261,8 +262,9 @@ bool ProfileQValue = true;
 bool RTLearnLib = false;
 bool SaveOriginalLib = false;
 bool SaveCalInfo = false;
-bool iRTOutputFromLearnLib = true;
+bool iRTOutputLibrary = true;
 bool PredictorSaved = false;
+bool LibrarySaveRT = false;
 
 int Verbose = 1;
 bool ExportWindows = false;
@@ -347,7 +349,7 @@ bool RemoveQuant = false;
 bool QuantInMem = false;
 
 #define Q1 true
-#define AAS false
+#define AAS true
 #define LOGSC false
 #define REPORT_SCORES false
 #define EXTERNAL 1
@@ -1340,7 +1342,7 @@ int AA_index[256];
 const char * AAs = "GAVLIFMPWSCTYHKRQEND";
 const char * MutateAAto = "LLLVVLLLLTSSSSLLNDQE";
 
-void init_aas() {
+void init_all() {
 	for (int i = 0; i < 256; i++) AA_index[i] = 0, AA[i] = 0.0;
 
 	AA['G'] = 57.021464;
@@ -1832,8 +1834,8 @@ void arguments(int argc, char *argv[]) {
 #else
 			dsout << "WARNING: DIA-NN has been compiled without support for deep learning-based in silico spectral library generation\n";
 #endif
-		} else if (!memcmp(&(args[start]), "out-measured-rt ", 16)) iRTOutputFromLearnLib = false,
-			dsout << "When generating a spectral library without a guide library but with a training library, iRT values (Tr_recalibrated) will correspond to the measured retention times\n";
+		} else if (!memcmp(&(args[start]), "out-measured-rt ", 16)) iRTOutputLibrary = false,
+			dsout << "Experimental retention times will be saved to the newly generated library and/or used for RT profiling; use this option only for analysing very stable repeat injections of the same sample\n";
 		else if (!memcmp(&(args[start]), "library-headers ", 16)) {
 			std::string word;
 			std::stringstream list(trim(args.substr(start + 16, end - start - 16)));
@@ -2156,7 +2158,7 @@ void arguments(int argc, char *argv[]) {
 			dsout << "WARNING: FASTA digest is enabled while conversion of modifications to the UniMod format is disabled - this might lead to duplicate precursors being generated\n";
 	}
 
-	QFilter = Max(MatrixQValue, Max(Max(Max(ReportQValue, MaxQuantQvalue), Max(ProteinQuantQvalue, MaxProfilingQvalue)), Max(NormalisationQvalue, ProteinIDQvalue)));
+	QFilter = Max(Max(MatrixQValue, ProteinQCalcQvalue), Max(Max(Max(ReportQValue, MaxQuantQvalue), Max(ProteinQuantQvalue, MaxProfilingQvalue)), Max(NormalisationQvalue, ProteinIDQvalue)));
 
 	init_unimod();
 	init_prediction();
@@ -2628,7 +2630,7 @@ public:
 	int run_index;
 	mutable bool decoy_found;
 	mutable int apex, peak, best_fragment, peak_width;
-	mutable float RT, RT_start, RT_stop, iRT, predicted_RT, predicted_iRT, one_over_K0, best_fr_mz, profile_qvalue, qvalue, decoy_qvalue, protein_qvalue, pg_qvalue, gg_qvalue, quantity, ratio, level, norm;
+	mutable float RT, RT_start, RT_stop, iRT, predicted_RT, predicted_iRT, one_over_K0, best_fr_mz, profile_qvalue, qvalue, lib_qvalue, dratio, decoy_qvalue, protein_qvalue, pg_qvalue, gg_qvalue, quantity, ratio, level, norm;
 	mutable float pg_quantity, pg_norm, gene_quantity, gene_norm, max_lfq, max_lfq_unique;
 	mutable float evidence, decoy_evidence, ms1_corr, ms1_area, cscore, decoy_cscore;
 #if REPORT_SCORES
@@ -2658,10 +2660,10 @@ public:
 class DecoyEntry {
 public:
 	int index = -1;
-	float qvalue = 1.0, cscore = 0.0;
+	float qvalue = 1.0, lib_qvalue = 0.0, dratio = 1.0, cscore = 0.0; // constructor below must have these intialised explicitly
 
 	DecoyEntry() {  }
-	DecoyEntry(int _index, float _qvalue, float _cscore) { index = _index; qvalue = _qvalue; cscore = _cscore; }
+	DecoyEntry(int _index, float _qvalue, float _lib_qvalue, float _dratio, float _cscore) { index = _index; qvalue = _qvalue; lib_qvalue = _lib_qvalue; dratio = _dratio; cscore = _cscore; }
 
 	template <class F> void write(F &out) {
 		out.write((char*)this, sizeof(DecoyEntry));
@@ -2680,6 +2682,7 @@ public:
 	std::vector<QuantEntry> entries;
 	std::vector<DecoyEntry> decoys; // used only for cross-run q-value calculation - for spectral library generation from DIA data; 
 	std::vector<int> proteins; // protein ids at <= ProteinIDQvalue
+	std::vector<int> detectable_precursors; // precursors which are being searched in the particular run - bit flags in int
 	double weights[pN], guide_weights[pN];
 	double tandem_min, tandem_max;
 
@@ -2707,6 +2710,7 @@ public:
 		write_vector(out, MassCalCenterMs1);
 
 		write_vector(out, proteins);
+		write_vector(out, detectable_precursors);
 
         int size = entries.size();
         out.write((char*)&size, sizeof(int));
@@ -2715,6 +2719,7 @@ public:
 		size = decoys.size();
 		out.write((char*)&size, sizeof(int));
 		for (int i = 0; i < size; i++) decoys[i].write(out);
+
     }
 
 	template <class F> void read_meta(F &in, int _lib_size = 0) {
@@ -2757,6 +2762,7 @@ public:
 	template <class F> void read(F &in, int _lib_size = 0) {
 		read_meta(in, _lib_size);
 		read_vector(in, proteins);
+		read_vector(in, detectable_precursors);
 		int size; in.read((char*)&size, sizeof(int));
 		entries.resize(size);
 		for (int i = 0; i < size; i++) entries[i].read(in);
@@ -3650,10 +3656,12 @@ public:
 		Library * lib;
 		int n_s; // number of samples (runs)
 		int n_entries; // total number of entries
-		int n_decoys; // total number of decoy entries
+		int n_decoys; // total number of decoy entries 
+		int n_det_pr_block; // block size for the detectable_precursors array
 		std::map<int, std::vector<std::pair<int, QuantEntry> > > map;
 		std::map<int, std::vector<std::pair<int, DecoyEntry> > > decoy_map;
 		std::vector<std::vector<int> > proteins;
+		std::vector<int> detectable_precursors;
 		std::vector<RunStats> RS;
 		std::vector<std::vector<QuantEntry*> > runs;
 
@@ -3686,9 +3694,12 @@ public:
 			clear();
 
 			lib = parent;
+			int lib_n = lib->entries.size();
+			n_det_pr_block = (lib_n / sizeof(int)) + 64;
 			n_entries = n_decoys = 0;
 			proteins.clear();
 			proteins.resize(n_s);
+			detectable_precursors.resize(n_s * n_det_pr_block, 0);
 			RS.resize(n_s);
 			for (int i = 0; i < n_s; i++) {
 				Quant Qt;
@@ -3701,6 +3712,8 @@ public:
 				} else Q = &((*_quants)[i]);
 				memcpy(&(RS[i]), &(Q->RS), sizeof(RunStats));
 				proteins[i] = Q->proteins;
+				if (Q->lib_size != lib_n) dsout << "ERROR: different library used to generate the .quant file\n";
+				memcpy(&detectable_precursors[i * n_det_pr_block], &Q->detectable_precursors[0], n_det_pr_block * sizeof(int));
 				for (auto it = Q->entries.begin(); it != Q->entries.end(); it++) {
 					n_entries++;
 					int index = it->pr.index;
@@ -3720,10 +3733,10 @@ public:
 					int index = it->index;
 					auto pos = decoy_map.find(index);
 					if (pos != decoy_map.end())
-						pos->second.push_back(std::pair<int, DecoyEntry>(i, DecoyEntry(index, it->qvalue, it->cscore)));
+						pos->second.push_back(std::pair<int, DecoyEntry>(i, DecoyEntry(index, it->qvalue, it->lib_qvalue, it->dratio, it->cscore)));
 					else {
 						std::vector<std::pair<int, DecoyEntry> > v;
-						v.push_back(std::pair<int, DecoyEntry>(i, DecoyEntry(index, it->qvalue, it->cscore)));
+						v.push_back(std::pair<int, DecoyEntry>(i, DecoyEntry(index, it->qvalue, it->lib_qvalue, it->dratio, it->cscore)));
 						decoy_map.insert(std::pair<int, std::vector<std::pair<int, DecoyEntry> > >(index, v));
 					}
 				}
@@ -3736,12 +3749,17 @@ public:
 			clear();
 
 			lib = parent;
+			int lib_n = lib->entries.size();
+			n_det_pr_block = (lib_n / sizeof(int)) + 64;
 			n_entries = 0;
 			proteins.clear();
 			proteins.resize(n_s = 1);
+			detectable_precursors.resize(n_det_pr_block, 0);
 
 			Quant &Q = quant;
 			proteins[0] = Q.proteins;
+			if (Q.lib_size != lib_n) dsout << "ERROR: different library used to generate the .quant file\n";
+			memcpy(&detectable_precursors[0], &Q.detectable_precursors[0], n_det_pr_block * sizeof(int));
 			for (auto it = Q.entries.begin(); it != Q.entries.end(); it++) {
 				n_entries++;
 				int index = it->pr.index;
@@ -3760,10 +3778,10 @@ public:
 				int index = it->index;
 				auto pos = decoy_map.find(index);
 				if (pos != decoy_map.end())
-					pos->second.push_back(std::pair<int, DecoyEntry>(0, DecoyEntry(index, it->qvalue, it->cscore)));
+					pos->second.push_back(std::pair<int, DecoyEntry>(0, DecoyEntry(index, it->qvalue, it->lib_qvalue, it->dratio, it->cscore)));
 				else {
 					std::vector<std::pair<int, DecoyEntry> > v;
-					v.push_back(std::pair<int, DecoyEntry>(0, DecoyEntry(index, it->qvalue, it->cscore)));
+					v.push_back(std::pair<int, DecoyEntry>(0, DecoyEntry(index, it->qvalue, it->lib_qvalue, it->dratio, it->cscore)));
 					decoy_map.insert(std::pair<int, std::vector<std::pair<int, DecoyEntry> > >(index, v));
 				}
 			}
@@ -4873,7 +4891,14 @@ public:
 #ifdef PREDICTOR
 			generate_predictions();
 			predictor_file = remove_extension(out_lib_file) + std::string(".predicted.speclib");
+
+			// save the full list of precursors to the .predicted.speclib file
+			auto old_precursors = precursors;
+			precursors.resize(entries.size());
+			for (i = 0; i < entries.size(); i++) precursors[i] = entries[i].name;
+
 			PredictorSaved = save(predictor_file);
+			precursors = old_precursors;
 #endif
 		}
 		skipped = 0;
@@ -5131,11 +5156,33 @@ public:
 	}
 
 	void group_qvalues(int stage = 0) {
+
 		auto &prot = stage ? gene_groups : (InferPGs ? protein_groups : protein_ids);
 		int i, s, n_s = info.n_s, n_p = prot.size();
-		std::vector<float> ts(n_s * n_p, -INF), ds(n_s * n_p, -INF), qvalue(n_s * n_p, 1.0), targets(n_p), decoys(n_p);
-
+		if (!n_p && Verbose >= 1) {
+			Time(), dsout << "No protein annotation, skipping protein q-value calculation\n";
+			for (auto it = info.map.begin(); it != info.map.end(); it++) {
+				auto v = &(it->second);
+				for (auto jt = v->begin(); jt != v->end(); jt++) {
+					auto pr = &(jt->second.pr);
+					if (stage == 0) pr->pg_qvalue = 1.0;
+					else pr->gg_qvalue = 1.0;
+				}
+			}
+			if (stage < 1) group_qvalues(stage + 1);
+			return;
+		}
+		std::vector<float> ts(n_s * n_p, 0.0), ds(n_s * n_p, 0.0), tq(n_s * n_p, 0.0), dq(n_s * n_p, 0.0),
+			qvalue[2], targets(n_p), decoys(n_p);
+		std::vector<int> prs(n_s * n_p, 0);
 		if (Verbose >= 1 && stage == 0) Time(), dsout << "Calculating q-values for protein and gene groups\n";
+
+		for (i = 0; i < entries.size(); i++) {
+			int p = stage ? gg_index[i] : (InferPGs ? entries[i].pg_index : entries[i].pid_index);
+			int ind = i / sizeof(int);
+			int shift = i % sizeof(int);
+			for (s = 0; s < n_s; s++) if (info.detectable_precursors[s * info.n_det_pr_block + ind] & (1 << shift)) prs[s * n_p + p]++;
+		}
 
 		for (auto it = info.map.begin(); it != info.map.end(); it++) {
 			auto v = &(it->second);
@@ -5143,10 +5190,17 @@ public:
 			for (auto jt = v->begin(); jt != v->end(); jt++) {
 				int s = jt->first;
 				auto pr = &(jt->second.pr);
+
 				int p = stage ? gg_index[pr->index] : (InferPGs ? entries[pr->index].pg_index : entries[pr->index].pid_index);
 				if (!prot[p].ids.size()) continue;
-				float sc = pr->cscore;
-				if (sc > ts[s * n_p + p]) ts[s * n_p + p] = sc;
+
+				if (prs[s * n_p + p] < E) dsout << "ERROR: undetectable precursor id reported in the .quant file\n";
+				float err = pr->lib_qvalue + Max(pr->lib_qvalue, pr->dratio);
+				float sc = Max(0.0, 1.0 - err);
+				if (pr->qvalue <= ProteinQCalcQvalue) {
+					if (sc > tq[s * n_p + p]) tq[s * n_p + p] = sc;
+					ts[s * n_p + p] -= log(Max(E, Min(1.0, err * prs[s * n_p + p])));
+				}
 			}
 		}
 
@@ -5156,48 +5210,60 @@ public:
 			for (auto jt = v->begin(); jt != v->end(); jt++) {
 				int s = jt->first;
 				auto pr = &(jt->second);
+
 				int p = stage ? gg_index[pr->index] : (InferPGs ? entries[pr->index].pg_index : entries[pr->index].pid_index);
 				if (!prot[p].ids.size()) continue;
-				float sc = pr->cscore;
-				if (sc > ds[s * n_p + p]) ds[s * n_p + p] = sc;
+
+				if (prs[s * n_p + p] < E) dsout << "ERROR: undetectable precursor id reported in the .quant file\n";
+				float err = pr->lib_qvalue + Max(pr->lib_qvalue, pr->dratio);
+				float sc = Max(0.0, 1.0 - err);
+				if (pr->qvalue <= ProteinQCalcQvalue) {
+					if (sc > dq[s * n_p + p]) dq[s * n_p + p] = sc;
+					ds[s * n_p + p] -= log(Max(E, Min(1.0, err * prs[s * n_p + p])));
+				}
 			}
 		}
 
-
+		qvalue[0].resize(n_s * n_p, 1.0);
+		qvalue[1].resize(n_s * n_p, 1.0);
 		for (s = 0; s < n_s; s++) {
-			auto tsc = &ts[s * n_p];
-			auto dsc = &ds[s * n_p];
-			auto q = &qvalue[s * n_p];
-			memcpy(&targets[0], tsc, n_p * sizeof(float));
-			memcpy(&decoys[0], dsc, n_p * sizeof(float));
+			for (int at = 0; at <= 1; at++) {
+				auto tsc = (at == 0 ? &ts[s * n_p] : &tq[s * n_p]);
+				auto dsc = (at == 0 ? &ds[s * n_p] : &dq[s * n_p]);
+				auto q = &qvalue[at][s * n_p];
+				memcpy(&targets[0], tsc, n_p * sizeof(float));
+				memcpy(&decoys[0], dsc, n_p * sizeof(float));
 
-			std::sort(targets.begin(), targets.end());
-			std::sort(decoys.begin(), decoys.end());
+				std::sort(targets.begin(), targets.end());
+				std::sort(decoys.begin(), decoys.end());
 
-			std::map<float, float> cs_qv;
-			for (i = 0; i < n_p; i++) {
-				if (tsc[i] < -INF * 0.5) continue;
-				float sc = tsc[i];
-				auto pD = std::lower_bound(decoys.begin(), decoys.end(), sc);
-				if (pD > decoys.begin()) sc = *(--pD);
-				auto pT = std::lower_bound(targets.begin(), targets.end(), sc);
+				std::map<float, float> cs_qv;
+				for (i = 0; i < n_p; i++) {
+					if (tsc[i] < E) continue;
+					float sc = tsc[i];
+					auto pD = std::lower_bound(decoys.begin(), decoys.end(), sc);
+					if (pD > decoys.begin()) if (*(pD - 1) > E) sc = *(--pD);
+					auto pT = std::lower_bound(targets.begin(), targets.end(), sc);
 
-				q[i] = Min(1.0, ((double)std::distance(pD, decoys.end())) / Max(1.0, (double)std::distance(pT, targets.end())));
+					q[i] = Min(1.0, ((double)std::distance(pD, decoys.end())) / Max(1.0, (double)std::distance(pT, targets.end())));
 
-				auto pair = std::pair<float, float>(tsc[i], q[i]);
-				auto pos = cs_qv.insert(pair);
-				if (pos.second) {
-					if (pos.first != cs_qv.begin() && std::prev(pos.first)->second < pair.second) pos.first->second = std::prev(pos.first)->second;
-					else for (auto jt = std::next(pos.first); jt != cs_qv.end() && jt->second > pair.second; jt++) jt->second = pair.second;
+					auto pair = std::pair<float, float>(tsc[i], q[i]);
+					auto pos = cs_qv.insert(pair);
+					if (pos.second) {
+						if (pos.first != cs_qv.begin() && std::prev(pos.first)->second < pair.second) pos.first->second = std::prev(pos.first)->second;
+						else for (auto jt = std::next(pos.first); jt != cs_qv.end() && jt->second > pair.second; jt++) jt->second = pair.second;
+					}
+				}
+
+				for (i = 0; i < n_p; i++) {
+					if (q[i] < 1.0) {
+						auto pos = cs_qv.lower_bound(tsc[i]);
+						q[i] = pos->second;
+					}
 				}
 			}
-
-			for (i = 0; i < n_p; i++) {
-				if (q[i] < 1.0) {
-					auto pos = cs_qv.lower_bound(tsc[i]);
-					q[i] = pos->second;
-				}
-			}
+			auto q0 = &qvalue[0][s * n_p], q1 = &qvalue[1][s * n_p];
+			for (i = 0; i < n_p; i++) if (q1[i] < q0[i]) q0[i] = q1[i];
 		}
 
 		for (auto it = info.map.begin(); it != info.map.end(); it++) {
@@ -5207,7 +5273,7 @@ public:
 				int s = jt->first;
 				auto pr = &(jt->second.pr);
 				int p = stage ? gg_index[pr->index] : (InferPGs ? entries[pr->index].pg_index : entries[pr->index].pid_index);
-				float qv = qvalue[s * n_p + p];
+				float qv = qvalue[0][s * n_p + p];
 				if (stage == 0) pr->pg_qvalue = qv;
 				else pr->gg_qvalue = qv;
 			}
@@ -5722,7 +5788,7 @@ public:
 
 		for (auto &e : entries) {
 			if (e.index < 0) continue;
-			auto pos = cs_qv.lower_bound(-e.pr.qvalue);
+			auto pos = cs_qv.lower_bound(-(e.pr.qvalue + e.pr.lib_qvalue));
 			if (pos == cs_qv.end()) e.pr.profile_qvalue = 1.0;
 			else e.pr.profile_qvalue = pos->second;
 		}
@@ -5751,16 +5817,17 @@ public:
 				else if (it->pr.qvalue < entries[pos].pr.qvalue) entries[pos].pr = it->pr;
 
 				if (decoy_list) {
+					float sc = Max(it->pr.qvalue, it->pr.lib_qvalue) + it->pr.lib_qvalue;
 					if (pos >= tq.size()) tq.resize(pos + 1 + pos / 2, 1.0);
-					if (it->pr.qvalue <= ReportQValue && it->pr.qvalue < tq[pos]) tq[pos] = it->pr.qvalue;
+					if (sc <= ReportQValue && sc < tq[pos]) tq[pos] = sc;
 				}
 			}
 			if (decoy_list) {
 				for (auto it = Q->decoys.begin(); it != Q->decoys.end(); it++) {
 					auto pos = it->index;
-
+					float sc = Max(it->qvalue, it->lib_qvalue) + it->lib_qvalue;
 					if (pos >= dq.size()) dq.resize(pos + 1 + pos / 2, 1.0);
-					if (it->qvalue <= ReportQValue && it->qvalue < dq[pos]) dq[pos] = it->qvalue;
+					if (sc <= ReportQValue && sc < dq[pos]) dq[pos] = sc;
 				}
 			}
 			if (!QuantInMem) std::vector<QuantEntry>().swap(Q->entries), std::vector<DecoyEntry>().swap(Q->decoys);
@@ -5789,8 +5856,9 @@ public:
 				else if (qr.pr.qvalue < entries[pos].pr.qvalue) entries[pos] = qr;
 
 				if (decoy_list) {
+					float sc = Max(qr.pr.qvalue, qr.pr.lib_qvalue) + qr.pr.lib_qvalue;
 					if (pos >= tq.size()) tq.resize(pos + 1 + pos / 2, 1.0);
-					if (qr.pr.qvalue <= ReportQValue && qr.pr.qvalue < tq[pos]) tq[pos] = qr.pr.qvalue;
+					if (sc <= ReportQValue && sc < tq[pos]) tq[pos] = sc;
 				}
 			}
 		}
@@ -5803,9 +5871,9 @@ public:
 					int s = jt->first;
 					auto pr = &(jt->second);
 					int pos = pr->index;
-					
+					float sc = Max(pr->qvalue, pr->lib_qvalue) + pr->lib_qvalue;
 					if (pos >= dq.size()) dq.resize(pos + 1 + pos / 2, 1.0);
-					if (pr->qvalue <= ReportQValue && pr->qvalue < dq[pos]) dq[pos] = pr->qvalue;
+					if (sc <= ReportQValue && sc < dq[pos]) dq[pos] = sc;
 				}
 			}
 		}
@@ -6400,7 +6468,7 @@ public:
 		float best_corr_sum = 0.0, total_corr_sum = 0.0;
 
 		std::vector<Fragment> quant;
-		float RT, RT_start, RT_stop, one_over_K0, evidence, ms1_corr, ms1_area, cscore, quantity, qvalue = 1.0, protein_qvalue = 0.0, best_fr_mz, q1_shift = 0.0;
+		float RT, RT_start, RT_stop, one_over_K0, evidence, ms1_corr, ms1_area, cscore, quantity, qvalue = 1.0, dratio = 1.0, protein_qvalue = 0.0, best_fr_mz, q1_shift = 0.0;
 		int apex, peak_width, best_peak, nn_index, nn_inc;
 		int peak_pos, best_fragment;
 		float mass_delta = 0.0, mass_delta_mz = 0.0, mass_delta_ms1 = 0.0;
@@ -8782,7 +8850,7 @@ public:
 			std::sort(guide_decoy_scores.begin(), guide_decoy_scores.end());
 		}
 
-		std::map<float, float> cs_qv, guide_cs_qv;
+		std::map<float, float> cs_qv, guide_cs_qv, cs_dr, guide_cs_dr;
 
         for (auto it = entries.begin(); it != entries.end(); it++) {
 			if (it->batch > curr_batch) continue;
@@ -8796,12 +8864,13 @@ public:
 				n_better = std::distance(pT, vt.end());
 
 				auto pD = std::lower_bound(vd.begin(), vd.end(), sc);
-				if (pD > vd.begin()) sc = *(--pD);
+				if (pD > vd.begin()) if (*(pD - 1) > vd[0]) sc = *(--pD);
 				pT = std::lower_bound(vt.begin(), vt.end(), sc);
 
 				n_targets = std::distance(pT, vt.end());
 				n_decoys = std::distance(pD, vd.end());
 				it->target.info[0].qvalue = Min(1.0, ((double)Max(1, n_decoys)) / (double)Max(1, n_targets));
+				it->target.info[0].dratio = Min(1.0, ((double)Max(1, n_decoys)) / (double)Max(1, entries.size()));
 
 				if (n_better <= iRTTopPrecursors && (!GuideLibrary || !(lib->entries[it->target.pep->index].entry_flags & fFromFasta)))
 					if (it->target.info[0].cscore < iRT_cscore) iRT_cscore = it->target.info[0].cscore;
@@ -8814,12 +8883,14 @@ public:
 						if (pos.first != cs_qv.begin() && std::prev(pos.first)->second < pair.second) pos.first->second = std::prev(pos.first)->second;
 						else for (auto jt = std::next(pos.first); jt != cs_qv.end() && jt->second > pair.second; jt++) jt->second = pair.second;
 					}
+					cs_dr.insert(std::pair<float, float>(it->target.info[0].cscore, it->target.info[0].dratio));
 				} else {
 					auto pos = guide_cs_qv.insert(pair);
 					if (pos.second) {
 						if (pos.first != guide_cs_qv.begin() && std::prev(pos.first)->second < pair.second) pos.first->second = std::prev(pos.first)->second;
 						else for (auto jt = std::next(pos.first); jt != guide_cs_qv.end() && jt->second > pair.second; jt++) jt->second = pair.second;
 					}
+					guide_cs_dr.insert(std::pair<float, float>(it->target.info[0].cscore, it->target.info[0].dratio));
 				}
             }
         }
@@ -8827,10 +8898,12 @@ public:
 		for (auto it = entries.begin(); it != entries.end(); it++) {
 			if (it->batch > curr_batch) continue;
 			if (curr_iter >= iN - 1) if (it->decoy.flags & fFound) {
-				auto pos = (!GuideLibrary || (lib->entries[it->target.pep->index].entry_flags & fFromFasta)) ?
-					cs_qv.lower_bound(it->decoy.info[0].cscore) : guide_cs_qv.lower_bound(it->decoy.info[0].cscore);
+				bool no_guide = (!GuideLibrary || (lib->entries[it->target.pep->index].entry_flags & fFromFasta));
+				auto pos = no_guide ? cs_qv.lower_bound(it->decoy.info[0].cscore) : guide_cs_qv.lower_bound(it->decoy.info[0].cscore);
 				it->decoy.info[0].qvalue = pos->second;
 				if (it->decoy.info[0].qvalue > 1.0) it->decoy.info[0].qvalue = 1.0;
+				auto dr_pos = no_guide ? cs_dr.lower_bound(it->decoy.info[0].cscore) : guide_cs_dr.lower_bound(it->decoy.info[0].cscore);
+				it->decoy.info[0].dratio = dr_pos->second;
 			}
 			if (!(it->target.flags & fFound)) continue;
 			auto pos = (!GuideLibrary || (lib->entries[it->target.pep->index].entry_flags & fFromFasta)) ?
@@ -9249,9 +9322,9 @@ public:
 
 	std::vector<int> calculate_protein_qvalues() {
 		int i, pi, np = (PGLevel == 2 ? lib->genes.size() : (PGLevel == 1 ? lib->names.size() : lib->proteins.size()));
-		std::vector<float> tsc(np, -INF), dsc(np, -INF), q(np);
+		std::vector<float> tsc(np, 0.0), dsc(np, 0.0), tbq(np, 0.0), dbq(np, 0.0), q[2];
 		std::vector<bool> identified(np);
-		std::vector<int> ids;
+		std::vector<int> ids, prs(np, 0);
 		if (!np) {
 			if (Verbose >= 1) Time(), dsout << "No protein annotation, skipping protein q-value calculation\n";
 			return ids;
@@ -9259,79 +9332,150 @@ public:
 
 		if (Verbose >= 1) Time(), dsout << "Calculating protein q-values\n";
 
+		std::vector<int> prot_ids; 
+		// calculate the number of unique precursors per protein
+		int non_proteotypic = 0;
+		for (i = 0; i < entries.size(); i++) {
+			auto &e = entries[i];
+			auto &le = lib->entries[e.target.pep->index];
+			if (!le.proteotypic) continue;
+			prot_ids.clear();
+			auto &pid = lib->protein_ids[le.pid_index];
+			if (PGLevel == 0) for (auto &p : pid.proteins) if (lib->proteins[p].id.size()) 
+				if (std::find(prot_ids.begin(), prot_ids.end(), p) == prot_ids.end()) prs[p]++, prot_ids.push_back(p);
+			if (PGLevel) for (auto &p : pid.proteins) {
+				if (PGLevel == 1) {
+					pi = lib->proteins[p].name_index;
+					if (!lib->names[pi].size()) continue;
+				} else {
+					pi = lib->proteins[p].gene_index;
+					if (!lib->genes[pi].size()) continue;
+				}
+				if (std::find(prot_ids.begin(), prot_ids.end(), pi) == prot_ids.end()) prs[pi]++, prot_ids.push_back(pi);
+			}
+			if (prot_ids.size() > 1) non_proteotypic++;
+		}
+
+		if (non_proteotypic) dsout << "WARNING: " << non_proteotypic << " precursors were wrongly annotated in the library as proteotypic\n";
+
 		for (auto &e : entries) {
 			auto &le = lib->entries[e.target.pep->index];
 			if (!le.proteotypic) continue;
 			auto &pid = lib->protein_ids[le.pid_index];
 			if (e.target.flags & fFound) {
-				float sc = e.target.info[0].cscore;
-				if (PGLevel == 0) for (auto &p : pid.proteins) if (lib->proteins[p].id.size()) {
-					if (sc > tsc[p]) tsc[p] = sc;
-					if (e.target.info[0].qvalue <= 0.01) identified[p] = true;
-				}
-				if (PGLevel) for (auto &p : pid.proteins) {
-					if (PGLevel == 1) {
-						pi = lib->proteins[p].name_index;
-						if (!lib->names[pi].size()) continue;
-					} else {
-						pi = lib->proteins[p].gene_index;
-						if (!lib->genes[pi].size()) continue;
+				prot_ids.clear();
+				float err = Max(e.target.info[0].dratio, le.target.lib_qvalue) + le.target.lib_qvalue;
+				float sc = Max(0.0, 1.0 - err);
+				if (e.target.info[0].qvalue <= ProteinQCalcQvalue) {
+					if (PGLevel == 0) for (auto &p : pid.proteins) if (lib->proteins[p].id.size()) {
+						if (std::find(prot_ids.begin(), prot_ids.end(), p) == prot_ids.end()) {
+							prot_ids.push_back(p);
+							if (sc > tbq[p]) tbq[p] = sc;
+							tsc[p] -= log(Max(E, Min(1.0, err * (double)prs[p])));
+							if (e.target.info[0].qvalue <= 0.01) identified[p] = true;
+						}
 					}
-					if (sc > tsc[pi]) tsc[pi] = sc;
-					if (e.target.info[0].qvalue <= 0.01) identified[pi] = true;
+					if (PGLevel) for (auto &p : pid.proteins) {
+						if (PGLevel == 1) {
+							pi = lib->proteins[p].name_index;
+							if (!lib->names[pi].size()) continue;
+						} else {
+							pi = lib->proteins[p].gene_index;
+							if (!lib->genes[pi].size()) continue;
+						}
+						if (std::find(prot_ids.begin(), prot_ids.end(), pi) == prot_ids.end()) {
+							prot_ids.push_back(pi);
+							if (sc > tbq[pi]) tbq[pi] = sc;
+							tsc[pi] -= log(Max(E, Min(1.0, err * (double)prs[pi])));
+							if (e.target.info[0].qvalue <= 0.01) identified[pi] = true;
+						}
+					}
 				}
 			}
 			if (e.decoy.flags & fFound) {
-				float sc = e.decoy.info[0].cscore;
-				if (PGLevel == 0) for (auto &p : pid.proteins) if (lib->proteins[p].id.size()) if (sc > dsc[p]) dsc[p] = sc;
-				if (PGLevel) for (auto &p : pid.proteins) {
-					if (PGLevel == 1) {
-						pi = lib->proteins[p].name_index;
-						if (!lib->names[pi].size()) continue;
-					} else if (PGLevel == 2) {
-						pi = lib->proteins[p].gene_index;
-						if (!lib->genes[pi].size()) continue;
+				prot_ids.clear();
+				float err = Max(e.decoy.info[0].dratio, le.target.lib_qvalue) + le.target.lib_qvalue;
+				float sc = Max(0.0, 1.0 - err);
+				if (e.decoy.info[0].qvalue <= ProteinQCalcQvalue) {
+					if (PGLevel == 0) for (auto &p : pid.proteins) if (lib->proteins[p].id.size()) {
+						if (std::find(prot_ids.begin(), prot_ids.end(), p) == prot_ids.end()) {
+							prot_ids.push_back(p);
+							if (sc > dbq[p]) dbq[p] = sc;
+							dsc[p] -= log(Max(E, Min(1.0, err * (double)prs[p])));
+						}
 					}
-					if (sc > dsc[pi]) dsc[pi] = sc;
+					if (PGLevel) for (auto &p : pid.proteins) {
+						if (PGLevel == 1) {
+							pi = lib->proteins[p].name_index;
+							if (!lib->names[pi].size()) continue;
+						} else if (PGLevel == 2) {
+							pi = lib->proteins[p].gene_index;
+							if (!lib->genes[pi].size()) continue;
+						}
+						if (std::find(prot_ids.begin(), prot_ids.end(), pi) == prot_ids.end()) {
+							prot_ids.push_back(pi);
+							if (sc > dbq[pi]) dbq[pi] = sc;
+							dsc[pi] -= log(Max(E, Min(1.0, err * (double)prs[pi])));
+						}
+					}
 				}
 			}
 		}
 
 		auto targets = tsc;
 		auto decoys = dsc;
-		std::sort(targets.begin(), targets.end());
-		std::sort(decoys.begin(), decoys.end());
+		auto tq = tbq;
+		auto dq = dbq;
+		std::sort(targets.begin(), targets.end()); std::sort(tq.begin(), tq.end());
+		std::sort(decoys.begin(), decoys.end()); std::sort(dq.begin(), dq.end());
 
-		std::map<float, float> cs_qv;
-		for (i = 0; i < np; i++) {
-			if (tsc[i] < -INF + 1.0) {
-				q[i] = 1.0;
-				continue;
+		for (int at = 0; at <= 1; at++) {
+			q[at].resize(np, 1.0);
+			std::map<float, float> cs_qv;
+			for (i = 0; i < np; i++) {
+				if (tsc[i] < E || tbq[i] < E) {
+					q[at][i] = 1.0;
+					continue;
+				}
+
+				float score = (at == 0 ? tsc[i] : tbq[i]);
+				if (at == 0) {
+					float sc = score;
+					auto pD = std::lower_bound(decoys.begin(), decoys.end(), sc);
+					if (pD > decoys.begin()) if (*(pD - 1) > E) sc = *(--pD);
+					auto pT = std::lower_bound(targets.begin(), targets.end(), sc);
+					q[at][i] = Min(1.0, ((double)std::distance(pD, decoys.end())) / Max(1.0, (double)std::distance(pT, targets.end())));
+				} else {
+					float scq = score;
+					auto pDq = std::lower_bound(dq.begin(), dq.end(), scq);
+					if (pDq > dq.begin()) if (*(pDq - 1) > E) scq = *(--pDq);
+					auto pTq = std::lower_bound(tq.begin(), tq.end(), scq);
+					q[at][i] = Min(1.0, ((double)std::distance(pDq, dq.end())) / Max(1.0, (double)std::distance(pTq, tq.end())));
+				}
+
+				auto pair = std::pair<float, float>(score, q[at][i]);
+				auto pos = cs_qv.insert(pair);
+				if (pos.second) {
+					if (pos.first != cs_qv.begin() && std::prev(pos.first)->second < pair.second) pos.first->second = std::prev(pos.first)->second;
+					else for (auto jt = std::next(pos.first); jt != cs_qv.end() && jt->second > pair.second; jt++) jt->second = pair.second;
+				}
 			}
-			float sc = tsc[i];
-			auto pD = std::lower_bound(decoys.begin(), decoys.end(), sc);
-			if (pD > decoys.begin()) sc = *(--pD);
-			auto pT = std::lower_bound(targets.begin(), targets.end(), sc);
 
-			q[i] = Min(1.0, ((double)std::distance(pD, decoys.end())) / Max(1.0, (double)std::distance(pT, targets.end())));
-
-			auto pair = std::pair<float, float>(tsc[i], q[i]);
-			auto pos = cs_qv.insert(pair);
-			if (pos.second) {
-				if (pos.first != cs_qv.begin() && std::prev(pos.first)->second < pair.second) pos.first->second = std::prev(pos.first)->second;
-				else for (auto jt = std::next(pos.first); jt != cs_qv.end() && jt->second > pair.second; jt++) jt->second = pair.second;
+			for (i = 0; i < np; i++) {
+				if (q[at][i] < 1.0) {
+					auto pos = cs_qv.lower_bound(at == 0 ? tsc[i] : tbq[i]);
+					q[at][i] = pos->second;
+				}
 			}
 		}
 
 		int ids01 = 0, ids01p = 0;
 		for (i = 0; i < np; i++) {
-			if (q[i] < 1.0) {
-				auto pos = cs_qv.lower_bound(tsc[i]);
-				q[i] = pos->second;
-				if (q[i] <= 0.01) ids01p++;
-			}
+			if (q[1][i] < q[0][i]) q[0][i] = q[1][i];
+			if (q[0][i] <= 0.01) ids01p++;
 			if (identified[i]) ids01++;
 		}
+
 		if (Verbose >= 1) Time(), dsout << "Number of " << (PGLevel == 0 ? "protein isoforms" : (PGLevel == 1 ? "proteins" : "genes")) << " identified at 1% FDR: "
 			<< ids01 << " (precursor-level), " << ids01p << " (protein-level) (inference performed using proteotypic peptides only)\n";
 		RS.proteins = ids01p;
@@ -9341,19 +9485,19 @@ public:
 			auto &pid = lib->protein_ids[le.pid_index];
 			if (e.target.flags & fFound) {
 				e.target.info[0].protein_qvalue = 1.0;
-				if (PGLevel == 0) for (auto &p : pid.proteins) if (q[p] < e.target.info[0].protein_qvalue) e.target.info[0].protein_qvalue = q[p];
+				if (PGLevel == 0) for (auto &p : pid.proteins) if (q[0][p] < e.target.info[0].protein_qvalue) e.target.info[0].protein_qvalue = q[0][p];
 				if (PGLevel) for (auto &p : pid.proteins) {
 					pi = (PGLevel == 1 ? lib->proteins[p].name_index : lib->proteins[p].gene_index);
-					if (q[pi] < e.target.info[0].protein_qvalue) e.target.info[0].protein_qvalue = q[pi];
+					if (q[0][pi] < e.target.info[0].protein_qvalue) e.target.info[0].protein_qvalue = q[0][pi];
 				}
 			}
 		}
 
 		for (i = 0; i < lib->proteins.size(); i++) {
 			auto &p = lib->proteins[i];
-			if (PGLevel == 0 && q[i] <= ProteinIDQvalue) ids.push_back(i);
-			else if (PGLevel == 1 && q[p.name_index] <= ProteinIDQvalue) ids.push_back(i);
-			else if (PGLevel == 2 && q[p.gene_index] <= ProteinIDQvalue) ids.push_back(i);
+			if (PGLevel == 0 && q[0][i] <= ProteinIDQvalue) ids.push_back(i);
+			else if (PGLevel == 1 && q[0][p.name_index] <= ProteinIDQvalue) ids.push_back(i);
+			else if (PGLevel == 2 && q[0][p.gene_index] <= ProteinIDQvalue) ids.push_back(i);
 		}
 		std::sort(ids.begin(), ids.end());
 		return ids; // identified protein isoforms at <= ProteinIDQvalue
@@ -9622,6 +9766,12 @@ public:
 			}
 		}
 
+		quant.detectable_precursors.resize((lib->entries.size() / sizeof(int)) + 64, 0); 
+		for (auto &e : entries) {
+			i = e.target.pep->index;
+			quant.detectable_precursors[i / sizeof(int)] |= 1 << (i % sizeof(int));
+		}
+
 		QuantEntry qe;
 		DecoyEntry de;
 		for (i = 0; i < pN; i++) quant.weights[i] = weights[i], quant.guide_weights[i] = guide_weights[i];
@@ -9641,9 +9791,12 @@ public:
 			result->clear(); result->reserve(tot_entries);
 		}
 		for (auto it = entries.begin(); it != entries.end(); it++) {
+			float lib_q = lib->entries[it->target.pep->index].target.lib_qvalue;
 			if (result == NULL) if (it->decoy.flags & fFound) if (it->decoy.info[0].qvalue <= QFilter) {
 				de.index = it->target.pep->index;
 				de.qvalue = it->decoy.info[0].qvalue;
+				de.lib_qvalue = lib_q;
+				de.dratio = it->decoy.info[0].dratio;
 				de.cscore = it->decoy.info[0].cscore;
 				quant.decoys.push_back(de);
 			}
@@ -9665,6 +9818,8 @@ public:
 			qe.pr.predicted_RT = calc_spline(RT_coeff, RT_points, qe.pr.iRT);
 			qe.pr.quantity = it->target.info[0].quantity;
 			qe.pr.qvalue = it->target.info[0].qvalue;
+			qe.pr.lib_qvalue = lib_q;
+			qe.pr.dratio = it->target.info[0].dratio;
 			qe.pr.protein_qvalue = it->target.info[0].protein_qvalue;
 			qe.pr.RT = scan_RT[it->target.info[0].apex];
 			qe.pr.RT_start = it->target.info[0].RT_start;
@@ -9893,7 +10048,7 @@ int main(int argc, char *argv[]) {
 #endif
 	std::cout.setf(std::ios::unitbuf);
 	auto curr_time = time(0);
-	dsout << "DIA-NN 1.7.11 (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\nCurrent date and time: " << std::ctime(&curr_time);
+	dsout << "DIA-NN 1.7.12 (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\nCurrent date and time: " << std::ctime(&curr_time);
 #ifdef _MSC_VER
 	cpu_info(dsout);
 #endif
@@ -9901,7 +10056,7 @@ int main(int argc, char *argv[]) {
 #if (HASH > 0)
 	init_hash();
 #endif
-	init_aas();
+	init_all();
 	arguments(argc, argv);
 	Eigen::setNbThreads(Threads);
 
@@ -10079,7 +10234,7 @@ quant_only:
 		Profile profile(ms_files, lib.entries.size());
 		if (RTProfiling) for (auto jt = profile.entries.begin(); jt != profile.entries.end(); jt++)
 			if (jt->index >= 0) if (jt->pr.qvalue < MaxProfilingQvalue) {
-				lib.entries[jt->pr.index].target.iRT = lib.entries[jt->pr.index].decoy.iRT = (!FastaSearch || GuideLibrary || RTLearnLib) ? jt->pr.predicted_iRT : jt->pr.RT;
+				lib.entries[jt->pr.index].target.iRT = lib.entries[jt->pr.index].decoy.iRT = ((!FastaSearch || GuideLibrary || RTLearnLib || Predictor) && iRTOutputLibrary) ? jt->pr.predicted_iRT : jt->pr.RT;
 				lib.entries[jt->pr.index].best_run = jt->pr.run_index;
 				lib.entries[jt->pr.index].qvalue = jt->pr.qvalue;
 				lib.entries[jt->pr.index].pg_qvalue = jt->pr.pg_qvalue;
@@ -10163,7 +10318,7 @@ gen_spec_lib:
 					if (lib.entries[jt->pr.index].qvalue > ReportQValue) lib.entries[jt->pr.index].best_run = -1;
 					else {
 						lib.entries[jt->pr.index].best_run = jt->pr.run_index;
-						lib.entries[jt->pr.index].target.iRT = (GuideLibrary || (GenSpecLib && !FastaSearch) || RTLearnLib) ? jt->pr.predicted_iRT : jt->pr.RT;
+						lib.entries[jt->pr.index].target.iRT = ((GuideLibrary || (GenSpecLib && !FastaSearch) || RTLearnLib || Predictor) && iRTOutputLibrary) ? jt->pr.predicted_iRT : jt->pr.RT;
 						lib.entries[jt->pr.index].peak = jt->pr.peak;
 						lib.entries[jt->pr.index].apex = jt->pr.apex;
 						lib.entries[jt->pr.index].pg_qvalue = jt->pr.pg_qvalue;
