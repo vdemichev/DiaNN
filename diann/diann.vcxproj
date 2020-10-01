@@ -209,7 +209,7 @@
       <FunctionLevelLinking>false</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;PREDICTOR;TDFREADER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <OmitFramePointers>true</OmitFramePointers>
@@ -487,21 +487,6 @@
     </ClCompile>
     <ClCompile Include="..\sqlite\sqlite3.c" />
     <ClCompile Include="..\src\diann.cpp">
-      <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Disabled</Optimization>
-      <FavorSizeOrSpeed Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Speed</FavorSizeOrSpeed>
-      <EnableEnhancedInstructionSet Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
-      <FloatingPointModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Strict</FloatingPointModel>
-      <FloatingPointExceptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</FloatingPointExceptions>
-      <BasicRuntimeChecks Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Default</BasicRuntimeChecks>
-      <BufferSecurityCheck Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</BufferSecurityCheck>
-      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">TurnOffAllWarnings</WarningLevel>
-      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">TurnOffAllWarnings</WarningLevel>
-      <SDLCheck Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</SDLCheck>
-      <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MultiThreaded</RuntimeLibrary>
-      <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">MultiThreaded</RuntimeLibrary>
-      <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</CompileAsManaged>
-      <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">false</CompileAsManaged>
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">PREDICTOR;TDFREADER;WIN32;_NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <DebugInformationFormat Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">ProgramDatabase</DebugInformationFormat>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Deploy|x64'">true</WholeProgramOptimization>

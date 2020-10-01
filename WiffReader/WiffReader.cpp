@@ -169,7 +169,7 @@ public:
 		try {
 			int pos = 0, e = 0, ns = 0, s = 0, m;
 			auto provider = gcnew AnalystWiffDataProvider();
-			while (!(*locks)[0].set()) {}
+			while (!(*locks)[0].set()) { Sleep(1); }
 			auto batch = AnalystDataProviderFactory::CreateBatch(gcnew System::String(file), provider);
 			auto sample = batch->GetSample(0);
 			auto mss = sample->MassSpectrometerSample;
@@ -227,12 +227,17 @@ public:
 				}
 			} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout); }
 			provider->Close();
-		} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout);  return; }
+		} catch (System::Exception^ e) { 
+			(*locks)[0].free();
+			std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; 
+			std::flush(std::cout);  
+			return; 
+		}
 	}
 };
-
+#include <msclr/marshal_cppstd.h>
 __declspec(dllexport) HANDLE diann_wiff_load(char * file, bool vendor, int Threads) {
-	int i, e, ns = 0, verbose = false;
+	int i, e, ns = 0, verbose = false, sswath = 0;
 	long long mem, tot_peaks;
 	if (verbose) {
 		std::cout.setf(std::ios::unitbuf);
@@ -253,6 +258,10 @@ __declspec(dllexport) HANDLE diann_wiff_load(char * file, bool vendor, int Threa
 			if (verbose) std::cout << "Experiment " << e << ": " << exp->Details->NumberOfScans << " scans\n";
 		}
 		if (verbose) std::cout << ns << " total scans\n";
+		
+		auto details = sample->Details;
+		auto sswath_id = details->GetCustomFieldValue("Is Scanning SWATH");
+		if (sswath_id != nullptr) sswath = 1;
 	} catch (System::Exception^ e) { std::cout << "ERROR: cannot read the .wiff file. Perhaps the respective .wiff.scan file is absent or corrupted?\n"; std::flush(std::cout); provider->Close(); return false; }
 
 	provider->Close();
@@ -269,9 +278,10 @@ __declspec(dllexport) HANDLE diann_wiff_load(char * file, bool vendor, int Threa
 
 	for (i = mem = tot_peaks = 0; i < ns; i++) mem += spectra[i].mem_size(), tot_peaks += spectra[i].peaks.size();
 	if (verbose) std::cout << "Total memory required: " << mem << " bytes\n";
-	HANDLE data = GlobalAlloc(0, mem + 16);
+	HANDLE data = GlobalAlloc(0, mem + 32);
 	if (verbose) std::cout << "Memory allocated\n";
 	int * ptr = (int*)data;
+	*(ptr++) = sswath;
 	*(ptr++) = ns;
 	long long* lptr = (long long*)ptr; 
 	*(lptr++) = tot_peaks; ptr = (int*)lptr;

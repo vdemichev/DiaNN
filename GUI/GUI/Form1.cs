@@ -54,6 +54,7 @@ namespace GUI
         }
 
         public string curr_dir;
+        private readonly object Lock = new object();
 
         bool running = false, finished = false, in_pipeline = false, finished_pipeline = false;
         Process process = new Process();
@@ -65,6 +66,7 @@ namespace GUI
 
         private void SaveSettings(ref Settings S)
         {
+            
             S.diann_s = ExeText.Text;
             S.files_s = FilesList.Text;
             S.lib_s = LibText.Text;
@@ -206,64 +208,71 @@ namespace GUI
 
         private void OutputHandler(object sender, DataReceivedEventArgs outLine)
         {
-            string line = (outLine?.Data?.ToString());
-            if (line == "Finished") {
-                finished = true;
-                if (!running && (in_pipeline || finished_pipeline))
-                    Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.SystemColors.Control));
+            // lock (Lock)
+            {
+                string line = (outLine?.Data?.ToString());
+                if (line == "Finished")
+                {
+                    finished = true;
+                    if (!running && (in_pipeline || finished_pipeline))
+                        Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.SystemColors.Control));
+                }
+                Invoke(new Action(() => LogText.AppendText(line + Environment.NewLine)));
             }
-            Invoke(new Action(() => LogText.AppendText(line + Environment.NewLine)));
         }
 
         private void DiaNNStopped(bool plot = true)
         {
-            running = false;
-            Invoke(new Action(() => LogText.Text += "DIA-NN exited" + Environment.NewLine));
-            Invoke(new Action(() => StatusLabel.Text = "Finished"));
-            Invoke(new Action(() => StatusIndicator.BackColor = System.Drawing.SystemColors.Control));
-
-            if (pdf_file.Length > 0 && plot)
+            // lock (Lock)
             {
-                bool pdf_running = false;
-                var plotter = new Process();
-                plotter.StartInfo.FileName = "DIA-NN-plotter.exe";
-                plotter.StartInfo.CreateNoWindow = true;
-                plotter.StartInfo.UseShellExecute = false;
-                plotter.StartInfo.RedirectStandardOutput = false;
-                plotter.StartInfo.RedirectStandardInput = false;
-                plotter.EnableRaisingEvents = false;
+                running = false;
+                Invoke(new Action(() => LogText.Text += "DIA-NN exited" + Environment.NewLine));
+                Invoke(new Action(() => StatusLabel.Text = "Finished"));
+                Invoke(new Action(() => StatusIndicator.BackColor = System.Drawing.SystemColors.Control));
 
-                plotter.StartInfo.Arguments += " " + stats_file + " " + report_file + " " + pdf_file;
-                LogText.Text += "DIA-NN-plotter.exe" + plotter.StartInfo.Arguments + Environment.NewLine;
-                try
+                if (pdf_file.Length > 0 && plot)
                 {
-                    pdf_running = plotter.Start();
-                }
-                catch (Exception ex) { pdf_running = false; }
-                if (!pdf_running) LogText.Text += "Failed to start DIA-NN-plotter.exe" + Environment.NewLine;
-                else LogText.Text += "PDF report will be generated in the background" + Environment.NewLine + Environment.NewLine;
-            }
+                    bool pdf_running = false;
+                    var plotter = new Process();
+                    plotter.StartInfo.FileName = "DIA-NN-plotter.exe";
+                    plotter.StartInfo.CreateNoWindow = true;
+                    plotter.StartInfo.UseShellExecute = false;
+                    plotter.StartInfo.RedirectStandardOutput = false;
+                    plotter.StartInfo.RedirectStandardInput = false;
+                    plotter.EnableRaisingEvents = false;
 
-            if (in_pipeline)
-            {
-                bool failed = false;
-                if (!finished)
-                {
-                    if (!process.HasExited) failed = true;
-                    else if (process.ExitCode != 0) failed = true;
-                    if (failed) Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.Color.LightSalmon));
+                    plotter.StartInfo.Arguments += " " + stats_file + " " + report_file + " " + pdf_file;
+                    LogText.Text += "DIA-NN-plotter.exe" + plotter.StartInfo.Arguments + Environment.NewLine;
+                    try
+                    {
+                        pdf_running = plotter.Start();
+                    }
+                    catch (Exception ex) { pdf_running = false; }
+                    if (!pdf_running) LogText.Text += "Failed to start DIA-NN-plotter.exe" + Environment.NewLine;
+                    else LogText.Text += "PDF report will be generated in the background" + Environment.NewLine + Environment.NewLine;
                 }
-                if (!failed) Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.SystemColors.Control));
-                processed++;
-                if (processed < Pipeline.Count)
+
+                if (in_pipeline)
                 {
-                    process.Dispose();
-                    Invoke(new Action(() => RunProcess(false, Pipeline[processed])));
-                }
-                else
-                {
-                    in_pipeline = false;
-                    finished_pipeline = true;
+                    bool failed = false;
+                    if (!finished)
+                    {
+                        if (!process.HasExited) failed = true;
+                        else if (process.ExitCode != 0) failed = true;
+                        if (failed) Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.Color.LightSalmon));
+                    }
+                    if (!failed) Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.SystemColors.Control));
+                    processed++;
+                    if (processed < Pipeline.Count)
+                    {
+                        process.Dispose();
+                        Invoke(new Action(() => RunProcess(false, Pipeline[processed])));
+                    }
+                    else
+                    {
+                        in_pipeline = false;
+                        finished_pipeline = true;
+                    }
                 }
             }
         }
@@ -275,194 +284,202 @@ namespace GUI
 
         private void RunProcess(bool convert, Settings S)
         {
-            if (running) return;
-            finished = finished_pipeline = false;
-
-            if (in_pipeline) PipelineList.Items[processed].BackColor = System.Drawing.Color.GreenYellow;
-
-            bool external = false, save_cfg = false;
-            if (S.add_s.Length >= 1)
+            // lock (Lock)
             {
-                if (S.add_s[0] == '>') external = true; // run some external tool; only "Additional options" will be passed to the tool
-                if (S.add_s[0] == '!') save_cfg = true;
-            }
-            string opts;
-            if (external || save_cfg) opts = S.add_s.Substring(1);
-            else opts = S.add_s;
+                if (running) return;
+                finished = finished_pipeline = false;
 
-            pdf_file = "";
+                if (in_pipeline) PipelineList.Items[processed].BackColor = System.Drawing.Color.GreenYellow;
 
-            process = new Process();
-            process.StartInfo.FileName = S.diann_s;
-            process.StartInfo.CreateNoWindow = true;
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardInput = true;
-            process.EnableRaisingEvents = true;
+                bool external = false, save_cfg = false;
+                if (S.add_s.Length >= 1)
+                {
+                    if (S.add_s[0] == '>') external = true; // run some external tool; only "Additional options" will be passed to the tool
+                    if (S.add_s[0] == '!') save_cfg = true;
+                }
+                string opts;
+                if (external || save_cfg) opts = S.add_s.Substring(1);
+                else opts = S.add_s;
 
-            if (!external)
-            {
-                List<string> rawDataFiles = new List<string>(S.files_s.Split(new[] { '\n' }));
-                rawDataFiles = rawDataFiles.Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
-                foreach (var file in rawDataFiles)
-                    if (file.Length >= 2) process.StartInfo.Arguments += " --f \"" + file + "\"";
-            }
-            if (convert)
-            {
-                process.StartInfo.Arguments += " --convert";
-                process.StartInfo.Arguments += " --threads " + S.threads_i.ToString();
-                process.StartInfo.Arguments += " --verbose " + S.log_i.ToString();
-                if (S.temp_folder_s != "") process.StartInfo.Arguments += " --out-dir \"" + S.temp_folder_s + "\"";
-            }
-            else
-            {
+                pdf_file = "";
+
+                process = new Process();
+                process.StartInfo.FileName = S.diann_s;
+                process.StartInfo.CreateNoWindow = true;
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.RedirectStandardInput = true;
+                process.EnableRaisingEvents = true;
+
                 if (!external)
                 {
-                    process.StartInfo.Arguments += " --lib \"" + S.lib_s + "\"";
+                    List<string> rawDataFiles = new List<string>(S.files_s.Split(new[] { '\n' }));
+                    rawDataFiles = rawDataFiles.Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
+                    foreach (var file in rawDataFiles)
+                        if (file.Length >= 2) process.StartInfo.Arguments += " --f \"" + file + "\"";
+                }
+                if (convert)
+                {
+                    process.StartInfo.Arguments += " --convert";
                     process.StartInfo.Arguments += " --threads " + S.threads_i.ToString();
                     process.StartInfo.Arguments += " --verbose " + S.log_i.ToString();
-                    process.StartInfo.Arguments += " --out \"" + S.out_s + "\"";
-                    var report = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(S.out_s), System.IO.Path.GetFileNameWithoutExtension(S.out_s));
-                    process.StartInfo.Arguments += " --out-gene \"" + report + ".genes.tsv\"";
-                    process.StartInfo.Arguments += " --qvalue " + Convert.ToString(0.01 * (double)S.prec_fdr_d, new System.Globalization.CultureInfo("en-US"));
-                    if (S.matrices_b) process.StartInfo.Arguments += " --matrices ";
-
-                    if (S.ram_b) process.StartInfo.Arguments += " --min-corr 1.0 --corr-diff 1.0";
-                    if (S.pdf_rep_b && S.files_s.Length > 0)
+                    if (S.temp_folder_s != "") process.StartInfo.Arguments += " --out-dir \"" + S.temp_folder_s + "\"";
+                }
+                else
+                {
+                    if (!external)
                     {
-                        stats_file = "\"" + report + ".stats.tsv\"";
-                        report_file = "\"" + S.out_s + "\"";
-                        pdf_file = "\"" + report + ".pdf\"";
-                    }
-                    else stats_file = report_file = pdf_file = "";
+                        process.StartInfo.Arguments += " --lib \"" + S.lib_s + "\"";
+                        process.StartInfo.Arguments += " --threads " + S.threads_i.ToString();
+                        process.StartInfo.Arguments += " --verbose " + S.log_i.ToString();
+                        process.StartInfo.Arguments += " --out \"" + S.out_s + "\"";
+                        var report = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(S.out_s), System.IO.Path.GetFileNameWithoutExtension(S.out_s));
+                        process.StartInfo.Arguments += " --out-gene \"" + report + ".genes.tsv\"";
+                        process.StartInfo.Arguments += " --qvalue " + Convert.ToString(0.01 * (double)S.prec_fdr_d, new System.Globalization.CultureInfo("en-US"));
+                        if (S.matrices_b) process.StartInfo.Arguments += " --matrices ";
 
-                    if (!System.IO.Directory.Exists(S.temp_folder_s)) TempFolderBox.Text = S.temp_folder_s = "";
-                    else process.StartInfo.Arguments += " --temp \"" + S.temp_folder_s + "\"";
-                    if (S.out_lib_s != "") {
-                        process.StartInfo.Arguments += " --out-lib \"" + S.out_lib_s + "\"";
-                        process.StartInfo.Arguments += " --gen-spec-lib";
-                    }
-                    if (S.predictor_b) process.StartInfo.Arguments += " --predictor";
-                    if (S.prosit_b) process.StartInfo.Arguments += " --prosit";
-                    if (S.reannotate_b) process.StartInfo.Arguments += " --reannotate";
-
-                    if (S.fasta_s != "")
-                    {
-                        List<string> fastaFiles = new List<string>(S.fasta_s.Split(new[] { '\n' }));
-                        foreach (var file in fastaFiles)
-                            if (file.Length >= 2) process.StartInfo.Arguments += " --fasta \"" + file + "\"";
-                        if (S.learn_lib_s != "") process.StartInfo.Arguments += " --learn-lib \"" + S.learn_lib_s + "\"";
-                        if (S.use_lib_free_b)
+                        if (S.ram_b) process.StartInfo.Arguments += " --min-corr 1.0 --corr-diff 1.0";
+                        if (S.pdf_rep_b && S.files_s.Length > 0)
                         {
-                            process.StartInfo.Arguments += " --fasta-search";
-
-                            process.StartInfo.Arguments += " --min-fr-mz " + S.fr_min_i.ToString();
-                            process.StartInfo.Arguments += " --max-fr-mz " + S.fr_max_i.ToString();
-
-                            if (S.opt_training_b) process.StartInfo.Arguments += " --min-fr-corr 0.9 --min-gen-fr 2";
+                            stats_file = "\"" + report + ".stats.tsv\"";
+                            report_file = "\"" + S.out_s + "\"";
+                            pdf_file = "\"" + report + ".pdf\"";
                         }
-                        if (S.met_exc_b) process.StartInfo.Arguments += " --met-excision";
-                        if (S.use_lib_free_b || S.prosit_b || S.reannotate_b)
+                        else stats_file = report_file = pdf_file = "";
+
+                        if (!System.IO.Directory.Exists(S.temp_folder_s)) TempFolderBox.Text = S.temp_folder_s = "";
+                        else process.StartInfo.Arguments += " --temp \"" + S.temp_folder_s + "\"";
+                        if (S.out_lib_s != "")
                         {
-                            if (S.protease_i == 0) process.StartInfo.Arguments += " --cut-after KR";
-                            if (S.protease_i == 1) process.StartInfo.Arguments += " --cut-after KR --no-cut-before P";
-                            if (S.protease_i == 2) process.StartInfo.Arguments += " --cut-after K";
-                            if (S.protease_i == 3) process.StartInfo.Arguments += " --cut-after K --no-cut-before P";
-                            if (S.protease_i == 4) process.StartInfo.Arguments += " --cut-after FYWL --no-cut-before P";
-                            process.StartInfo.Arguments += " --missed-cleavages " + S.missed_i.ToString();
+                            process.StartInfo.Arguments += " --out-lib \"" + S.out_lib_s + "\"";
+                            process.StartInfo.Arguments += " --gen-spec-lib";
+                        }
+                        if (S.predictor_b) process.StartInfo.Arguments += " --predictor";
+                        if (S.prosit_b) process.StartInfo.Arguments += " --prosit";
+                        if (S.reannotate_b) process.StartInfo.Arguments += " --reannotate";
 
-                            process.StartInfo.Arguments += " --min-pep-len " + S.pep_min_i.ToString();
-                            process.StartInfo.Arguments += " --max-pep-len " + S.pep_max_i.ToString();
-                            process.StartInfo.Arguments += " --min-pr-mz " + S.pr_min_i.ToString();
-                            process.StartInfo.Arguments += " --max-pr-mz " + S.pr_max_i.ToString();
-
-                            if (S.carbamet_b || S.prosit_b) process.StartInfo.Arguments += " --unimod4";
-                            if (S.varmod_i >= 1)
+                        if (S.fasta_s != "")
+                        {
+                            List<string> fastaFiles = new List<string>(S.fasta_s.Split(new[] { '\n' }));
+                            foreach (var file in fastaFiles)
+                                if (file.Length >= 2) process.StartInfo.Arguments += " --fasta \"" + file + "\"";
+                            if (S.learn_lib_s != "") process.StartInfo.Arguments += " --learn-lib \"" + S.learn_lib_s + "\"";
+                            if (S.use_lib_free_b)
                             {
-                                process.StartInfo.Arguments += " --var-mods " + S.varmod_i.ToString();
-                                if (S.oxid_b) process.StartInfo.Arguments += " --unimod35";
+                                process.StartInfo.Arguments += " --fasta-search";
+
+                                process.StartInfo.Arguments += " --min-fr-mz " + S.fr_min_i.ToString();
+                                process.StartInfo.Arguments += " --max-fr-mz " + S.fr_max_i.ToString();
+
+                                if (S.opt_training_b) process.StartInfo.Arguments += " --min-fr-corr 0.9 --min-gen-fr 2";
                             }
-                        } else
-                        {
-                            if (S.protease_i == 1) process.StartInfo.Arguments += " --cut-after KR --no-cut-before P";
-                            if (S.protease_i == 2) process.StartInfo.Arguments += " --cut-after K";
-                            if (S.protease_i == 3) process.StartInfo.Arguments += " --cut-after K --no-cut-before P";
-                            if (S.protease_i == 4) process.StartInfo.Arguments += " --cut-after FYWL --no-cut-before P";
+                            if (S.met_exc_b) process.StartInfo.Arguments += " --met-excision";
+                            if (S.use_lib_free_b || S.prosit_b || S.reannotate_b)
+                            {
+                                if (S.protease_i == 0) process.StartInfo.Arguments += " --cut K*,R*";
+                                if (S.protease_i == 1) process.StartInfo.Arguments += " --cut K*,R*,!*P";
+                                if (S.protease_i == 2) process.StartInfo.Arguments += " --cut K*";
+                                if (S.protease_i == 3) process.StartInfo.Arguments += " --cut F*,Y*,W*,M*,L*,!*P";
+                                if (S.protease_i == 4) process.StartInfo.Arguments += " --cut *D";
+                                if (S.protease_i == 5) process.StartInfo.Arguments += " --cut E*";
+                                process.StartInfo.Arguments += " --missed-cleavages " + S.missed_i.ToString();
+
+                                process.StartInfo.Arguments += " --min-pep-len " + S.pep_min_i.ToString();
+                                process.StartInfo.Arguments += " --max-pep-len " + S.pep_max_i.ToString();
+                                process.StartInfo.Arguments += " --min-pr-mz " + S.pr_min_i.ToString();
+                                process.StartInfo.Arguments += " --max-pr-mz " + S.pr_max_i.ToString();
+
+                                if (S.carbamet_b || S.prosit_b) process.StartInfo.Arguments += " --unimod4";
+                                if (S.varmod_i >= 1)
+                                {
+                                    process.StartInfo.Arguments += " --var-mods " + S.varmod_i.ToString();
+                                    if (S.oxid_b) process.StartInfo.Arguments += " --unimod35";
+                                }
+                            }
+                            else
+                            {
+                                if (S.protease_i == 0) process.StartInfo.Arguments += " --cut K*,R*";
+                                if (S.protease_i == 1) process.StartInfo.Arguments += " --cut K*,R*,!*P";
+                                if (S.protease_i == 2) process.StartInfo.Arguments += " --cut K*";
+                                if (S.protease_i == 3) process.StartInfo.Arguments += " --cut F*,Y*,W*,M*,L*,!*P";
+                                if (S.protease_i == 4) process.StartInfo.Arguments += " --cut *D";
+                                if (S.protease_i == 5) process.StartInfo.Arguments += " --cut E*";
+                            }
                         }
+
+                        if ((int)S.scan_i > 0) process.StartInfo.Arguments += " --window " + S.scan_i.ToString();
+                        if ((double)S.mass_acc_d > 0.0) process.StartInfo.Arguments += " --mass-acc " + S.mass_acc_d.ToString();
+                        if ((double)S.mass_acc_ms1_d > 0.0) process.StartInfo.Arguments += " --mass-acc-ms1 " + S.mass_acc_ms1_d.ToString();
+
+                        if (S.use_quant_b) process.StartInfo.Arguments += " --use-quant";
+                        if (!S.batches_b) process.StartInfo.Arguments += " --no-batch-mode";
+                        if (!S.nn_b) process.StartInfo.Arguments += " --no-nn";
+                        if (S.unrelated_b) process.StartInfo.Arguments += " --individual-mass-acc --individual-windows";
+                        if (S.rtprof_b) process.StartInfo.Arguments += " --rt-profiling";
+                        if (!S.protinf_b) process.StartInfo.Arguments += " --no-prot-inf";
+                        if (!S.iso_b) process.StartInfo.Arguments += " --no-isotopes";
+                        if (!S.ifr_b) process.StartInfo.Arguments += " --int-removal 0";
+
+                        if (S.grouping_i <= 2)
+                        {
+                            process.StartInfo.Arguments += " --pg-level " + S.grouping_i.ToString();
+                            if (S.grouping_i == 2) process.StartInfo.Arguments += " --species-genes";
+                        }
+                        if (S.quant_i >= 2) process.StartInfo.Arguments += " --peak-center";
+                        if ((S.quant_i & 1) != 0) process.StartInfo.Arguments += " --no-ifs-removal";
+
+                        if (S.norm_i == 0) process.StartInfo.Arguments += " --global-norm";
+                        else if (S.norm_i == 2) process.StartInfo.Arguments += " --sig-norm";
                     }
 
-                    if ((int)S.scan_i > 0) process.StartInfo.Arguments += " --window " + S.scan_i.ToString();
-                    if ((double)S.mass_acc_d > 0.0) process.StartInfo.Arguments += " --mass-acc " + S.mass_acc_d.ToString();
-                    if ((double)S.mass_acc_ms1_d > 0.0) process.StartInfo.Arguments += " --mass-acc-ms1 " + S.mass_acc_ms1_d.ToString();
-
-                    if (S.use_quant_b) process.StartInfo.Arguments += " --use-quant";
-                    if (!S.batches_b) process.StartInfo.Arguments += " --no-batch-mode";
-                    if (!S.nn_b) process.StartInfo.Arguments += " --no-nn";
-                    if (S.unrelated_b) process.StartInfo.Arguments += " --individual-mass-acc --individual-windows";
-                    if (S.rtprof_b) process.StartInfo.Arguments += " --rt-profiling";
-                    if (!S.protinf_b) process.StartInfo.Arguments += " --no-prot-inf";
-                    if (!S.iso_b) process.StartInfo.Arguments += " --no-isotopes";
-                    if (!S.ifr_b) process.StartInfo.Arguments += " --int-removal 0";
-
-                    if (S.grouping_i <= 2)
-                    {
-                        process.StartInfo.Arguments += " --pg-level " + S.grouping_i.ToString();
-                        if (S.grouping_i == 2) process.StartInfo.Arguments += " --species-genes";
-                    }
-                    if (S.quant_i >= 2) process.StartInfo.Arguments += " --peak-center";
-                    if ((S.quant_i & 1) != 0) process.StartInfo.Arguments += " --no-ifs-removal";
-
-                    if (S.norm_i == 0) process.StartInfo.Arguments += " --global-norm";
-                    else if (S.norm_i == 2) process.StartInfo.Arguments += " --sig-norm";
+                    process.StartInfo.Arguments += " " + opts;
                 }
 
-                process.StartInfo.Arguments += " " + opts;
-            }
+                process.OutputDataReceived += new DataReceivedEventHandler(OutputHandler);
+                process.Exited += new EventHandler(ExitedHandler);
 
-            process.OutputDataReceived += new DataReceivedEventHandler(OutputHandler);
-            process.Exited += new EventHandler(ExitedHandler);
+                if ((process.StartInfo.Arguments.Length >= 32000 && !external) || save_cfg)
+                {
+                    if (!save_cfg) LogText.Text += "Large number of files cannot be passed to the command line tool as command line arguments. " +
+                        "A config file will therefore be created and referenced with a --cfg command. " +
+                        "Alternatively, one can use --dir command to include all files in a directory." + Environment.NewLine;
+                    String fname = Directory.GetCurrentDirectory() + "\\DIA-NN-launch-cfg.txt";
+                    if (S.temp_folder_s.Length >= 1) if (System.IO.Directory.Exists(S.temp_folder_s)) fname = S.temp_folder_s + "\\DIA-NN-launch-cfg.txt";
+                    try
+                    {
+                        File.WriteAllText(fname, process.StartInfo.Arguments);
+                        process.StartInfo.Arguments = " --cfg \"" + fname + "\"";
+                    }
+                    catch (Exception ex) { LogText.Text += "ERROR: cannot create the config file " + fname + ": check if the location is write protected. Error message: " + Environment.NewLine + ex.ToString() + Environment.NewLine; }
+                }
 
-            if ((process.StartInfo.Arguments.Length >= 32000 && !external) || save_cfg)
-            {
-                if (!save_cfg) LogText.Text += "Large number of files cannot be passed to the command line tool as command line arguments. " +
-                    "A config file will therefore be created and referenced with a --cfg command. " +
-                    "Alternatively, one can use --dir command to include all files in a directory." + Environment.NewLine;
-                String fname = Directory.GetCurrentDirectory() + "\\DIA-NN-launch-cfg.txt";
-                if (S.temp_folder_s.Length >= 1) if (System.IO.Directory.Exists(S.temp_folder_s)) fname = S.temp_folder_s + "\\DIA-NN-launch-cfg.txt";
+                if (save_cfg) return;
                 try
                 {
-                    File.WriteAllText(fname, process.StartInfo.Arguments);
-                    process.StartInfo.Arguments = " --cfg \"" + fname + "\"";
+                    running = process.Start();
                 }
-                catch (Exception ex) { LogText.Text += "ERROR: cannot create the config file " + fname + ": check if the location is write protected. Error message: " + Environment.NewLine + ex.ToString() + Environment.NewLine; }
-            }
-
-            if (save_cfg) return;
-            try
-            {
-                running = process.Start();
-            }
-            catch (Exception ex) { running = false; }
-            if (!running)
-            {
-                LogText.Text += "Failed to start " + S.diann_s + Environment.NewLine;
-                if (in_pipeline)
+                catch (Exception ex) { running = false; }
+                if (!running)
                 {
-                    PipelineList.Items[processed].BackColor = System.Drawing.Color.LightSalmon;
-                    processed++;
-                    if (processed >= PipelineList.Items.Count) in_pipeline = false;
-                    else
+                    LogText.Text += "Failed to start " + S.diann_s + Environment.NewLine;
+                    if (in_pipeline)
                     {
-                        process.Dispose();
-                        RunProcess(false, Pipeline[processed]);
+                        PipelineList.Items[processed].BackColor = System.Drawing.Color.LightSalmon;
+                        processed++;
+                        if (processed >= PipelineList.Items.Count) in_pipeline = false;
+                        else
+                        {
+                            process.Dispose();
+                            RunProcess(false, Pipeline[processed]);
+                        }
                     }
+                    return;
                 }
-                return;
+                StatusLabel.Text = "Running...";
+                StatusIndicator.BackColor = System.Drawing.Color.GreenYellow;
+                LogText.Text += process.StartInfo.FileName + process.StartInfo.Arguments + Environment.NewLine;
+                process.BeginOutputReadLine();
             }
-            StatusLabel.Text = "Running...";
-            StatusIndicator.BackColor = System.Drawing.Color.GreenYellow;
-            LogText.Text += process.StartInfo.FileName + process.StartInfo.Arguments + Environment.NewLine;
-            process.BeginOutputReadLine();
         }
 
         private void RunButton_Click(object sender, EventArgs e)
@@ -480,25 +497,32 @@ namespace GUI
 
         private void StopButton_Click(object sender, EventArgs e)
         {
-            if (!running) return;
-
-            DialogResult dr;
-            if (!in_pipeline) dr = MessageBox.Show("Stop DIA-NN? All progress will be lost.", "Stop", MessageBoxButtons.YesNo);
-            else dr = MessageBox.Show("Cancel the current pipeline step? All progress will be lost.", "Stop", MessageBoxButtons.YesNo);
-            switch (dr)
+            // lock (Lock)
             {
-                case DialogResult.Yes:
-                    try
-                    {
-                        DiaNNStopped(false);
-                        process.OutputDataReceived -= OutputHandler;
-                        process.Exited -= ExitedHandler;
-                        process.Kill();
-                    }
-                    catch (Exception ex) {}
-                    return;
-                case DialogResult.No:
-                    return;
+                if (!running) return;
+
+                DialogResult dr;
+                if (!in_pipeline) dr = MessageBox.Show("Stop DIA-NN? All progress will be lost.", "Stop", MessageBoxButtons.YesNo);
+                else dr = MessageBox.Show("Cancel the current pipeline step? All progress will be lost.", "Stop", MessageBoxButtons.YesNo);
+                switch (dr)
+                {
+                    case DialogResult.Yes:
+                        try
+                        {
+                            DiaNNStopped(false);
+                            process.OutputDataReceived -= OutputHandler;
+                            process.Exited -= ExitedHandler;
+                        }
+                        catch (Exception ex) { }
+                        try
+                        {
+                            process.Kill();
+                        }
+                        catch (Exception ex) { }
+                        return;
+                    case DialogResult.No:
+                        return;
+                }
             }
         }
 
@@ -617,6 +641,10 @@ namespace GUI
             {
                 process.OutputDataReceived -= OutputHandler;
                 process.Exited -= ExitedHandler;
+            }
+            catch (Exception ex) { }
+            try
+            {
                 process.Kill();
             }
             catch (Exception ex) { }
@@ -624,12 +652,12 @@ namespace GUI
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
-            if (MessageBox.Show("Close DIA-NN? All progress will be lost.", "Close",
+            if (MessageBox.Show("Close tab? All progress will be lost.", "Close",
                MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
             {
                 e.Cancel = true;
             }
-            else kill();
+            kill();
         }
 
         private void ClearFastaButton_Click(object sender, EventArgs e)
@@ -718,27 +746,34 @@ namespace GUI
 
         private void PipAbort_Click(object sender, EventArgs e)
         {
-            if (!running || !in_pipeline) return;
-
-            DialogResult dr = MessageBox.Show("Abort the pipeline? All progress (current step) will be lost.", "Abort", MessageBoxButtons.YesNo);
-            switch (dr)
+            // lock (Lock)
             {
-                case DialogResult.Yes:
-                    try
-                    {
-                        Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.Color.LightSalmon));
-                        in_pipeline = false;
-                        processed = 0;
+                if (!running || !in_pipeline) return;
 
-                        DiaNNStopped();
-                        process.OutputDataReceived -= OutputHandler;
-                        process.Exited -= ExitedHandler;
-                        process.Kill();
-                    }
-                    catch (Exception ex) { }
-                    return;
-                case DialogResult.No:
-                    return;
+                DialogResult dr = MessageBox.Show("Abort the pipeline? All progress (current step) will be lost.", "Abort", MessageBoxButtons.YesNo);
+                switch (dr)
+                {
+                    case DialogResult.Yes:
+                        try
+                        {
+                            Invoke(new Action(() => PipelineList.Items[processed].BackColor = System.Drawing.Color.LightSalmon));
+                            in_pipeline = false;
+                            processed = 0;
+
+                            DiaNNStopped();
+                            process.OutputDataReceived -= OutputHandler;
+                            process.Exited -= ExitedHandler;
+                        }
+                        catch (Exception ex) { }
+                        try
+                        {
+                            process.Kill();
+                        }
+                        catch (Exception ex) { }
+                        return;
+                    case DialogResult.No:
+                        return;
+                }
             }
         }
 

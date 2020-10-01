@@ -48,20 +48,24 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="EasyTabs, Version=1.3.3.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\EasyTabs.1.3.3.0\lib\net40\EasyTabs.dll</HintPath>
+    <Reference Include="EasyTabs, Version=2.0.0.33, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\EasyTabs.2.0.0-beta5\lib\net40\EasyTabs.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.WindowsAPICodePack, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\EasyTabs.1.3.3.0\lib\net40\Microsoft.WindowsAPICodePack.dll</HintPath>
+      <HintPath>..\..\packages\EasyTabs.2.0.0-beta5\lib\net40\Microsoft.WindowsAPICodePack.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.WindowsAPICodePack.Shell, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\EasyTabs.1.3.3.0\lib\net40\Microsoft.WindowsAPICodePack.Shell.dll</HintPath>
+      <HintPath>..\..\packages\EasyTabs.2.0.0-beta5\lib\net40\Microsoft.WindowsAPICodePack.Shell.dll</HintPath>
+    </Reference>
+    <Reference Include="Svg, Version=2.4.3.29446, Culture=neutral, PublicKeyToken=12a0bac221edeae2, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\Svg.2.4.3\lib\Svg.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.DirectoryServices" />
     <Reference Include="System.Management" />
     <Reference Include="System.Runtime.Remoting" />
+    <Reference Include="System.Web" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />

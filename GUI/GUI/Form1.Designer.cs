@@ -434,9 +434,10 @@
             this.EnzymeCombo.Items.AddRange(new object[] {
             "Trypsin/P",
             "Trypsin",
-            "Lys-C/P",
             "Lys-C",
-            "Chymotrypsin"});
+            "Chymotrypsin",
+            "AspN",
+            "GluC"});
             this.EnzymeCombo.Location = new System.Drawing.Point(61, 69);
             this.EnzymeCombo.Name = "EnzymeCombo";
             this.EnzymeCombo.Size = new System.Drawing.Size(81, 21);

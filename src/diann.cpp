@@ -246,6 +246,7 @@ int MinClassifier = 2000;
 double FilterFactor = 1.5;
 
 bool Convert = false;
+bool MGF = false;
 bool Reannotate = false;
 bool UseRTInfo = false; // use .quant files created previously for RT profiling
 bool UseQuant = false; // use .quant files created previously; implies UseRTInfo
@@ -298,8 +299,7 @@ int MaxRecLoss = loss_N;
 double MinMs1RangeOverlap = 0.25;
 double QuadrupoleError = 1.0;
 
-std::string CutAfter = "RK";
-std::string NoCutBefore = "";
+std::vector<int16_t> Cut = { ('K' << 8) | '*', ('R' << 8) | '*' }, NoCut;
 
 int MissedCleavages = 1;
 int MinPeptideLength = 7;
@@ -316,6 +316,8 @@ double MinRelFrHeight = 0.00001;
 double MinGenFrCorr = 0.5;
 double MinRareFrCorr = 0.95;
 double FrCorrBSeriesPenalty = 0.1;
+int MinPrCharge = 1;
+int MaxPrCharge = 10;
 int MinGenFrNum = 4;
 int MinOutFrNum = 4;
 int MinSearchFrNum = 3;
@@ -342,6 +344,8 @@ bool SpeciesGenes = false;
 
 bool ExtendedReport = true;
 bool ReportLibraryInfo = false;
+bool DecoyReport = false;
+bool SaveCandidatePSMs = false;
 bool MobilityReport = false;
 bool SaveMatrices = false;
 
@@ -373,13 +377,13 @@ std::vector<std::string> library_headers = {
 	" RelativeIntensity RelativeFragmentIntensity RelativeFragmentIonIntensity LibraryIntensity \"LibraryIntensity\" relative_intensity ",
 	" UniprotId UniProtIds UniprotID \"UniprotID\" uniprot_id ",
 	" Protein Name Protein.Name ProteinName \"ProteinName\" ",
-	" Genes Gene Genes \"Genes\" ",
+	" Genes Gene Genes GeneName \"Genes\" ",
 	" IsProteotypic Is.Proteotypic Proteotypic ",
 	" Decoy decoy \"Decoy\" \"decoy\" ",
-	" FragmentCharge frg_z \"FragmentCharge\" ",
-	" FragmentType frg_type \"FragmentType\" ",
+	" FragmentCharge FragmentIonCharge ProductCharge ProductIonCharge frg_z \"FragmentCharge\" ",
+	" FragmentType FragmentIonType ProductType ProductIonType frg_type \"FragmentType\" ",
 	" FragmentNumber frg_nr FragmentSeriesNumber \"FragmentSeriesNumber\" ",
-	" FragmentLossType \"FragmentLossType\" ",
+	" FragmentLossType FragmentIonLossType ProductLossType ProductIonLossType \"FragmentLossType\" ",
 	" Q.Value QValue Qvalue qvalue \"Q.Value\" \"QValue\" \"Qvalue\" \"qvalue\" ",
 	" ElutionGroup ModifiedSequence ",
 	" ExcludeFromAssay ExcludeFromQuantification "
@@ -388,6 +392,8 @@ std::vector<std::string> library_headers = {
 const double proton = 1.007825035;
 const double OH = 17.003288;
 const double C13delta = 1.003355;
+
+std::vector<float> Extract;
 
 std::vector<std::pair<std::string, std::string> > UniMod;
 std::vector<std::pair<std::string, int> > UniModIndex;
@@ -669,14 +675,15 @@ inline double get_mobility(float intensity) { // 1/K0 encoded as part of the int
 }
 
 enum {
-	outFile, outPG, outPID, outPNames, outGenes, outPGQ, outPGN, outGQ, outGN, outGMQ, outGMQU, outModSeq, outStrSeq,
-	outPrId, outCharge, outQv, outPQv, outPGQv, outGGQv, outPPt, outPrQ, outPrN, outPrLR,
+	outFile, outRun, outPG, outPID, outPNames, outGenes, outPGQ, outPGN, outGQ, outGN, outGMQ, outGMQU, outModSeq, outStrSeq,
+	outPrId, outCharge, outQv, outPQv, outPGQv, outGGQv, outPPt, outPrQ, outPrN, outPrLR, outPrQual,
 	outRT, outiRT, outpRT, outpRTf, outpRTt, outpiRT,
 	outCols
 };
 
 std::vector<std::string> oh = { // output headers
 	"File.Name",
+	"Run",
 	"Protein.Group",
 	"Protein.Ids",
 	"Protein.Names",
@@ -699,6 +706,7 @@ std::vector<std::string> oh = { // output headers
 	"Precursor.Quantity",
 	"Precursor.Normalised",
 	"Label.Ratio",
+	"Quantity.Quality",
 	"RT",
 	"RT.Start",
 	"RT.Stop",
@@ -1300,6 +1308,25 @@ public:
 #endif
 };
 
+struct Trace {
+	float mz;
+	float height;
+	float score;
+
+	Trace() {}
+	Trace(float _mz, float _height, float _score) {
+		mz = _mz;
+		height = _height;
+		score = _score;
+	}
+	void init(float _mz, float _height, float _score) {
+		mz = _mz;
+		height = _height;
+		score = _score;
+	}
+	friend inline bool operator < (const Trace &left, const Trace &right) { return left.mz < right.mz; }
+};
+
 const int fTypeB = 1 << 0;
 const int fTypeY = 1 << 1;
 const int fExclude = 1 << 6;
@@ -1376,6 +1403,33 @@ void init_all() {
 		AA_index[AAs[i]] = i;
 	AA_index['U'] = AA_index['C'];
 	AA_index['X'] = AA_index['M'];
+}
+
+inline bool do_cut(char aa, char next) {
+	bool cut = false;
+	int16_t query = (aa << 8) | '*';
+	for (auto &s : Cut) if (s == query) { cut = true; break; }
+	if (!cut) {
+		query = ('*' << 8) | next;
+		for (auto &s : Cut) if (s == query) { cut = true; break; }
+		if (!cut) {
+			query = (aa << 8) | next;
+			for (auto &s : Cut) if (s == query) { cut = true; break; }
+		}
+	}
+	if (cut && NoCut.size()) {
+		query = ('*' << 8) | next;
+		for (auto &s : NoCut) if (s == query) { cut = false; break; }
+		if (cut) {
+			query = ('*' << 8) | next;
+			for (auto &s : NoCut) if (s == query) { cut = false; break; }
+			if (cut) {
+				query = (aa << 8) | next;
+				for (auto &s : NoCut) if (s == query) { cut = false; break; }
+			}
+		}
+	}
+	return cut;
 }
 
 std::vector<double> yDelta;
@@ -1753,6 +1807,14 @@ void arguments(int argc, char *argv[]) {
 			if (args[start + 4] >= '1' && args[start + 4] <= '9') XICRadius = std::stoi(args.substr(start + 4, std::string::npos)) / 2;
 			SaveXICs = true, dsout << "XICs of length " << XICRadius * 2 + 1 << " will be extracted for each precursor and saved in binary format\n";
 		}
+		else if (!memcmp(&(args[start]), "extract ", 8)) {
+			std::string word;
+			std::stringstream list(trim(args.substr(start + 8, end - start - 8)));
+			for (i = 0; std::getline(list, word, ','); i++) Extract.push_back(to_double(word));
+			dsout << "Full chromatograms will be extracted for the following fragment ions: ";
+			for (i = 0; i < Extract.size(); i++) dsout << Extract[i] << ' ';
+			dsout << '\n';
+		}
 		else if (!memcmp(&(args[start]), "vis ", 4)) {
 			std::string word;
 			std::stringstream list(trim(args.substr(start + 4, end - start - 4)));
@@ -1767,6 +1829,8 @@ void arguments(int argc, char *argv[]) {
 		} else if (!memcmp(&(args[start]), "cal-info ", 9)) SaveCalInfo = true;
 		else if (!memcmp(&(args[start]), "compact-report ", 15)) ExtendedReport = false;
 		else if (!memcmp(&(args[start]), "report-lib-info ", 16)) ReportLibraryInfo = true;
+		else if (!memcmp(&(args[start]), "decoy-report ", 13)) DecoyReport = true;
+		else if (!memcmp(&(args[start]), "candidate-psms ", 15)) SaveCandidatePSMs = true;
 		else if (!memcmp(&(args[start]), "matrices ", 9)) SaveMatrices =  true, dsout << "Precursor/protein x samples expression level matrices will be saved along with the main report\n";
 		else if (!memcmp(&(args[start]), "no-isotopes ", 12)) UseIsotopes = false, dsout << "Isotopologue chromatograms will not be used\n";
 		else if (!memcmp(&(args[start]), "no-ms2-range ", 13)) MS2Range = false, dsout << "MS2 range inference will not be performed\n";
@@ -1910,10 +1974,40 @@ void arguments(int argc, char *argv[]) {
 			WindowRadius = std::stoi(args.substr(start + 7, std::string::npos));
 			if (WindowRadius <= 0) dsout << "WARNING: scan window radius should be a positive integer\n";
 			else InferWindow = false, dsout << "Scan window radius set to " << WindowRadius << "\n";
-		} else if (!memcmp(&(args[start]), "cut-after ", 10)) CutAfter = trim(args.substr(start + 10, end - start - 10)),
-			dsout << "In silico digest will include cuts after amino acids: " << CutAfter << "\n";
-		else if (!memcmp(&(args[start]), "no-cut-before ", 14)) NoCutBefore = trim(args.substr(start + 14, end - start - 14)),
-			dsout << "In silico digest will not include cuts before amino acids: " << NoCutBefore << "\n";
+		} else if (!memcmp(&(args[start]), "cut ", 4)) {
+			std::string aas;
+			std::stringstream list(trim(args.substr(start + 4, end - start - 4)));
+			Cut.clear(); NoCut.clear();
+			while (std::getline(list, aas, ',')) {
+				aas = trim(aas);
+				if (aas.length() < 2) continue;
+				char *p = &aas[0];
+				auto cl = &Cut;
+				if (*p == '~' || *p == '!') {
+					p++, cl = &NoCut;
+					if (aas.length() < 3) continue;
+				}
+				if ((*p) != '*') if ((*p) < 'A' || (*p) > 'Z') continue;
+				if ((*(p+1)) != '*') if ((*(p + 1)) < 'A' || (*(p + 1)) > 'Z') continue;
+				int16_t id = ((*p) << 8) + (*(p+1));
+				if (std::find(cl->begin(), cl->end(), id) == cl->end()) {
+					cl->push_back(id);
+					std::sort(cl->begin(), cl->end());
+				}
+			}
+			if (Cut.size()) {
+				dsout << "In silico digest will involve cuts at ";
+				dsout << char(Cut[0] >> 8) << char(Cut[0] & 0xFF);
+				for (int s = 1; s < Cut.size(); s++) dsout << ',' << char(Cut[s] >> 8) << char(Cut[s] & 0xFF);
+				dsout << '\n';
+			}
+			if (NoCut.size()) {
+				dsout << "But excluding cuts at ";
+				dsout << char(NoCut[0] >> 8) << char(NoCut[0] & 0xFF);
+				for (int s = 1; s < NoCut.size(); s++) dsout << ',' << char(NoCut[s] & 0xFF) << char(NoCut[s] >> 8);
+				dsout << '\n';
+			}
+		}
 		else if (!memcmp(&(args[start]), "min-pep-len ", 12)) MinPeptideLength = std::stoi(args.substr(start + 12, std::string::npos)),
 			dsout << "Min peptide length set to " << MinPeptideLength << "\n";
 		else if (!memcmp(&(args[start]), "max-pep-len ", 12)) MaxPeptideLength = std::stoi(args.substr(start + 12, std::string::npos)),
@@ -1930,6 +2024,10 @@ void arguments(int argc, char *argv[]) {
 			dsout << "Min fragment m/z set to " << MinFrMz << "\n";
 		else if (!memcmp(&(args[start]), "max-fr-mz ", 10)) MaxFrMz = to_double(args.substr(start + 10, std::string::npos)),
 			dsout << "Max fragment m/z set to " << MaxFrMz << "\n";
+		else if (!memcmp(&(args[start]), "min-pr-charge ", 14)) MinPrCharge = std::stoi(args.substr(start + 14, std::string::npos)),
+			dsout << "Min precursor charge set to " << MinPrCharge << "\n";
+		else if (!memcmp(&(args[start]), "max-pr-charge ", 14)) MaxPrCharge = std::stoi(args.substr(start + 14, std::string::npos)),
+			dsout << "Max precursor charge set to " << MaxPrCharge << "\n";
 		else if (!memcmp(&(args[start]), "max-fr ", 7)) MaxF = std::stoi(args.substr(start + 7, std::string::npos)),
 			dsout << "Maximum number of fragments set to " << MaxF << "\n";
 		else if (!memcmp(&(args[start]), "min-fr ", 7)) MinF = std::stoi(args.substr(start + 7, std::string::npos)),
@@ -1957,6 +2055,7 @@ void arguments(int argc, char *argv[]) {
 		else if (!memcmp(&(args[start]), "individual-reports ", 19)) IndividualReports = true, dsout << "Reports will be generated separately for different runs (in the respective folders)\n";
 		else if (!memcmp(&(args[start]), "no-stats ", 9)) SaveRunStats = false;
 		else if (!memcmp(&(args[start]), "convert ", 8)) Convert = true, dsout << "MS data files will be converted to .dia format\n";
+		else if (!memcmp(&(args[start]), "mgf ", 4)) MGF = true, std::cout << "Spectra will be extracted from the DIA data and exported in the .mgf format\n";
 		else if (!memcmp(&(args[start]), "reannotate ", 11)) Reannotate = true, dsout << "Library precursors will be reannotated using the FASTA database\n";
 		else if (!memcmp(&(args[start]), "out-dir ", 8)) out_dir = trim(args.substr(start + 8, end - start - 8));
 #ifdef CPP17
@@ -2383,6 +2482,119 @@ struct FI {
 	friend bool inline operator > (const FI& left, const FI& right) { return left.value > right.value; }
 };
 
+struct Mass {
+	float mz;
+	int pr, index, charge;
+
+	Mass() {}
+	Mass(float _mz, int _pr, int _index, int _charge) { mz = _mz, pr = _pr, index = _index, charge = _charge; }
+	friend inline bool operator < (const Mass& left, const Mass& right) { return left.mz < right.mz; }
+};
+
+struct Hit {
+	float score;
+	int fr;
+};
+
+const int SCSPeaks = 50;
+
+const int SCSFr = 12;
+struct Match {
+	Hit hit[SCSFr];
+
+	inline double score() { int i; double s; for (i = 0, s = 0.0; i < SCSFr; i++) s += hit[i].score; return s; }
+};
+
+struct Feature {
+	double mz = 0.0, RT = 0.0, score = 0.0, height = 0.0, quantity = 0.0, qvalue = 0.0, search[2], mod[2];
+	int apex = 0, ms1_apex = 0, charge = 0, shadow = 0, index[2];
+
+	std::vector<Trace> peaks;
+
+	template <class F> void write(F &out, int scan_number) {
+		out << "BEGIN IONS\nTITLE=ssc." << scan_number << '.' << scan_number << ".0\nPEPMASS=" << (float)mz << ' ' << quantity << "\nRTINSECONDS=" << (float)(RT * 60.0) << '\n';
+		for (int i = 0; i < peaks.size(); i++) out << peaks[i].mz << ' ' << peaks[i].height << '\n';
+		out << "END IONS\n";
+	}
+
+	friend inline bool operator < (const Feature &left, const Feature &right) {
+		if (left.RT < right.RT) return true;
+		if (left.RT <= right.RT && left.mz < right.mz) return true;
+		return false;
+	}
+
+	template <bool open> void find(bool _decoy, std::vector<Mass> &fragments, std::vector<Mass> &fragments_shift,
+		std::vector<std::pair<float, int> > &precursors, double acc_ms1, double acc_ms2, std::vector<Match> &temp) {
+
+		temp.clear();
+		int decoy = _decoy, frs = fragments.size();
+		if (!frs || shadow || charge < 1 || charge > 7) {
+			search[decoy] = -INF, index[decoy] = -1, mod[decoy] = 0.0;
+			return;
+		}
+
+		int i, size = 0, ind;
+		float min = mz - mz * acc_ms1, max = mz + mz * acc_ms1, s, sc;
+		Mass query(0.0, 0, 0, 0);
+
+		for (int iter = 0; iter <= (int)open; iter++) for (auto &p : peaks) {
+			float qmz = ((iter == 0 || !open) ? p.mz : (mz - proton) * ((double)charge) - (p.mz - proton));
+			auto &frm = ((iter == 0 || !open) ? fragments : fragments_shift);
+
+			float delta = qmz * acc_ms2;
+			query.mz = qmz - delta;
+			float high = qmz + delta;
+			if (high <= frm[0].mz || query.mz >= frm[frs - 1].mz) continue;
+
+			auto pos = std::lower_bound(frm.begin(), frm.end(), query);
+			if (pos == frm.end()) continue;
+			while (pos->mz < high) {
+				if (open && iter == 1 && pos->charge != 1) goto finish;
+				auto &pr = precursors[pos->pr];
+				if ((open || (pr.first > min && pr.first < max)) && pr.second == charge) {
+					if (size <= pos->pr) size = ((pos->pr * 5) / 4) + 1, temp.resize(size);
+					auto &match = temp[pos->pr].hit;
+					if (p.score <= match[SCSFr - 1].score) goto finish;
+					int fr, j; if (open) fr = pos->index;
+
+					for (i = 0; i < SCSFr - 1; i++) {
+						auto &h = match[i];
+						if (h.score < E || (open && h.fr == fr && p.score > h.score)) {
+							for (j = i; j > 0; j--) {
+								auto &next = match[j - 1];
+								if (next.score >= p.score) break;
+								match[j] = next;
+							}
+							match[j].score = p.score;
+							if (open) match[j].fr = fr;
+							break;
+						} else if (open && h.fr == fr && p.score <= h.score) break;
+					}
+					if (i == SCSFr - 1) {
+						for (j = i; j > 0; j--) {
+							auto &next = match[j - 1];
+							if (next.score >= p.score) break;
+							match[j] = next;
+						}
+						match[j].score = p.score;
+						if (open) match[j].fr = fr;
+					}
+				}
+			finish:
+				pos++;
+				if (pos == frm.end()) break;
+			}
+		}
+
+		s = E, ind = -1;
+		for (i = 0; i < size; i++) if ((sc = temp[i].score()) > s)
+			s = sc, ind = i;
+		search[decoy] = s;
+		index[decoy] = ind;
+		mod[decoy] = (mz - precursors[ind].first) * (double)precursors[ind].second;
+	}
+};
+
 struct Scan {
 	double RT = 0.0, window_low = 0.0, window_high = 0.0;
 	int n = 0, type = 0;
@@ -2477,6 +2689,91 @@ struct Scan {
 		return res;
 	}
 #endif
+
+	void bin_peaks(FI * binned, int bins_per_Da) {
+		int i;
+		FI * fi = NULL;
+		float bpd = (float)bins_per_Da, bpdi = 1.0 / bpd, max = -INF;
+
+		if (!n) return;
+		for (i = 0; i < n; i++) {
+			auto &p = peaks[i];
+			if (p.mz >= max) {
+				int bin = floor(p.mz * bpd);
+				max = bpdi * float(bin + 1);
+				fi = binned + bin;
+			}
+			if (p.height > fi->value) fi->value = p.height, fi->index = i;
+		}
+	}
+
+	void bin_peaks(std::vector<FI>& binned, int bins_per_Da) {
+		if (!n) return;
+		binned.resize(floor(peaks[n - 1].mz * (float)bins_per_Da) + 1);
+		bin_peaks(&(binned[0]), bins_per_Da);
+	}
+
+	void top_peaks(Peak * top, int N, std::vector<Peak>& temp, float DR = 10000.0) {
+		int k;
+		float margin;
+
+		if (!n) {
+			k = 0;
+			goto finish;
+		}
+
+		temp.resize(n);
+		memcpy(&(temp[0]), peaks, n * sizeof(Peak));
+		std::sort(temp.begin(), temp.end(), [&](const Peak &left, const Peak &right) { return left.height > right.height; });
+
+		margin = temp[0].height / DR;
+		for (k = 0; k < Min(n, N); k++) if (temp[k].height < margin) break;
+
+		temp.resize(k);
+		std::sort(temp.begin(), temp.end());
+		memcpy(top, &(temp[0]), k * sizeof(Peak));
+
+	finish:
+		if (N > k) memset(top + k, 0, (N - k) * sizeof(Peak));
+	}
+
+	void top_peaks(std::vector<Peak> &top, int N, std::vector<Peak>& temp, float DR = 10000.0) {
+		top.resize(N);
+		top_peaks(&(top[0]), N, temp, DR);
+	}
+
+	void top_peaks(Peak * top, int N, float low, float high, std::vector<Peak>& temp, float DR = 10000.0) {
+		int i, k;
+		float margin;
+
+		if (!n) {
+			k = 0;
+			goto finish;
+		}
+
+		temp.resize(n);
+		memcpy(&(temp[0]), peaks, n * sizeof(Peak));
+		std::sort(temp.begin(), temp.end(), [&](const Peak &left, const Peak &right) { return left.height > right.height; });
+
+		margin = temp[0].height / DR;
+		for (i = k = 0; i < n && k < N; i++) if (temp[i].mz > low && temp[i].mz < high) {
+			if (temp[k].height < margin) break;
+			top[k++] = temp[i];
+		}
+
+		temp.resize(k);
+		memcpy(&(temp[0]), top, k * sizeof(Peak));
+		std::sort(temp.begin(), temp.end());
+		memcpy(top, &(temp[0]), k * sizeof(Peak));
+
+	finish:
+		if (N > k) memset(top + k, 0, (N - k) * sizeof(Peak));
+	}
+
+	void top_peaks(std::vector<Peak> &top, int N, float low, float high, std::vector<Peak>& temp, float DR = 10000.0) {
+		top.resize(N);
+		top_peaks(&(top[0]), N, low, high, temp, DR);
+	}
 };
 
 inline int mass_bin(float mz, double acc) { return floor(log(mz) / acc); }
@@ -2630,7 +2927,7 @@ public:
 	int run_index;
 	mutable bool decoy_found;
 	mutable int apex, peak, best_fragment, peak_width;
-	mutable float RT, RT_start, RT_stop, iRT, predicted_RT, predicted_iRT, one_over_K0, best_fr_mz, profile_qvalue, qvalue, lib_qvalue, dratio, decoy_qvalue, protein_qvalue, pg_qvalue, gg_qvalue, quantity, ratio, level, norm;
+	mutable float RT, RT_start, RT_stop, iRT, predicted_RT, predicted_iRT, one_over_K0, best_fr_mz, profile_qvalue, qvalue, lib_qvalue, dratio, decoy_qvalue, protein_qvalue, pg_qvalue, gg_qvalue, quantity, ratio, level, norm, quality;
 	mutable float pg_quantity, pg_norm, gene_quantity, gene_norm, max_lfq, max_lfq_unique;
 	mutable float evidence, decoy_evidence, ms1_corr, ms1_area, cscore, decoy_cscore;
 #if REPORT_SCORES
@@ -2982,6 +3279,7 @@ public:
 
 			sequence.clear(), id.clear(), name.clear(), gene.clear(), peptide.clear();
 			bool skip = false, eof = !getline(in, line);
+			int skipped = 0;
 			if (!eof) while (true) {
 				bool new_prot = (line.size() != 0);
 				if (new_prot) new_prot &= (line[0] == '>');
@@ -2992,6 +3290,7 @@ public:
 						skip = !ins.second; // dublicate protein?
 						if (!skip) proteins.push_back(Isoform(next_id, next_name, next_gene, description, swissprot));
 						if (FastaProtDuplicates) skip = false;
+						if (skip) skipped++;
 						if (ForceSwissProt) skip = skip || !swissprot;
 					}
 
@@ -3002,13 +3301,7 @@ public:
 						char aa = sequence[i];
 						if (aa >= 'A' && aa <= 'Z') {
 							bool cut = (i == sequence.length() - 1);
-							if (!cut) {
-								for (auto &s : CutAfter) if (s == aa) { cut = true; break; }
-								if (cut && i + 1 < sequence.length()) {
-									char next_aa = sequence[i + 1];
-									for (auto &s : NoCutBefore) if (s == next_aa) { cut = false; break; }
-								}
-							}
+							if (!cut) cut = do_cut(aa, sequence[i + 1]);
 							if (cut) cuts.push_back(i);
 						}
 						if (i < sequence.length() - 4) {
@@ -3057,6 +3350,7 @@ public:
 				if (!getline(in, line)) eof = true, line.clear();
 			}
 			in.close();
+			if (skipped) dsout << "WARNING: " << skipped << " sequences skipped due to duplicate protein ids; use --duplicate-proteins to disable skipping duplicates\n";
 		}
 		dict.insert(dict.begin(), dic.begin(), dic.end()); dic.clear();
 		entries.insert(entries.begin(), unique.begin(), unique.end());
@@ -3852,10 +4146,14 @@ public:
 				}
 
 				for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
-					for (i = 0, jt->second.pr.quantity = jt->second.pr.ratio = 0.0; i < jt->second.fr_n; i++) {
+					for (i = 0, jt->second.pr.quantity = jt->second.pr.ratio = jt->second.pr.quality = 0.0; i < jt->second.fr_n; i++) {
 						int ind = jt->second.fr[i].index;
-						if (fr_score[ind].first >= margin) jt->second.pr.quantity += jt->second.fr[i].quantity[qFiltered];
+						if (fr_score[ind].first >= margin) {
+							jt->second.pr.quantity += jt->second.fr[i].quantity[qFiltered];
+							jt->second.pr.quality += jt->second.fr[i].corr * jt->second.fr[i].quantity[qFiltered];
+						}
 					}
+					if (jt->second.pr.quantity > E) jt->second.pr.quality /= jt->second.pr.quantity;
 					jt->second.pr.norm = jt->second.pr.level = jt->second.pr.quantity;
 				}
 			}
@@ -4445,6 +4743,13 @@ public:
 						csv.close();
 						return false;
 					}
+					if (colInd[libPID] < 0)
+						for (i = 0; i < nw; i++) 
+							if (words[i] == std::string("ProteinId") || words[i] == std::string("ProteinID") || words[i] == std::string("Protein")) {
+								colInd[libPID] = i;
+								break;
+							}
+
 					if (colInd[libPT] >= 0) infer_proteotypicity = false;
 					if (colInd[libFrCharge] >= 0) {
 						gen_charges = false;
@@ -4614,10 +4919,10 @@ public:
 									shift = found;
 									if (found == 0) l_cut = true;
 									else if (found == 1 && NMetExcision && (sequence[0] == 'M' || sequence[0] == 'X')) l_cut = true;
-									else if (CutAfter.find(sequence[found - 1]) != std::string::npos) l_cut = true;
+									else l_cut = do_cut(sequence[found - 1], sequence[found]);
 									if (l_cut) {
 										if (found >= sequence.size() - stripped.size()) r_cut = true;
-										else if (NoCutBefore.find(sequence[found + stripped.size()]) == std::string::npos) r_cut = true;
+										else r_cut = do_cut(sequence[found + stripped.size() - 1], sequence[found + stripped.size()]);
 									}
 									if (l_cut && r_cut) {
 										if (!ids.size()) ids = fasta.ids[seq];
@@ -4667,8 +4972,8 @@ public:
 			auto fragments = generate_fragments(seq, 1, loss_none, &cnt, MinFrAAs);
 			auto aas = get_aas(pep);
 			double mass = sum(seq) + proton + OH;
-			int min_charge = Max(1, (int)(mass / MaxPrMz));
-			int max_charge = Max(min_charge, Min(MaxGenCharge, (int)(mass / MinPrMz)));
+			int min_charge = Max(MinPrCharge, Max(1, (int)(mass / MaxPrMz)));
+			int max_charge = Min(MaxPrCharge, Max(min_charge, Min(MaxGenCharge, (int)(mass / MinPrMz))));
 			double iRT = InSilicoRTPrediction ? predict_irt(pep) : default_iRT;
 			if (iRT < iRT_min) iRT_min = iRT;
 			if (iRT > iRT_max) iRT_max = iRT;
@@ -5502,10 +5807,13 @@ public:
 
 		std::ofstream out(file_name, std::ofstream::out);
 		if (out.fail()) { dsout << "ERROR: cannot write to " << file_name << ". Check if the destination folder is write-protected or the file is in use\n"; return; }
-		out << oh[outFile] << '\t' << oh[outPG] << '\t' << oh[outPID] << '\t' << oh[outPNames] << '\t' << oh[outGenes] << '\t'
+		std::vector<char> buf(128 * 1024 * 1024);
+		out.rdbuf()->pubsetbuf(&buf[0], 128 * 1024 * 1024);
+
+		out << oh[outFile] << '\t' << oh[outRun] << '\t' << oh[outPG] << '\t' << oh[outPID] << '\t' << oh[outPNames] << '\t' << oh[outGenes] << '\t'
 			<< oh[outPGQ] << '\t' << oh[outPGN] << '\t' << oh[outGQ] << '\t' << oh[outGN] << '\t' << oh[outGMQ] << '\t' << oh[outGMQU] << '\t' << oh[outModSeq] << '\t' << oh[outStrSeq] << '\t'
 			<< oh[outPrId] << '\t' << oh[outCharge] << '\t' << oh[outQv] << '\t' << oh[outPQv] << '\t' << oh[outPGQv] << '\t' << oh[outGGQv] << '\t' << oh[outPPt] << '\t'
-			<< oh[outPrQ] << '\t' << oh[outPrN] << '\t' << oh[outPrLR] << '\t'
+			<< oh[outPrQ] << '\t' << oh[outPrN] << '\t' << oh[outPrLR] << '\t' << oh[outPrQual] << '\t'
 			<< oh[outRT] << '\t' << oh[outiRT] << '\t' << oh[outpRT] << '\t' << oh[outpRTf] << '\t' << oh[outpRTt] << '\t' << oh[outpiRT];
 		if (ExtendedReport) {
 			out << (fasta_files.size() ? "\tFirst.Protein.Description\t" : "\t") << "Lib.Q.Value\tMs1.Profile.Corr\tMs1.Area\tEvidence\tCScore\tDecoy.Evidence\tDecoy.CScore\tFragment.Quant.Raw\tFragment.Quant.Corrected\tFragment.Correlations\tMS2.Scan";
@@ -5523,6 +5831,9 @@ public:
 #endif
 		out << "\n";
 
+		auto runs = ms_files;
+		for (int i = 0; i < runs.size(); i++) runs[i] = remove_extension(get_file_name(ms_files[i]));
+
 		for (auto it = info.map.begin(); it != info.map.end(); it++) {
 			auto v = &(it->second);
 			auto entry = &(entries[it->first]);
@@ -5533,6 +5844,7 @@ public:
 				if (jt->second.pr.pg_qvalue > ReportProteinQValue) continue;
 
 				out << ms_files[jt->first].c_str() << '\t'
+					<< runs[jt->first].c_str() << '\t'
 					<< prot[pg].ids.c_str() << '\t'
 					<< protein_ids[entry->pid_index].ids.c_str() << '\t'
 					<< prot[pg].names.c_str() << '\t'
@@ -5563,7 +5875,8 @@ public:
 				if (jt->second.pr.ratio >= 0.0) out << jt->second.pr.ratio << '\t';
 				else out << "\t";
 
-				out << jt->second.pr.RT << '\t'
+				out << jt->second.pr.quality << '\t'
+					<< jt->second.pr.RT << '\t'
 					<< jt->second.pr.RT_start << '\t'
 					<< jt->second.pr.RT_stop << '\t'
 					<< jt->second.pr.iRT << '\t'
@@ -5604,6 +5917,46 @@ public:
 #if REPORT_SCORES
 				for (int i = 0; i < pN; i++) out << '\t' << jt->second.pr.scores[i];
 				for (int i = 0; i < pN; i++) out << '\t' << jt->second.pr.decoy_scores[i];
+#endif
+				out << "\n";
+			}
+		}
+
+		if (DecoyReport) for (auto it = info.decoy_map.begin(); it != info.decoy_map.end(); it++) {
+			auto v = &(it->second);
+			auto entry = &(entries[it->first]);
+			int pg = InferPGs ? entry->pg_index : entry->pid_index;
+
+			for (auto jt = (*v).begin(); jt != (*v).end(); jt++) {
+				if (jt->second.qvalue > ReportQValue) continue;
+
+				out << ms_files[jt->first].c_str() << '\t'
+					<< prot[pg].ids.c_str() << '\t'
+					<< protein_ids[entry->pid_index].ids.c_str() << '\t'
+					<< prot[pg].names.c_str() << '\t'
+					<< prot[pg].genes.c_str() << "\t\t\t\t\t\t\t";
+				auto aas = get_aas(entry->name);
+				out << pep_name(entry->name).c_str() << '\t'
+					<< aas.c_str() << '\t'
+					<< "DECOY_" << entry->name.c_str() << '\t'
+					<< entry->decoy.charge << '\t'
+					<< jt->second.qvalue << "\t\t\t\t"
+					<< (int)entry->proteotypic << "\t\t\t\t\t\t\t\t\t";
+
+				if (ExtendedReport) {
+					out << '\t';
+					if (fasta_files.size()) out << '\t';
+					out << entry->target.lib_qvalue << "\t\t\t\t"
+						<< jt->second.cscore << "\t\t\t\t\t\t";
+
+					if (ReportLibraryInfo) out << "\t\t";
+#ifdef TDFREADER
+					if (MobilityReport) out << '\t';
+#endif
+				}
+#if REPORT_SCORES
+				for (int i = 0; i < pN; i++) out << '\t';
+				for (int i = 0; i < pN; i++) out << '\t';
 #endif
 				out << "\n";
 			}
@@ -6176,6 +6529,9 @@ public:
 	int run_index = 0, LDA = 0;
 	RunStats RS;
     std::string name; // run name
+	std::ofstream run_out;
+	bool suspend_output = false;
+
 	float weights[pN], guide_weights[pN], best_weights[pN], best_guide_weights[pN], selection_weights[pN], selection_guide_weights[pN];
 	bool default_weights = true;
 	std::vector<Scan> ms1h, ms2h; // headers
@@ -6195,6 +6551,7 @@ public:
 	std::vector<int> scan_cycle; // list of SWATH cycle numbers
 	double RT_window, RT_min = 0.0, RT_max = 0.0;
 	double tandem_min = 0.0, tandem_max = INF;
+	double lower_selection_bound = 0.0, upper_selection_bound = INF;
 	bool full_spectrum = false;
 
 	std::vector<std::vector<float> > NF, MS1, MS2, MS2_H, MS2_min, MS2_tight_one, MS2_tight_two, Shadow;
@@ -6456,6 +6813,247 @@ public:
 		}
 			 
 		return area;
+	}
+
+	inline float ms1_level(float mz, float RT) {
+		Scan query; query.RT = RT;
+		int n = ms1h.size(), index = std::distance(ms1h.begin(), std::lower_bound(ms1h.begin(), ms1h.end(), query));
+		if (index >= n) index--;
+		if (index > 0) if (RT - ms1h[index - 1].RT < ms1h[index].RT - RT) index--;
+		return ms1h[index].level<false>(mz, MassAccuracyMs1);
+	}
+
+	void ms1_profile(float * ms1, float mz, int S, float RT) {
+		Scan query; query.RT = RT;
+		int j, W = 2 * S + 1, n = ms1h.size(), index = std::distance(ms1h.begin(), std::lower_bound(ms1h.begin(), ms1h.end(), query));
+		if (index >= n) index--;
+		if (index > 0) if (RT - ms1h[index - 1].RT < ms1h[index].RT - RT) index--;
+
+		for (j = 0; j < W; j++) ms1[j] = 0.0;
+		int start = Max(index - S, 0);
+		for (int j = start; j <= Min(index + S, n - 1); j++) ms1[j - start] = ms1h[j].level<false>(mz, MassAccuracyMs1);
+	}
+
+	void ms1_top_profiles(std::vector<float> &ms1, std::vector<float> &masses, std::vector<Peak> &temp, int S, float RT, float low, float high, int N) {
+		Scan query; query.RT = RT;
+		int i, j, k, W = 2 * S + 1, n = ms1h.size(), index = std::distance(ms1h.begin(), std::lower_bound(ms1h.begin(), ms1h.end(), query));
+		if (index >= n) index--;
+		if (index > 0) if (RT - ms1h[index - 1].RT < ms1h[index].RT - RT) index--;
+
+		temp.resize(ms1h[index].n); memcpy(&(temp[0]), ms1h[index].peaks, ms1h[index].n * sizeof(Peak));
+		std::sort(temp.begin(), temp.end(), [](const Peak &left, const Peak &right) { return left.height > right.height; });
+
+		for (i = k = 0; i < temp.size(); i++) if (temp[i].mz >= low && temp[i].mz < high) k++;
+		N = Min(N, k); masses.clear(), masses.resize(N), ms1.clear(); ms1.resize(W * N);
+
+		for (i = k = 0; i < temp.size(); i++) {
+			if (k >= N) break;
+			float mz = temp[i].mz;
+			if (mz < low || mz >= high) continue;
+
+			int start = Max(index - S, 0);
+			for (j = start; j <= Min(index + S, n - 1); j++) ms1[k * W + j - start] = ms1h[j].level<false>(mz, MassAccuracyMs1);
+			masses[k] = mz;
+			k++;
+		}
+	}
+
+	void ms1_top_peaks(int thread_id, std::vector<Peak> * _top, std::vector<Lock> * _locks, int N = 500) {
+		auto &top = *_top;
+		auto &locks = *_locks;
+		std::vector<Peak> temp;
+
+		while (!lock.set()) {}
+		top.resize(N * ms1h.size());
+		if (!thread_id) memset(&(top[0]), 0, top.size() * sizeof(Peak));
+		lock.free();
+
+		for (int i = 0; i < ms1h.size(); i++) if (locks[i].set()) ms1h[i].top_peaks(&(top[i * N]), N, lower_selection_bound, upper_selection_bound, temp);
+	}
+
+	void ms1_features(int thread_id, std::vector<std::vector<Peak> > * _features, std::vector<Peak> * _top, std::vector<Lock> * _locks,
+		int window, float accuracy = 12.0 / 1000000.0, int N = 500) { // features must be empty before calling this function
+
+		auto &features = *_features;
+		auto &top = *_top;
+		auto &locks = *_locks;
+		int S = window, W = 2 * S + 1;
+		std::vector<float> ch(W * N), elution(W);
+		std::vector<int> ind(W, 0);
+
+		while (!lock.set()) {}
+		features.resize(ms1h.size());
+		lock.free();
+
+		int i, j, pos, jj, jjN, k, l, SN = S * N, iN;
+		for (i = S; i < ms1h.size() - S; i++) if (locks[i].set()) {
+			iN = i * N;
+			for (j = 0; j < W; j++) ind[j] = 0;
+			memset(&(ch[0]), 0, ch.size() * sizeof(float));
+			for (k = 0; k < Min(N, ms1h[i].size()); k++) {
+				float mz = top[iN + k].mz, margin = mz * accuracy, low = mz - margin, high = mz + margin;
+				if (mz <= lower_selection_bound || mz >= upper_selection_bound) continue;
+				ch[SN + k] = top[iN + k].height;
+				for (j = 0; j < W; j++) {
+					jj = i - S + j, jjN = jj * N;
+					for (l = ind[j]; l < N; l++) {
+						if (top[jjN + l].mz <= low) continue;
+						if (top[jjN + l].mz >= high) break;
+						if (top[jjN + l].height > ch[j * N + k]) ch[j * N + k] = top[jjN + l].height;
+					}
+					ind[j] = l;
+				}
+			}
+
+			for (k = 0; k < Min(N, ms1h[i].size()); k++) {
+				float mz = top[iN + k].mz;
+				if (mz <= lower_selection_bound || mz >= upper_selection_bound) continue;
+
+				elution[0] = (2.0 / 3.0) * ch[0 + k] + (1.0 / 3.0) * ch[N + k];
+				elution[W - 1] = (2.0 / 3.0) * ch[(W - 1) * N + k] + (1.0 / 3.0) * ch[(W - 2) * N + k];
+				for (j = 1; j < W - 1; j++) elution[j] = 0.5 * ch[j * N + k] + 0.25 * (ch[(j - 1) * N + k] + ch[(j + 1) * N + k]);
+
+				bool skip_flag = false, inc_flag = false;
+				float curr_evidence = elution[S];
+				for (pos = S - Max(S / 3, 1); pos <= S + Max(S / 3, 1); pos++) if (elution[pos] > curr_evidence) {
+					skip_flag = true;
+					break;
+				}
+				if (skip_flag) continue;
+
+				float max_evidence = curr_evidence, margin = curr_evidence / 3.0;
+				for (pos = k - S + 1; pos <= k + S - 1; pos++) {
+					int ind = pos - k + S;
+					float evidence = elution[ind];
+					if (evidence > max_evidence) max_evidence = evidence;
+					if (evidence < margin) inc_flag = true;
+				}
+				if (!inc_flag) continue;
+				if (curr_evidence < max_evidence * PeakApexEvidence) continue;
+
+				features[i].push_back(top[iN + k]);
+			}
+		}
+	}
+
+	int get_charge(int scan, float acc, const Peak &p) {
+		int i, max_c = 2;
+		float margin = p.height / 10.0;
+		float charges[10], max = 0.0;
+		for (i = 0; i < 10; i++) charges[i] = 0.0;
+
+		for (i = 7; i >= 1; i--) {
+			float l1, l2;
+			if ((l1 = ms1h[scan].level<false>(p.mz + C13delta / (double)i, acc)) >= margin) {
+				charges[i] += l1;
+				if ((l2 = Min(ms1h[scan].level<false>(p.mz + (2.0 * C13delta) / (double)i, acc), l1)) >= margin) charges[i] += l2;
+			}
+		}
+
+		max = charges[2];
+		for (i = 7; i >= 1; i--) if (charges[i] > max + E) max = charges[i], max_c = i;
+		if (max_c > E) return max_c;
+
+		return 1;
+	}
+
+	int get_shadow(int scan, std::vector<float> &elution, int charge, float acc, const Peak &p, float min_corr = 0.7) {
+		float margin = p.height / 3.0;
+		if (charge != 0) if (ms1h[scan].level<false>(p.mz - C13delta / (double)charge, acc) >= margin) {
+			float *x = (float*)alloca(elution.size() * sizeof(float));
+			ms1_profile(x, p.mz - C13delta / (double)charge, elution.size() >> 1, ms1h[scan].RT);
+			if (corr(&(elution[0]), x, elution.size()) >= min_corr) return charge;
+			else return 0;
+		}
+		for (int c = 1; c <= 4; c++) if (c != charge) if (ms1h[scan].level<false>(p.mz - C13delta / (double)c, acc) >= margin) return c;
+		return 0;
+	}
+
+	void feature_spectra(int thread_id, std::list<Feature> * _spectra, std::vector<std::vector<Peak> > * _features, std::vector<Lock> * _locks,
+		int window = 6, float ms1_accuracy = 12.0 / 1000000.0, float accuracy = 20.0 / 1000000.0, int N = 100, int min_fragments = 4, float corr_threshold = 0.8) {
+
+		auto &spectra = *_spectra;
+		auto &features = *_features;
+		auto &locks = *_locks;
+		int i, j, S = window, W = 2 * S + 1;
+		assert(features.size() == ms1h.size());
+
+		std::vector<int> scan_index(W);
+		std::vector<float> elution(W), x(W), y(W);
+		std::vector<Peak> peaks(N), temp;
+		Feature fs;
+
+		for (i = S; i < ms1h.size() - S; i++) if (locks[i].set()) {
+			float rt = ms1h[i].RT;
+			auto pos = std::lower_bound(scan_RT.begin(), scan_RT.end(), rt);
+			if (pos != scan_RT.end() && pos != scan_RT.begin()) {
+				int base_apex = std::distance(scan_RT.begin(), pos);
+
+				for (auto &feature : features[i]) {
+					float mz = feature.mz;
+					if (mz <= lower_selection_bound || mz >= upper_selection_bound) continue;
+					int apex = base_apex, start, stop, low = S - 1, high = S + 1, len, shadow = 0, charge = 0;
+
+					for (start = apex; start >= 1; start--) if (ms2h[start].has(mz)) break;
+					for (stop = apex; stop < ms2h.size() - 1; stop++) if (ms2h[stop].has(mz)) break;
+					if (start < 1) start++; if (stop >= ms2h.size() - 1) stop--;
+					if (rt - ms2h[start].RT < ms2h[stop].RT - rt) apex = start;
+					else apex = stop;
+					scan_index[S] = apex;
+
+					for (start = apex - 1; start >= 0 && low >= 0; start--) if (ms2h[start].has(mz)) scan_index[low--] = start;
+					for (stop = apex + 1; stop < ms2h.size() && high < W; stop++) if (ms2h[stop].has(mz)) scan_index[high++] = stop;
+					low++; len = high - low;
+					if (len < 2) continue;
+
+					peaks.clear(); peaks.resize(N);
+					ms2h[apex].top_peaks(peaks, N, temp);
+					for (j = low; j < high; j++) x[j] = ms1h[i + j - S].level<false>(mz, ms1_accuracy);
+					smooth(&(elution[low]), &(x[low]), len);
+					fs.peaks.clear();
+					float score = 0.0;
+					for (auto &p : peaks) if (p.mz > E) {
+						for (j = low; j < high; j++) y[j] = ms2h[scan_index[j]].level<false>(p.mz, accuracy);
+						float c = corr(&(elution[low]), &(y[low]), len);
+						if (c >= corr_threshold) fs.peaks.push_back(Trace(p.mz, p.height, c)), score += c;
+					}
+					if (fs.peaks.size() >= min_fragments) {
+						fs.RT = rt, fs.mz = mz, fs.score = score, fs.height = elution[S];
+						fs.shadow = shadow, fs.charge = charge;
+						fs.apex = apex, fs.ms1_apex = i;
+
+						std::sort(fs.peaks.begin(), fs.peaks.end(), [](const Trace &left, const Trace &right) { return left.score > right.score; });
+						if (fs.peaks.size() > SCSPeaks) fs.peaks.resize(SCSPeaks);
+
+						float quant = 0.0;
+						int vpos, R = (QuantMode == 1) ? Max(1, S / 2) : S;
+						for (j = 0; j < low; j++) x[j] = 0.0; for (j = high; j < W; j++) x[j] = 0.0;
+						if (QuantMode == 0) {
+							float valley, boundary = elution[S] / PeakBoundary;
+							for (start = vpos = S - 1, valley = elution[S]; start > 0; start--) {
+								if (elution[start] < valley) valley = elution[start], vpos = start;
+								else if (valley < elution[S] / 3.0 && valley < elution[start] / 2.0) { start = vpos;  break; }
+								if (Max(x[start], x[start + 1]) < boundary) break;
+							}
+							for (stop = vpos = S + 1, valley = elution[S]; stop < W; stop++) {
+								if (elution[stop] < valley) valley = elution[stop], vpos = stop;
+								else if (valley < elution[S] / 3.0 && valley < elution[stop] / 2.0) { stop = vpos;  break; }
+								if (Max(x[stop], x[stop - 1]) < boundary) break;
+							}
+							for (j = Max(start, S - R); j <= Min(stop, S + R); j++) quant += x[j];
+						} else for (j = S - R; j <= S + R; j++) quant += x[j];
+						fs.quantity = quant;
+
+						fs.charge = get_charge(i, MassAccuracyMs1, feature);
+						fs.shadow = get_shadow(i, elution, fs.charge, MassAccuracyMs1, feature);
+
+						while (!lock.set()) {}
+						spectra.push_back(fs);
+						lock.free();
+					}
+				}
+			}
+		}
 	}
 
 	class Search {
@@ -7536,6 +8134,14 @@ public:
 			bool guide = GuideLibrary && GuideClassifier && !(run->lib->entries[pep->index].entry_flags & fFromFasta);
             for (peak = 0; peak < info[0].peaks.size(); peak++) {
                 score = run->cscore<true>(&(info[0].scoring[peak * pN]), guide);
+				if (SaveCandidatePSMs && !run->suspend_output && run->curr_iter == nnIter - 1) {
+					while (!run->lock.set()) {}
+					run->run_out << run->lib->entries[pep->index].name << '\t' << int((flags & fDecoy) != 0) 
+						<< '\t' << score << '\t' << run->scan_RT[info[0].peaks[peak].apex];
+					for (int i = 0; i < pN; i++) run->run_out << '\t' << info[0].scoring[peak * pN + i];
+					run->run_out << '\n';
+					run->lock.free();
+				}
                 if (score > info[0].cscore) {
 					if (run->RT_windowed_search && Abs(run->scan_RT[info[0].peaks[peak].apex] - calc_spline(run->RT_coeff, run->RT_points, pep->iRT)) > run->RT_window) continue;
 					info[0].best_peak = peak;
@@ -7636,6 +8242,114 @@ public:
 	};
 
 	std::vector<Target> entries;
+
+	void extract_chromatograms(std::vector<std::vector<float> > &ch, std::vector<float> &masses) {
+		int i, j, m = masses.size();
+		ch.clear(); ch.resize(m);
+		if (!m) return;
+
+		for (auto &c : ch) c.resize(ms2h.size());
+
+		for (i = 0; i < ms2h.size(); i++) for (j = 0; j < m; j++) {
+			float query_mz = predicted_mz(&(MassCorrection[0]), masses[j], scan_RT[i]);
+			ch[j][i] = ms2h[i].level<false>(query_mz, MassAccuracy);
+		}
+	}
+
+	void extract_spectra(std::vector<Feature> &spectra, std::vector<float> &masses, int N_ms1, int N_ms2, float min_corr = 0.7) { // only partial support for overlapping windows
+		spectra.clear();
+		std::vector<std::vector<float> > ch, ms2;
+		extract_chromatograms(ch, masses);
+		ms2.resize(masses.size());
+		std::vector<float> corrs(masses.size());
+		std::vector<int> peak(masses.size());
+
+		int i, j, l, k, window, n = ms2h.size(), m = masses.size();
+		for (window = 0; window < cycle_length; window++) {
+			float mz = 0.5 * (ms2h[window].window_low + ms2h[window].window_high);
+
+			std::vector<int> si;
+			for (i = k = 0; i < n; i++) if (ms2h[i].has(mz)) k++;
+			si.resize(k); for (auto &s : ms2) s.resize(k);
+			for (i = k = 0; i < n; i++) if (ms2h[i].has(mz)) {
+				for (j = 0; j < m; j++) ms2[j][k] = ch[j][i];
+				si[k++] = i;
+			}
+
+			int N = k, S, W, best;
+			if (WindowRadius) S = WindowRadius;
+			else if (PeakWidth > E) S = Max(1, int(ScanScale * PeakWidth));
+			else S = Max(1, k / ScanFactor);
+			W = 2 * S + 1;
+			std::vector<float> elution(W);
+			std::vector<float> x(W);
+
+			std::vector<Peak> temp;
+			std::vector<float> ms1, mzs;
+			std::vector<std::pair<float, float> > scores;
+			std::vector<Peak> peaks;
+			Feature fs;
+
+			float max;
+			for (k = S; k < N - S; k++) {
+				int apex = si[k];
+				for (j = 0; j < m; j++) {
+					corrs[j] = 0.0;
+					peak[j] = 0;
+					if (ms2[j][k] > ms2[j][k - 1] && ms2[j][k] > ms2[j][k + 1]) peak[j] = 1;
+				}
+				for (j = 0; j < m; j++) for (l = j + 1; l < m; l++) if (peak[j] + peak[l]) {
+					float c = corr(&(ms2[j][k - S]), &(ms2[l][k - S]), W);
+					corrs[j] += c, corrs[l] += c;
+				}
+				for (j = best = 0, max = -INF; j < m; j++) if (peak[j] && corrs[j] > max) max = corrs[j], best = j;
+				if (max < 0.5) continue;
+
+				smooth(&(elution[0]), &(ms2[best][k - S]), W);
+				for (j = 0; j < m; j++) corrs[j] = corr(&(elution[0]), &(ms2[j][k - S]), W);
+
+				ms1_top_profiles(ms1, mzs, temp, S, scan_RT[si[k]], ms2h[si[k]].window_low, ms2h[si[k]].window_high, N_ms1);
+				scores.resize(mzs.size());
+				for (j = 0; j < mzs.size(); j++) scores[j].first = corr(&(elution[0]), &(ms1[j * W]), W), scores[j].second = mzs[j];
+				std::sort(scores.begin(), scores.end());
+
+				if (!scores.size()) continue;
+				auto &sc = scores[scores.size() - 1];
+				if (sc.first < 0.5) continue;
+
+				for (j = l = 0; j < m; j++) if (corrs[j] >= min_corr && ms2[j][k] > E) l++;
+				if (l < 2) continue; // require at least two ions
+
+				fs.RT = scan_RT[si[k]];
+				fs.mz = sc.second;
+				fs.score = max + sc.first;
+				fs.apex = si[k];
+				fs.peaks.resize(l);
+				for (j = l = 0; j < m; j++) if (corrs[j] >= min_corr && ms2[j][k] > E) {
+					fs.peaks[l].mz = masses[j];
+					fs.peaks[l].height = ms2[j][k];
+					fs.peaks[l++].score = corrs[j];
+				}
+
+				auto ms1_peak = Peak(fs.mz, ms1_level(fs.mz, scan_RT[si[k]]));
+				fs.charge = get_charge(i, MassAccuracyMs1, ms1_peak);
+				fs.shadow = get_shadow(i, elution, fs.charge, MassAccuracyMs1, ms1_peak);
+
+				peaks.clear(); peaks.resize(N_ms2);
+				ms2h[apex].top_peaks(peaks, N_ms2, temp);
+				for (auto &p : peaks) if (p.mz > E) {
+					for (j = k - S; j <= k + S; j++) x[j - k + S] = ms2h[si[j]].level<false>(p.mz, MassAccuracy);
+					float c = corr(&(elution[0]), &(x[0]), W);
+					if (c >= min_corr) fs.peaks.push_back(Trace(p.mz, p.height, c));
+				}
+
+				std::sort(fs.peaks.begin(), fs.peaks.end());
+
+				spectra.push_back(fs);
+			}
+		}
+	}
+
 
 	void write(char * file_name) {
 		std::ofstream out(file_name, std::ofstream::binary);
@@ -7773,7 +8487,12 @@ public:
 			out.close();
 		}
 
-		scan_cycle.resize(n_scans); if (n_scans) scan_cycle[0] = 0;
+		scan_cycle.resize(n_scans); 
+		if (n_scans) {
+			scan_cycle[0] = 0;
+			lower_selection_bound = ms2h[0].window_low;
+			upper_selection_bound = ms2h[0].window_high;
+		}
 		for (i = 1; i < n_scans; i++) { // handle overlapping windows
 			if (ms2h[i - 1].window_low < ms2h[i].window_low - E && ms2h[i - 1].window_high < ms2h[i].window_high - E && ms2h[i - 1].window_high > ms2h[i].window_low + E)
 				ms2h[i - 1].window_high = ms2h[i].window_low = (ms2h[i - 1].window_high + ms2h[i].window_low) * 0.5;
@@ -7781,6 +8500,9 @@ public:
 				ms2h[i - 1].window_low = ms2h[i].window_high = (ms2h[i - 1].window_low + ms2h[i].window_high) * 0.5;
 			if (ms2h[i - 1].window_high < ms2h[i].window_high && ms2h[i - 1].window_low < ms2h[i].window_low) scan_cycle[i] = cycle;
 			else scan_cycle[i] = ++cycle;
+
+			if (ms2h[i].window_low < lower_selection_bound) lower_selection_bound = ms2h[i].window_low;
+			if (ms2h[i].window_high > upper_selection_bound) upper_selection_bound = ms2h[i].window_high;
 		}
 		for (cycle_length = 0; cycle_length < scan_cycle.size(); cycle_length++) if (scan_cycle[cycle_length]) break;
 
@@ -8122,8 +8844,9 @@ public:
 				auto data = load_func(file_name, !fast_wiff, Max(1, Threads - 1));
 				if (data == NULL) { dsout << "Unhandled exception when reading the .wiff file\n"; return false; }
 				int * ptr = (int*)data;
-				int i, j, pos = 0, n = *(ptr++), nms1 = 0, nms2 = 0;
-				long long *lptr = (long long*)ptr, tot_peaks = *(lptr++);
+				scanning = *(ptr++);
+				int i, j, n = *(ptr++), nms1 = 0, nms2 = 0;
+				long long *lptr = (long long*)ptr, tot_peaks = *(lptr++), pos = 0;
 				ptr = (int*)lptr;
 				ms1h.reserve(n), ms2h.reserve(n), peaks.resize(tot_peaks);
 				Scan S;
@@ -8146,7 +8869,6 @@ public:
 				dsout << "Unhandled exception when reading the .wiff file\n";
 				return false;
 			};
-			if (ms2h.size() >= 2) if (Abs(ms2h[0].window_low - ms2h[1].window_high) < E || Abs(ms2h[1].window_low - ms2h[0].window_high) < E) scanning = true;
 			goto finalise;
 		}
 #endif
@@ -8220,7 +8942,7 @@ public:
 			ms1h.resize(ms1_cnt);
 			ms2h.resize(ms2_cnt);
 
-			int i, pos = 0, n_ms1 = 0, n_ms2 = 0;
+			int i, n_ms1 = 0, n_ms2 = 0;
 			for (auto &s : spectra) {
 				if (s.type == 1) ms1h[n_ms1++] = s;
 				else if (s.type == 2) ms2h[n_ms2++] = s;
@@ -9525,6 +10247,112 @@ public:
 		return true;
 	}
 
+	void mgf(int N_ms1, int N_ms2, int min_fr, float min_corr, int window, double acc, double acc_ms1) {
+		window = Max(window, 1);
+		if (Verbose >= 1) Time(), std::cout << "Extracting spectra from the raw data: scan window radius = " << window << ", mass accuracy = "
+			<< acc * 1000000.0 << "ppm (MS2), " << acc_ms1 * 1000000.0 << "ppm (MS1)\n";
+		std::vector<Lock> locks(ms1h.size());
+		std::vector<Peak> top;
+		std::vector<std::vector<Peak> > features;
+
+		int i;
+		if (Threads > 1) {
+			std::vector<std::thread> threads;
+			for (i = 0; i < Threads; i++) threads.push_back(std::thread(&Run::ms1_top_peaks, this, i, &top, &locks, N_ms1));
+			for (i = 0; i < Threads; i++) threads[i].join();
+		} else ms1_top_peaks(0, &top, &locks, N_ms1);
+		for (i = 0; i < locks.size(); i++) locks[i].free();
+
+		if (Threads > 1) {
+			std::vector<std::thread> threads;
+			for (i = 0; i < Threads; i++) threads.push_back(std::thread(&Run::ms1_features, this, i, &features, &top, &locks, window, acc_ms1, N_ms1));
+			for (i = 0; i < Threads; i++) threads[i].join();
+		} else ms1_features(0, &features, &top, &locks, window, acc_ms1, N_ms1);
+		for (i = 0; i < locks.size(); i++) locks[i].free();
+
+		std::list<Feature> spectra;
+		if (Threads > 1) {
+			std::vector<std::thread> threads;
+			for (i = 0; i < Threads; i++) threads.push_back(std::thread(&Run::feature_spectra, this, i, &spectra, &features, &locks, window, acc_ms1, acc, N_ms2, min_fr, min_corr));
+			for (i = 0; i < Threads; i++) threads[i].join();
+		} else feature_spectra(0, &spectra, &features, &locks, window, acc_ms1, acc, N_ms2, min_fr, min_corr);
+		for (i = 0; i < locks.size(); i++) locks[i].free();
+		spectra.sort();
+
+		std::string(mgf_name) = name + std::string(".mgf");
+		if (out_dir.size()) mgf_name = out_dir + '\\' + get_file_name(mgf_name);
+		else if (temp_folder.size()) mgf_name = temp_folder + '\\' + get_file_name(mgf_name);
+		std::ofstream out(mgf_name, std::ofstream::out);
+		if (out.fail()) std::cout << "ERROR: cannot write to " << mgf_name << "\n";
+		else {
+			i = 0;
+			for (auto &s : spectra) { i++; s.write(out, i); }
+			out.close();
+			if (out.fail()) std::cout << "ERROR: cannot write to " << mgf_name << "\n";
+			else if (Verbose >= 1) Time(), std::cout << spectra.size() << " spectra exported to " << mgf_name << "\n";
+		}
+	}
+
+	void extract() {
+		if (Verbose >= 1) Time(), std::cout << "Extracting targeted masses\n";
+
+		std::vector<Feature> spectra;
+		extract_spectra(spectra, Extract, 500, 500, 0.5);
+
+		std::string(mgf_name) = name + std::string(".extracted.mgf");
+		if (out_dir.size()) mgf_name = out_dir + '\\' + get_file_name(mgf_name);
+		else if (temp_folder.size()) mgf_name = temp_folder + '\\' + get_file_name(mgf_name);
+		std::ofstream out(mgf_name, std::ofstream::out);
+		if (out.fail()) std::cout << "ERROR: cannot write to " << mgf_name << "\n";
+		else {
+			int i = 0;
+			for (auto &s : spectra) { i++; s.write(out, i); }
+			out.close();
+			if (out.fail()) std::cout << "ERROR: cannot write to " << mgf_name << "\n";
+			else if (Verbose >= 1) Time(), std::cout << spectra.size() << " spectra exported to " << mgf_name << "\n";
+		}
+		out.close();
+	}
+
+	void extraction(std::string &file) {
+		int i, k, N = Extract.size();
+		std::vector<std::vector<float> > chr(N);
+		std::vector<int> cnt(N + 1, 0);
+
+		if (Verbose >= 1) Time(), dsout << "Extracting " << N << " fragment ions specified\n";
+		for (i = 0; i < N; i++) {
+			chr[i].resize(ms2h.size());
+			for (k = 0; k < ms2h.size(); k++) {
+				float query = predicted_mz(&(MassCorrection[0]), Extract[i], ms2h[k].RT);
+				chr[i][k] = ms2h[k].level<false>(query, MassAccuracy);
+			}
+		}
+
+		std::ofstream out(file);
+		out << "RT\tWindow.Low\tWindow.High";
+		for (i = 0; i < N; i++) out << '\t' << Extract[i];
+		out << '\n';
+
+		for (k = 0; k < ms2h.size(); k++) {
+			int tot = 0;
+			out << ms2h[k].RT << '\t' << ms2h[k].window_low << '\t' << ms2h[k].window_high;
+			for (i = 0; i < N; i++) {
+				out << '\t' << chr[i][k];
+				if (int(chr[i][k]) > 0) tot++;
+			}
+			cnt[tot]++;
+			out << '\n';
+		}
+
+		out.close();
+
+		if (Verbose >= 1) Time(), dsout << "Extracted chromatograms saved to " << file << '\n';
+		if (Verbose >= 3) {
+			for (i = 0; i < cnt.size(); i++) dsout << cnt[i] << '\t';
+			dsout << '\n';
+		}
+	}
+
 	void process(std::vector<QuantEntry> * result = NULL, float q_filtering = 0.01) {
 		int i, ids = 0, best_ids = 0, best1, best50, cal_batch = 0;
 
@@ -9649,6 +10477,8 @@ public:
 			}
 			if (!IndividualMassAcc) ForceMassAcc = true;
 
+			if (Extract.size()) extraction(ms_files[run_index] + std::string(".extracted.txt"));
+
 			int processed_batches = curr_batch, fail = 0, switched = 0;
 			copy_weights(best_weights, selection_weights), copy_weights(best_guide_weights, selection_guide_weights), best_ids = Ids10;
 			for (; curr_iter < nnIter - 1; curr_iter++) {
@@ -9692,7 +10522,28 @@ public:
 			curr_batch = Batches;
 			all_iters = true;
 			copy_weights(weights, best_weights), copy_weights(guide_weights, best_guide_weights);
-			update_classifier(true, false, true, true, processed_batches + 1, Batches);
+
+			std::vector<char> buf;
+			if (SaveCandidatePSMs) {
+				buf.resize(128 * 1024 * 1024);
+				run_out.rdbuf()->pubsetbuf(&buf[0], 128 * 1024 * 1024);
+				std::string floc;
+				if (temp_folder.size()) floc = location_to_file_name(name) + std::string(".psms.tsv");
+				else floc = name + std::string(".psms.tsv");
+				run_out = std::ofstream(floc);
+				run_out.precision(10);
+				if (!run_out) {
+					dsout << "ERROR: cannot write to " << name << ".psms.txt\n";
+					suspend_output = true;
+				} else {
+					run_out << "Precursor\tDecoy\tScore\tRT";
+					for (int i = 0; i < pN; i++) run_out << '\t' << i;
+					run_out << '\n';
+				}
+			}
+
+			update_classifier(true, false, true, true, SaveCandidatePSMs ? 0 : (processed_batches + 1), Batches);
+			if (SaveCandidatePSMs && !suspend_output) run_out.close(), std::vector<char>().swap(buf);
 			update(false, false, false, false, false);
 
 			remove_rubbish();
@@ -10077,6 +10928,15 @@ int main(int argc, char *argv[]) {
 			run.write(&(dia_name[0]));
 		}
 		dsout << "Finished\n\n";
+		return 0;
+	} else if (MGF) {
+		for (auto it = ms_files.begin(); it != ms_files.end(); it++) {
+			Run run(std::distance(ms_files.begin(), it));
+			if (!run.load(&((*it)[0]))) continue;
+			run.mgf(500, 100, 4, 0.7, WindowRadius, GlobalMassAccuracy, GlobalMassAccuracyMs1);
+			run.extract();
+		}
+		std::cout << "Finished\n\n";
 		return 0;
 	}
 
