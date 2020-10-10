@@ -15,12 +15,12 @@ As input it takes raw data files and a spectral library / FASTA database.
 A report with protein and precursor ion quantities is produced.
 
 **Download**: https://github.com/vdemichev/DiaNN/releases  
-(it's recommended to use the latest version - DIA-NN 1.7.11)  
+(it's recommended to use the latest version - DIA-NN 1.7.12)  
 
 **DIA-NN manual**: https://github.com/vdemichev/DiaNN/blob/master/DIA-NN%20GUI%20manual.pdf  
 Please also check the commands listed below.   
 
-**R package** with some useful functions for dealing with DIA-NN's reports: https://github.com/vdemichev/diann-rpackage 
+**R package** with some useful functions for dealing with DIA-NN's reports: https://github.com/vdemichev/diann-rpackage
 
 ### New since version 1.7.0  
 
@@ -33,6 +33,8 @@ Please also check the commands listed below.
 4. Experimental support for NIST .msp and SpectraST .sptxt libraries.   
 
 5. MaxLFQ-based protein quantification and improved protein grouping.
+
+6. Significantly higher numbers of proteins identified.  
 
 ### Installation
 
