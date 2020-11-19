@@ -12,6 +12,17 @@ Uncomment "#define _NO_THERMORAW" in RAWReader.cpp, MSReader.cpp and MSReader.h 
 #define _CRT_SECURE_NO_WARNINGS
 #define EIGEN_MPL2_ONLY
 
+#define MAINAME "DIA-NN (Data Independent Acquisition by Neural Networks)"
+#define MAINVER 1
+#define SUBVER1 17
+#define SUBVER2 12
+ 
+#define STR_EXP(S) #S
+#define STR(S) STR_EXP(S)
+#define VERSION MAINAME \
+                " Version:" STR(MAINVER) "." STR(SUBVER1) "." STR(SUBVER2) \
+                ". Compiled on " __DATE__ " " __TIME__
+
 #pragma warning(disable:4244)
 #pragma warning(disable:4267)
 #pragma warning(disable:4305)
@@ -10899,7 +10910,7 @@ int main(int argc, char *argv[]) {
 #endif
 	std::cout.setf(std::ios::unitbuf);
 	auto curr_time = time(0);
-	dsout << "DIA-NN 1.7.12 (Data Independent Acquisition by Neural Networks)\nCompiled on " << __DATE__ << " " << __TIME__ << "\nCurrent date and time: " << std::ctime(&curr_time);
+	dsout << VERSION << "\nCurrent date and time: " << std::ctime(&curr_time);
 #ifdef _MSC_VER
 	cpu_info(dsout);
 #endif
