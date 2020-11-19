@@ -58,6 +58,11 @@ Uncomment "#define _NO_THERMORAW" in RAWReader.cpp, MSReader.cpp and MSReader.h 
 #endif
 #endif
 
+#ifdef __APPLE__
+#undef WIFFREADER
+#undef CPP17
+#endif
+
 #include "cpu_info.h"
 #include "../cranium/src/cranium.h"
 #include "../eigen/Eigen/Dense"
