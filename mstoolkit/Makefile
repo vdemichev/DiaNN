@@ -25,10 +25,17 @@ NOSQLITE = -D_NOSQLITE
 CFLAGS = -O3 -static -I. -I$(HEADER_PATH) -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DGCC -DHAVE_EXPAT_CONFIG_H
 LIBS = -lm -ldl
 
+CMD = $(CC) -o ../diann-linux ../src/diann.cpp -static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -std=c++17 -lstdc++fs -fpermissive -O3 -mfpmath=sse -msse2 -march=core2 -w -L. -lmstoolkitlite -I. -I$(HEADER_PATH) -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DGCC -DHAVE_EXPAT_CONFIG_H
+# MacOS 10.15.7
+ifneq ($(OS),Windows_NT)
+ ifeq ($(shell uname),Darwin)
+  CMD = $(CC) -o ../diann-linux ../src/diann.cpp -lpthread -std=c++14 -fpermissive -O3 -mfpmath=sse -msse2 -march=core2 -w -L. -lmstoolkitlite -I. -I$(HEADER_PATH) -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DGCC -DHAVE_EXPAT_CONFIG_H
+ endif
+endif
+
 all:  $(ZLIB) $(MZPARSERLITE) $(MSTOOLKIT) $(READERLITE) $(EXPAT)
 	ar rcs libmstoolkitlite.a $(ZLIB) $(EXPAT) $(MZPARSERLITE) $(MSTOOLKIT) $(READERLITE)
-	$(CC) -o ../diann-linux ../src/diann.cpp -static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -std=c++17 -lstdc++fs -fpermissive -O3 -mfpmath=sse -msse2 -march=core2 -w -L. -lmstoolkitlite -I. -I$(HEADER_PATH) -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DGCC -DHAVE_EXPAT_CONFIG_H
-
+	$(CMD)
 clean:
 	rm -f *.o libmstoolkitlite.a libmstoolkit.a msSingleScan diann-linux
 	rm -f ../diann-linux
