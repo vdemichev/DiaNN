@@ -2549,8 +2549,8 @@ struct Feature {
 			auto pos = std::lower_bound(frm.begin(), frm.end(), query);
 			if (pos == frm.end()) continue;
 			while (pos->mz < high) {
-				if (open && iter == 1 && pos->charge != 1) goto finish;
 				auto &pr = precursors[pos->pr];
+				if (open && iter == 1 && pos->charge != 1) goto finish;
 				if ((open || (pr.first > min && pr.first < max)) && pr.second == charge) {
 					if (size <= pos->pr) size = ((pos->pr * 5) / 4) + 1, temp.resize(size);
 					auto &match = temp[pos->pr].hit;
@@ -5391,12 +5391,12 @@ public:
 			}
 
 			int tot_pr = 0; for (i = 0; i < prs_n; i++) if (prn[i]) tot_pr++;
+			int ni = indices.size();
 			if (tot_pr < 2) {
 				for (i = 0; i < n_s; i++) quantities[i] = reference[i];
 				goto save;
 			}
-
-			int ni = indices.size();
+			
 			B.resize(ni); A.resize(ni, ni);
 			for (i = 0; i < ni; i++) {
 				B(i) = 0.0;
