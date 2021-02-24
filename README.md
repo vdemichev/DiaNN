@@ -38,12 +38,12 @@ Please also check the commands listed below.
 
 ### Installation
 
-Download and run the automatic installer: DIA-NN-Setup.msi.  
-For .wiff support, first download and install ProteoWizard (http://proteowizard.sourceforge.net/download.html - choose the version (64-bit) that supports "vendor files"), then use the installer (DIA-NN-Setup.msi) and specify the ProteoWizard directory (e.g. C:\Program Files (x86)\ProteoWizard\ProteoWizard \[version\], where \[version\] is the ProteoWizard version number, e.g. 3.0.11537) as the installation directory.
+Download the installer (https://github.com/vdemichev/DiaNN/releases, click 'Assets') and run it. Make sure not to run the installer from a network drive.        
+For .wiff support, first download and install ProteoWizard (http://proteowizard.sourceforge.net/download.html - choose the version (64-bit) that supports "vendor files"). Then copy all files with 'Clearcore' or 'Sciex' in their name (these will be .dll files) from the Proteowizard folder to the DIA-NN installation folder.   
 
 ### Input files
 
-Raw data files: Sciex .wiff, Thermo .raw, .mzML or .dia (format used by DIA-NN to store spectra).  
+Raw data files: Sciex .wiff, Bruker .d, Thermo .raw, .mzML or .dia (format used by DIA-NN to store spectra).  
 Reading Thermo .raw files requires Thermo MS File Reader (https://thermo.flexnetoperations.com/control/thmo/login?nextURL=%2Fcontrol%2Fthmo%2Fdownload%3Felement%3D6306677) to be installed. It is essential to use specifically the version by the link above (3.0 SP3).     
 The .mzML files should be centroided and contain data as spectra (e.g. SWATH) and not chromatograms.  
 
@@ -114,7 +114,7 @@ diann.exe --f run1.mzML --f run2.mzML --lib yeast.tsv --out report.tsv --vis 20,
 
 For a full list of supported commands see the arguments() function in /src/diann.cpp.
 
-### Building
+### Building (DIA-NN 1.7.12 only)
 
 **Windows**: A Visual C++ solution file is provided with the source code. Changing the SDK to a Windows 10 one in the project settings might be required. Tested on Windows 7 and 10. Configuration should be set to "Release" (source code for deep learning-based generation of spectral libraries (PyTorch) is not included, so this functionality is only supported in the official DIA-NN builds).      
 
