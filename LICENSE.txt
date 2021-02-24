@@ -11,12 +11,12 @@ To view a copy of this license, visit http://creativecommons.org/licenses/by/4.0
 PO Box 1866, Mountain View, CA 94042, USA.
 
 All third-party software included in this DiaNN distribution retains its original license (see below).
-For the inclusion in this DiaNN distribution, the source code of MSToolkit and Cranium was modified.
+For the inclusion in this DiaNN distribution, the source code of MSToolkit and MiniDNN was modified.
 
-Cranium
- - folder within this distribution: /cranium
- - URL: https://github.com/100/Cranium
- - License information: /cranium/LICENSE
+MiniDNN
+ - folder within this distribution: /MiniDNN
+ - URL: https://github.com/yixuan/MiniDNN
+ - License information: /MiniDNN/LICENSE.txt
 
 MSToolkit
  - folder within this distribution: /mstoolkit
