@@ -34,7 +34,11 @@ Please also check the commands listed below.
 
 5. MaxLFQ-based protein quantification and improved protein grouping.
 
-6. Significantly higher numbers of proteins identified.  
+6. Significantly higher numbers of proteins identified.     
+
+7. Global (experiment-wide) precursor-level and protein-level FDR control (since 1.7.15).
+
+8. Full dia-PASEF support (since 1.7.15).
 
 ### Installation
 
