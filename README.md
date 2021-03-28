@@ -14,8 +14,8 @@ DIA-NN encompasses all stages of DIA-MS data processing in a single program.
 As input it takes raw data files and a spectral library / FASTA database.  
 A report with protein and precursor ion quantities is produced.
 
-**Download**: https://github.com/vdemichev/DiaNN/releases  
-(it's recommended to use the latest version - either DIA-NN 1.7.12 or the latest development build 1.7.15)  
+**Download**: https://github.com/vdemichev/DiaNN/releases/tag/1.7.16
+(it's recommended to use the latest version - DIA-NN 1.7.16)  
 
 **DIA-NN manual**: https://github.com/vdemichev/DiaNN/blob/master/DIA-NN%20GUI%20manual.pdf  
 Please also check the commands listed below.   
