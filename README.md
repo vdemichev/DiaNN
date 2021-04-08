@@ -11,7 +11,7 @@ enable deep proteome coverage in high throughput**
 https://www.nature.com/articles/s41592-019-0638-x
 
 When using DIA-NN's ion mobility module for dia-PASEF analysis, please also cite  
-**High sensitivity dia-PASEF proteomics with DIA-NN and FragPipe**
+**High sensitivity dia-PASEF proteomics with DIA-NN and FragPipe**  
 https://www.biorxiv.org/content/10.1101/2021.03.08.434385v1  
 
 DIA-NN encompasses all stages of DIA-MS data processing in a single program.   
