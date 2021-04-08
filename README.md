@@ -5,10 +5,14 @@ DIA-NN - a fast and easy to use tool for processing data-independent acquisition
 DIA-NN implements deep neural networks to improve precursor ion identification.  
 DIA-NN now also supports library-free search and spectral library generation.
 
+Please cite   
 **DIA-NN: neural networks and interference correction   
 enable deep proteome coverage in high throughput**  
-Vadim Demichev, Christoph B. Messner, Spyros I. Vernardis, Kathryn S. Lilley, Markus Ralser  
 https://www.nature.com/articles/s41592-019-0638-x
+
+When using DIA-NN for dia-PASEF analysis, please cite  
+**High sensitivity dia-PASEF proteomics with DIA-NN and FragPipe**
+https://www.biorxiv.org/content/10.1101/2021.03.08.434385v1  
 
 DIA-NN encompasses all stages of DIA-MS data processing in a single program.   
 As input it takes raw data files and a spectral library / FASTA database.  
