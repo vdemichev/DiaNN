@@ -878,6 +878,8 @@ std::string get_file_name(const std::string &file) {
 		if (file[pos] == '\\' || file[pos] == '/') { pos++; break; }
 		pos--;
 	}
+	if (pos < 0)
+		pos = 0
 	res = file.substr(pos);
 	return res;
 }
