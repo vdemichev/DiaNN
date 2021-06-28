@@ -1,5 +1,8 @@
 
-### <img src="https://raw.githubusercontent.com/vdemichev/DiaNN/master/GUI/DIA-NN%20art%20-%20128x128.png" width="30" height="30"> DIA-NN
+<p align="center" style="margin-bottom: 0px !important;">
+  <img src="https://raw.githubusercontent.com/vdemichev/DiaNN/master/GUI/DIA-NN%20art%20-%20128x128.png" width="100" height="100">
+</p>
+<h1 align="center" style="margin-top: 5px; font-size: 20px">DIA-NN</h1>
 
 DIA-NN - a universal software for data-independent acquisition (DIA) proteomics data processing by Demichev, Ralser and Lilley labs. In 2018, DIA-NN opened a new chapter in proteomics, introducing a number of algorithms which enabled reliable, robust and quantitatively accurate large-scale experiments using high-throughput methods.
 
