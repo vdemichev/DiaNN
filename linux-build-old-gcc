@@ -1,4 +1,0 @@
-#!/bin/bash
-
-g++ -o diann-linux src/diann.cpp -static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -std=c++14 -fpermissive -O3 -mfpmath=sse -msse2 -march=core2 -w
-
