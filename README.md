@@ -68,7 +68,7 @@ It is also possible to run DIA-NN on Linux using **Wine** 6.8 or later.
 
 DIA mass spectrometry data can be analysed in two ways: by searching against a sequence database (library-free mode), or by using a "spectral library" - a set of known spectra and retention times for selected peptides. We discuss in detail when to use each of these approaches in the [Library-free search](#library-free-search) section. For both kinds of analyses, using DIA-NN is very simple:
 
-1. Click **Raw** (in the **Input** pane), select your raw mass spectrometry data files.
+1. Click **Raw** (in the **Input** pane), select your raw mass spectrometry data files. See [Raw data formats](#raw-data-formats) for information on supported formats.  
 2. Click **Add FASTA**, add one or more sequence databases in UniProt format.
 3. If you want to use a spectral library, click **Spectral library** and select the library. Alternatively, for library-free analysis, select **FASTA digest for library-free search/library generation** (in the **Precursor ion generation** pane).
 4. Specify **Main output** file name in the **Output** pane and click **Run**.  
