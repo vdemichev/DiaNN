@@ -62,7 +62,23 @@ On **Windows**, download the .exe installer and run it. Make sure not to run the
 
 On **Linux**, download the .deb or .rpm package. Install it using the preferred way for your Linux distribution, e.g. using gdebi for .deb installation on Ubuntu/Debian-based distributions. DIA-NN will be installed to the /usr/diann/[version number]/ folder. The Linux system must have glibc 2.27 or later (for example, Ubuntu 18.04 or CentOS 8 and later versions are fine).
 
-It is also possible to run DIA-NN on Linux using **Wine** 6.8 or later.
+It is also possible to run DIA-NN on Linux using **Wine** 6.8 or later, or via Docker.
+
+<details>
+  <summary>Example Docker usage</summary>
+
+On a non-Windows machine with [Docker](https://docs.docker.com/get-docker/) installed, from the root directory of this repository:
+```bash
+$ docker build -f Dockerfile .
+$ docker run -it $(docker images -q | head -1) diann
+DIA-NN 1.8 (Data-Independent Acquisition by Neural Networks)
+Compiled on Jun 28 2021 10:59:57
+Current date and time: Tue Aug  3 00:01:46 2021
+Logical CPU cores: 2
+
+0 files will be processed
+```
+</details>
 
 ### Getting Started
 
