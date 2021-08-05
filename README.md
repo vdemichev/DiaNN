@@ -35,6 +35,7 @@ When using DIA-NN's ion mobility module for dia-PASEF analysis or using DIA-NN i
 [Nature Biotechnology, 2021](https://www.nature.com/articles/s41587-021-00860-4)
 
 **R package** with some useful functions for dealing with DIA-NN's output reports: https://github.com/vdemichev/diann-rpackage
+**Visualisation** of peptide positions in the protein: https://github.com/MannLabs/alphamap (AlphaMap by Mann lab)
 
 ### Table of Contents
 **[Installation](#installation)**<br>
@@ -293,7 +294,9 @@ The DIA-NN GUI does not have built-in visualisation yet. However since the abili
 ```   
 --vis [N],[Peptide 1],[Peptide 2],...
 ```
-Specifically, chromatograms of length >= N will be extracted in the vicinity of the detected elution apex (for all runs in the experiment) and saved as a human- and machine-readable text table. Excel, R or Python can then be used to make visually-attractive plots based on these.
+Specifically, chromatograms of length >= N will be extracted in the vicinity of the detected elution apex (for all runs in the experiment) and saved as a human- and machine-readable text table. Excel, R or Python can then be used to make visually-attractive plots based on these.   
+
+Peptide & modification positions within a protein can be visualised using AlphaMap by Mann lab https://github.com/MannLabs/alphamap.
 
 ### Automated pipelines
 The pipeline window within the DIA-NN GUI allows to combine multiple analysis steps into pipelines. Each pipeline step is a set of settings as displayed by the GUI. One can add such steps to the pipeline, update existing steps, remove steps, move steps up/down in the pipeline, disable/enable (by double mouse-click) certain steps within the pipeline and save/load pipelines. Further, individual pipeline steps can be copy-pasted between different GUI tabs/windows (use Copy and Paste buttons for this).
