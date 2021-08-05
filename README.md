@@ -34,7 +34,7 @@ When using DIA-NN's ion mobility module for dia-PASEF analysis or using DIA-NN i
 - Ultra-fast proteomics with DIA-NN and Scanning SWATH:   
 [Nature Biotechnology, 2021](https://www.nature.com/articles/s41587-021-00860-4)
 
-**R package** with some useful functions for dealing with DIA-NN's output reports: https://github.com/vdemichev/diann-rpackage
+**R package** with some useful functions for dealing with DIA-NN's output reports: https://github.com/vdemichev/diann-rpackage   
 **Visualisation** of peptide positions in the protein: https://github.com/MannLabs/alphamap (AlphaMap by Mann lab)
 
 ### Table of Contents
