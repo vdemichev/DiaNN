@@ -24,6 +24,10 @@ Please cite
 enable deep proteome coverage in high throughput**  
 [Nature Methods, 2020](https://www.nature.com/articles/s41592-019-0638-x)
 
+When using DIA-NN for the analysis of post-translation modifications (PTMs), such as phosphorylation or ubiquitination, please also cite     
+**Time-resolved in vivo ubiquitinome profiling by DIA-MS reveals USP7 targets on a proteome-wide scale**   
+[Nature Communications, 2021](https://www.nature.com/articles/s41467-021-25454-1 )
+
 When using DIA-NN's ion mobility module for dia-PASEF analysis or using DIA-NN in combination with FragPipe-generated spectral libraries, please also cite  
 **High sensitivity dia-PASEF proteomics with DIA-NN and FragPipe**  
 [biorxiv, 2021](https://www.biorxiv.org/content/10.1101/2021.03.08.434385v1)
