@@ -1773,8 +1773,8 @@ void arguments(int argc, char *argv[]) {
 		end = (next == std::string::npos) ? args.length() : next;
 
 		bool flag = false;
-		if (!memcmp(&(args[start]), "cfg", 3)) { // parse the contents of the file
-			std::string name = args.substr(start + 4, end - start - 4);
+		if (!memcmp(&(args[start]), "cfg ", 3)) { // parse the contents of the file
+			std::string name = trim(args.substr(start + 4, end - start - 4));
 			std::ifstream in(name);
 			if (in.is_open()) {
 				std::stringstream stream;
