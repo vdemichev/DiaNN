@@ -195,14 +195,14 @@ A text table containing precursor and protein IDs, as well as plenty of associat
 <details>
   <summary>Matrices</summary>
 
-These contain normalised quantities for protein groups, gene groups, unique genes (i.e. genes identified and quantified using only proteotypic, that is gene-specific, peptides) and precursors. They are filtered at 1% FDR, using global q-values for protein groups and both global and run-specific q-values for precursors. Use --matrix-spec-q to force additional filtering of the protein/gene matrices using run-specific protein group q-values. Sometimes DIA-NN will report a zero as the best estimate for a precursor or protein quantity. Such zero quantities are omitted from protein/gene matrices.
+These contain normalised quantities for protein groups ('pg_matrix'), gene groups ('gg_matrix'), unique genes ('unique_genes_matrix'; i.e. genes identified and quantified using only proteotypic, that is gene-specific, peptides) and precursors ('pr_matrix'). They are filtered at 1% FDR, using global q-values for protein groups and both global and run-specific q-values for precursors. Use --matrix-spec-q to force additional filtering of the protein/gene matrices using run-specific protein group q-values. Sometimes DIA-NN will report a zero as the best estimate for a precursor or protein quantity. Such zero quantities are omitted from protein/gene matrices.
 
 </details>
 
 <details>
   <summary>Stats report</summary>
 
-Contains a number of QC metrics which can be used for data filtering, e.g. to exclude failed runs, or as a readout for method optimisation.
+Contains a number of QC metrics which can be used for data filtering, e.g. to exclude failed runs, or as a readout for method optimisation. Note that the number of proteins reported here corresponds to the number of unique proteins (i.e. identified with proteotypic precursors) in a given run at 1% unique protein q-value. This number can be reproduced from the main report generated using precursor FDR threshold of 100% and filtered using Protein.Q.Value <= 0.01 & Proteotypic == 1. What's counted as 'protein' here depends on the 'Protein inference' setting.    
 
 </details>
 
