@@ -396,7 +396,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--max-pr-charge [N]** sets the maximum precursor charge for the in silico library generation or library-free search
 * **--met-excision** enables protein N-term methionine excision as variable modification for the in silico digest
 * **--min-fr** specifies the minimum number of fragments per precursors in the spectral library being saved
-* **--mean-peak** sets the minimum peak height to consider. Must be 0.01 or greater
+* **--min-peak** sets the minimum peak height to consider. Must be 0.01 or greater
 * **--min-pep-len [N]** sets the minimum precursor length for the in silico library generation or library-free search
 * **--min-pr-charge [N]** sets the minimum precursor charge for the in silico library generation or library-free search
 * **--min-pr-mz [N]** sets the minimum precursor m/z for the in silico library generation or library-free search
