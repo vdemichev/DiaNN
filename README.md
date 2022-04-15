@@ -485,8 +485,14 @@ Note that some options below are strongly detrimental to performance and are onl
 * **GG.Q.Value** run-specific q-value for the gene group (identified by the value in the Genes column)
 * **Lib.Q.Value** q-value for the respective library entry, 'global' if the library was created by DIA-NN. In case of [MBR](#mbr), this applies to the library created after the first MBR pass
 * **Lib.PG.Q.Value** only relevant for [MBR](#mbr): global q-value for the protein group calculated after the first MBR pass
+* **Translated.Q.Value** the q-value a precursor would have had if it was not 'translated' between multiplexed channels
+* **Channel.Q.Value** reflects the confidence that the precursor is indeed present in the respective channel
 * **Ms1.Profile.Corr** correlation between MS1 and MS2 chromatograms, high score in itself is a good indicator that the set of modifications on the peptidoform is correctly identified (this does not apply when using the **Ultra-fast** mode without MBR)
+* **Precursor.Quantity** MS2-based quantity of the precursor (charged peptide), non-normalised
+* **Precursor.Normalised** MS2-based quantity of the precursor (charged peptide), normalised, if normalisation is not disabled
+* **Precursor.Translated** similar to Precursor.Translated, but this quantity is 'enhanced' using information on other isotopologues (if using --channels and --peak-translation)
 * **Ms1.Area** non-normalised MS1 peak area
+* **Ms1.Translated** normalised MS1 peak area, enhanced using information on other isotopologues (if using --channels and --peak-translation)
 * **Mass.Evidence** an MS2-level score, high values (e.g. higher than 0.5-1.0) are in itself good indicators that the set of modifications on the peptidoform is correclty identified
 * **CScore** the score that has been used to calculate the q-value
 * **Fragment.Quant.Raw** raw uncorrected quantities for the top fragment ions, ordered by their reference intensities. Use --report-lib-info to obtain fragment annotation
