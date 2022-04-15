@@ -358,7 +358,7 @@ In general, no. If fragment ions in the spectral library are properly annotated,
 Note that some options below are strongly detrimental to performance and are only there for benchmarking purposes. So the recommendation is to only use the options which are expected to be beneficial for a particular experiment based on some clear rationale.
 
 * **--cfg [file name]** specifies a file to load options/commands from
-* **--channels [channel 1]; [channel 2]; ...** lists multiplexing channels, wherein each channel declaration has the form [channel] = [label group],[channel name],[sites],[mass1:mass2:...], wherein [sites] has the same syntax as for --var-mod and if N sites are listed, N masses are listed at the end of the channel declaration. Examples: "--channels SILAC,L,KR,0:0; SILAC,H,KR,8.014199:10.008269" - declares standard light/heavy SILAC labels, "--channels mTRAQ,0,nK,0:0; mTRAQ,4,nK,4.0070994:4.0070994;mTRAQ,8,nK,8.0141988132:8.0141988132" - declares mTRAQ.  
+* **--channels [channel 1]; [channel 2]; ...** (experimental) lists multiplexing channels, wherein each channel declaration has the form [channel] = [label group],[channel name],[sites],[mass1:mass2:...], wherein [sites] has the same syntax as for --var-mod and if N sites are listed, N masses are listed at the end of the channel declaration. Examples: "--channels SILAC,L,KR,0:0; SILAC,H,KR,8.014199:10.008269" - declares standard light/heavy SILAC labels, "--channels mTRAQ,0,nK,0:0; mTRAQ,4,nK,4.0070994:4.0070994;mTRAQ,8,nK,8.0141988132:8.0141988132" - declares mTRAQ.  
 * **--clear-mods** makes DIA-NN 'forget' all built-in modification (PTM) names
 * **--compact-report** instructs DIA-NN to provide less information in the main report
 * **--convert** makes DIA-NN convert the mass spec files to the .dia format. The files are either saved to the same location as the input files, or in the Temp/.dia dir, if it is specified (in the GUI or using the --temp option)
@@ -390,6 +390,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--int-removal 0** disables the removal of interfering precursors
 * **--learn-lib [file name]** specifies a 'training library' for the legacy predictor, see [Library-free search](#library-free-search)
 * **--lib [file name]** specifies a spectral library. The use of multiple --lib commands (experimental) allows to load multiple libraries in .tsv format
+* **--lib-fixed-mod [name]** in silico applies a modification, previously declared using --fixed-mod, to a spectral library 
 * **--library-headers [name 1],[name 2],...** specifies column names in the spectral library to be used, in the order described in [Spectral library formats](#spectral-library-formats). Use '*' (without quotes) instead of the column name if a particular column is irrelevant, or if DIA-NN already recognises its name
 * **--mass-acc [N]** sets the MS2 mass accuracy to N ppm
 * **--mass-acc-cal [N]** sets the mass accuracy used during the calibration phase of the search to N ppm (default is 100 ppm, which is adjusted automatically to lower values based on the data)
