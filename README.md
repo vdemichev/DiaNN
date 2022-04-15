@@ -14,8 +14,8 @@ DIA-NN is built on the following principles:
 - **Powerful tuning options** to enable unconventional experiments
 - **Scalability and speed**: up to 1000 mass spec runs processed per hour
 
-**Download**: https://github.com/vdemichev/DiaNN/releases/tag/1.8
-(it's recommended to use the latest version - DIA-NN 1.8)  
+**Download**: https://github.com/vdemichev/DiaNN/releases/tag/1.8.1
+(it's recommended to use the latest version - DIA-NN 1.8.1)  
 
 <img src="https://raw.githubusercontent.com/vdemichev/DiaNN/master/GUI/GUI%20window.png"></br>  
 
@@ -358,11 +358,15 @@ In general, no. If fragment ions in the spectral library are properly annotated,
 Note that some options below are strongly detrimental to performance and are only there for benchmarking purposes. So the recommendation is to only use the options which are expected to be beneficial for a particular experiment based on some clear rationale.
 
 * **--cfg [file name]** specifies a file to load options/commands from
+* **--channels [channel 1]; [channel 2]; ...** lists multiplexing channels, wherein each channel declaration has the form [channel] = [label group],[channel name],[sites],[mass1:mass2:...], wherein [sites] has the same syntax as for --var-mod and if N sites are listed, N masses are listed at the end of the channel declaration. Examples: "--channels SILAC,L,KR,0:0; SILAC,H,KR,8.014199:10.008269" - declares standard light/heavy SILAC labels, "--channels mTRAQ,0,nK,0:0; mTRAQ,4,nK,4.0070994:4.0070994;mTRAQ,8,nK,8.0141988132:8.0141988132" - declares mTRAQ.  
 * **--clear-mods** makes DIA-NN 'forget' all built-in modification (PTM) names
 * **--compact-report** instructs DIA-NN to provide less information in the main report
 * **--convert** makes DIA-NN convert the mass spec files to the .dia format. The files are either saved to the same location as the input files, or in the Temp/.dia dir, if it is specified (in the GUI or using the --temp option)
 * **--cut [specificty 1],[specificity 2],...** specifies cleavage specificity for the in silico digest. Cleavage sites (pairs of amino acids) are listed separated by commas, '\*' indicates any amino acid, and '!' indicates that the respective site will not be cleaved. Examples: "--cut K\*,R\*,!*P" - canonical tryptic specificity, "--cut " - digest disabled
+* **--decoy-channel [channel]** specifies the decoy channel masses, wherein [channel] has the same syntax as for --channels
 * **--dir [folder]** specifies a folder containing raw files to be processed. All files in the folder must be in .raw, .mzML or .dia format
+* **--dl-no-im** when using the deep learning predictor, prediction of ion mobilities will not be performed
+* **--dl-no-rt** when using the deep learning predictor, prediction of retention times will not be performed
 * **--duplicate-proteins** instructs DIA-NN not to skip entries in the sequence database with duplicate IDs (while by default if several entries have the same protein ID, all but the first entry will be skipped)
 * **--exact-fdr** approximate FDR estimation for confident peptides based on parametric modelling will be disabled
 * **--ext [string]** adds a string to the end of each file name (specified with --f)
@@ -377,7 +381,9 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--gen-fr-restriction** annotates the library with fragment exclusion information, based on the runs being analysed (fragments least affected by interferences are selected for quantification, why the rest are excluded)
 * **--global-mass-cal** disables RT-dependent mass calibration
 * **--global-norm** instructs DIA-NN to use simple global normalisation instead of RT-dependent normalisation
-* **--il-eq** isoleucine and leucine will be considered equivalent when annotating peptides with protein information
+* **--il-eq** (experimental) when using the 'Reannotate' function, peptides will be matched to proteins while considering isoleucine and leucine equivalent
+* **--im-window [x]** fixes IM extraction window to the specific value
+* **--im-window-factor [x]** controls the minimum size of the IM extraction window, default is 2.0
 * **--individual-mass-acc** mass accuracies, if set to automatic, will be determined independently for different runs
 * **--individual-reports** a separate output report will be created for each run
 * **--individual-windows** scan window, if set to automatic, will be determined independently for different runs
@@ -389,11 +395,14 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--mass-acc-cal [N]** sets the mass accuracy used during the calibration phase of the search to N ppm (default is 100 ppm, which is adjusted automatically to lower values based on the data)
 * **--mass-acc-ms1 [N]** sets the MS1 mass accuracy to N ppm
 * **--matrices** output quantities matrices
+* **--matrix-ch-qvalue [x]** sets the 'channel q-value' used to filter the output matrices
 * **--matrix-qvalue [x]** sets the q-value used to filter the output matrices
+* **--matrix-tr-qvalue [x]** sets the 'translated q-value' used to filter the output matrices
 * **--matrix-spec-q** run-specific protein q-value filtering will be used, in addition to the global q-value filtering, when saving protein matrices. The ability to filter based on run-specific protein q-values, which allows to generate highly reliable data, is one of the advantages of DIA-NN
 * **--max-fr** specifies the maximum number of fragments per precursors in the spectral library being saved
 * **--max-pep-len [N]** sets the maximum precursor length for the in silico library generation or library-free search
 * **--max-pr-charge [N]** sets the maximum precursor charge for the in silico library generation or library-free search
+* **--mbr-fix-settings** when using the 'Unrelated runs' option in combination with MBR, the same settings will be used to process all runs during the second MBR pass
 * **--met-excision** enables protein N-term methionine excision as variable modification for the in silico digest
 * **--min-fr** specifies the minimum number of fragments per precursors in the spectral library being saved
 * **--min-peak** sets the minimum peak height to consider. Must be 0.01 or greater
@@ -406,11 +415,14 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--monitor-mod [name]** apply PTM scoring & site localisation for a particular modification. This modification must have been declared as variable using --var-mod
 * **--nn-single-seq** only use one (best) precursor per stripped sequence for the training of the neural network classifier
 * **--no-calibration** disables mass calibration
-* **--no-isotopes** do not extract chromatograms for heavy isotopologues
 * **--no-cut-after-mod [name]** discard peptides generated via in silico cuts after residues bearing a particular modification
+* **--no-decoy-channel** disables the use of a decoy channel for channel q-value calculation
 * **--no-fr-selection** the selection of fragments for quantification based on the quality assessment of the respective extracted chromatograms will be disabled
 * **--no-ifs-removal** turns off interference subtraction from fragment ion chromatograms - equivalent to the "high precision" quantification mode
 * **--no-im-window** disables IM-windowed search
+* **--no-isotopes** do not extract chromatograms for heavy isotopologues
+* **--no-lib-filter** the input library will be used 'as is' without discarding fragments that might be harmful for the analysis; use with caution
+* **--no-main-report** do not produce the main report
 * **--no-maxlfq** disables MaxLFQ for protein quantification
 * **--no-norm** disables cross-run normalisation
 * **--no-prot-inf** disables protein inference (that is protein grouping) - protein groups from the spectral library will be used instead
@@ -422,12 +434,15 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--original-mods** disables the automatic conversion of known modifications to the UniMod format names
 * **--out [file name]** specifies the name of the main output report. The names of all other report files will be derived from this one
 * **--out-lib [file name]** specifies the name of a spectral library to be generated
+* **--out-lib-copy** copies the spectral library used into the output folder
 * **--out-measured-rt** instructs DIA-NN to save raw empirical retention times in the spectral library being generated, instead of saving RTs aligned to a particular scale
-* **--peak-center** instructs DIA-NN to use chromatographic peak height for quantification - equivalent to the "Robust LC" quantification mode
+* **--peak-center** instructs DIA-NN to integrate chromatographic peaks only in the vicinity of the apex - equivalent to the "Robust LC" quantification mode
+* **--peak-height** instructs DIA-NN to use the apex height of the peak for quantification - equivalent to the "Peak height" quantification mode
 * **--pg-level [N]** controls the protein inference mode, with 0 - isoforms, 1 - protein names (as in UniProt), 2 - genes
 * **--predictor** instructs DIA-NN to perform deep learning-based prediction of spectra, retention times and ion mobility values
 * **--prefix [string]** adds a string at the beginning of each file name (specified with --f) - convenient when working with automatic scripts for the generation of config files
 * **--quant-fr [N]** sets the number of top fragment ions among which the fragments that will be used for quantification are chosen. Default value is 6
+* **--quick-mass-acc** (experimental) when choosing the MS2 mass accuracy setting automatically, DIA-NN will use a fast heuristical algorithm instead of IDs number optimisation
 * **--reanalyse** enables MBR
 * **--reannotate** reannotate the spectral library with protein information from the FASTA database, using the specified digest specificity
 * **--ref [file name]** (experimental) specify a special (small) spectral library which will be used exclusively for calibration - this function can speed up calibration in library-free searches
@@ -436,6 +451,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--report-lib-info** adds extra library information on the precursor and its fragments to the main output report
 * **--restrict-fr** some fragments will not be used for quantification, based on the value in the ExcludeFromAssay spectral library column
 * **--scanning-swath** all runs will be analysed as if they were Scanning SWATH runs
+* **--semi** (experimental) when using the 'Reannotate' function, a peptide will be matched to a protein also if it could be obtained with one specific and one non-specific cut (at either of the termini)
 * **--smart-profiling** enables an intelligent algorithm which determines how to extract spectra, when creating a spectral library from DIA data. This is highly recommended and should almost always be enabled
 * **--species-genes** instructs DIA-NN to add the organism identifier to the gene names - useful for distinguishing genes from different species, when analysing mixed samples. Works with UniProt sequence databases.
 * **--sptxt-acc [N]** sets the fragment filtering mass accuracy (in ppm) when reading .sptxt/.msp libraries
@@ -443,6 +459,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--target-fr [N]** fragment ions beyond this number will only be included in the spectral library being created (from DIA data) if they have high-quality chromatograms. Default value is 6
 * **--temp [folder]** specifies the Temp/.dia directory
 * **--threads [N]** specifies the number of CPU threads to use
+* **--tims-skip-errors** DIA-NN will ignore errors when loading dia-PASEF data
 * **--use-quant** use existing .quant files, if available
 * **--verbose [N]** sets the level of detail of the log. Reasonable values are in the range 0 - 4
 * **--var-mod [name],[mass],[sites],[optional: 'label']** - adds the modification name to the list of recognised names and specifies the modification as variable. [sites] can contain a list of amino acids and 'n' which codes for the N-terminus of the peptide. '\*n' indicates protein N-terminus. Examples: "--var-mod UniMod:21,79.966331,STY" - phosphorylation, "--var-mod UniMod:1,42.010565,*n" - N-terminal protein acetylation. Similar to --mod can be followed by 'label'
