@@ -466,7 +466,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--verbose [N]** sets the level of detail of the log. Reasonable values are in the range 0 - 4
 * **--var-mod [name],[mass],[sites],[optional: 'label']** - adds the modification name to the list of recognised names and specifies the modification as variable. [sites] can contain a list of amino acids and 'n' which codes for the N-terminus of the peptide. '\*n' indicates protein N-terminus. Examples: "--var-mod UniMod:21,79.966331,STY" - phosphorylation, "--var-mod UniMod:1,42.010565,*n" - N-terminal protein acetylation. Similar to --mod can be followed by 'label'
 * **--var-mods** sets the maximum number of variable modifications
-* **--vis [N],[Peptide 1],[Peptide 2],...** instructs DIA-NN to extract and save chromatograms in the vicinity of the detected elution apex, for all PSMs matching the stripped sequences provided, for all runs in the experiment
+* **--vis [N],[Peptide 1],[Peptide 2],...** instructs DIA-NN to extract and save chromatograms in the vicinity of the detected elution apex, for all PSMs matching the stripped sequences provided, for all runs in the experiment; at least N scans in the vicinity of the apex will be extracted
 * **--window [N]** sets the scan window radius to a specific value. Ideally, should be approximately equal to the average number of data points per peak
 </details>
 
