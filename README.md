@@ -32,7 +32,7 @@ When using DIA-NN's ion mobility module for dia-PASEF analysis or using DIA-NN i
 **dia-PASEF data analysis using FragPipe and DIA-NN for deep proteomics of low sample amounts**  
 [Nature Communications, 2022](https://www.nature.com/articles/s41467-022-31492-0)
 
-When using DIA-NN for the analysis of multiplexed samples (SILAC, mTRAQ, etc), please also cite
+When using DIA-NN for the analysis of multiplexed samples (SILAC, mTRAQ, etc), please also cite  
 **Increasing the throughput of sensitive proteomics by plexDIA**
 [Nature Biotechnology, 2022](https://www.nature.com/articles/s41587-022-01389-w)
 
