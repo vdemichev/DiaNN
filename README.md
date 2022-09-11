@@ -496,7 +496,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **Ms1.Profile.Corr** correlation between MS1 and MS2 chromatograms, high score in itself is a good indicator that the set of modifications on the peptidoform is correctly identified (this does not apply when using the **Ultra-fast** mode without MBR)
 * **Precursor.Quantity** MS2-based quantity of the precursor (charged peptide), non-normalised
 * **Precursor.Normalised** MS2-based quantity of the precursor (charged peptide), normalised, if normalisation is not disabled
-* **Precursor.Translated** similar to Precursor.Translated, but this quantity is 'enhanced' using information on other isotopologues (if using --channels and --peak-translation)
+* **Precursor.Translated** similar to Precursor.Normalised, but this quantity is 'enhanced' using information on other isotopologues (if using --channels and --peak-translation)
 * **Ms1.Area** non-normalised MS1 peak area
 * **Ms1.Translated** normalised MS1 peak area, enhanced using information on other isotopologues (if using --channels and --peak-translation)
 * **Mass.Evidence** an MS2-level score, high values (e.g. higher than 0.5-1.0) are in itself good indicators that the set of modifications on the peptidoform is correclty identified
