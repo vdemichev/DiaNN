@@ -373,6 +373,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--dir [folder]** specifies a folder containing raw files to be processed. All files in the folder must be in .raw, .mzML or .dia format
 * **--dl-no-im** when using the deep learning predictor, prediction of ion mobilities will not be performed
 * **--dl-no-rt** when using the deep learning predictor, prediction of retention times will not be performed
+* **--double-search** when using double-pass mode for the neural network classifier. It is the best in most cases but is about twice slower than single-pass. Default is single-pass mode, which has no command-line parameters. To disable the neural network classifier use --no-nn instead
 * **--duplicate-proteins** instructs DIA-NN not to skip entries in the sequence database with duplicate IDs (while by default if several entries have the same protein ID, all but the first entry will be skipped)
 * **--exact-fdr** approximate FDR estimation for confident peptides based on parametric modelling will be disabled
 * **--ext [string]** adds a string to the end of each file name (specified with --f)
@@ -387,6 +388,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--gen-fr-restriction** annotates the library with fragment exclusion information, based on the runs being analysed (fragments least affected by interferences are selected for quantification, why the rest are excluded)
 * **--global-mass-cal** disables RT-dependent mass calibration
 * **--global-norm** instructs DIA-NN to use simple global normalisation instead of RT-dependent normalisation
+* **--id-profiling** when using IDs profiling for spectral library generation from DIA data. To use full profiling use no command line parameter. It is highly recommended to use --smart-profiling instead
 * **--il-eq** (experimental) when using the 'Reannotate' function, peptides will be matched to proteins while considering isoleucine and leucine equivalent
 * **--im-window [x]** fixes IM extraction window to the specific value
 * **--im-window-factor [x]** controls the minimum size of the IM extraction window, default is 2.0
@@ -411,7 +413,8 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--max-pr-charge [N]** sets the maximum precursor charge for the in silico library generation or library-free search
 * **--mbr-fix-settings** when using the 'Unrelated runs' option in combination with MBR, the same settings will be used to process all runs during the second MBR pass
 * **--met-excision** enables protein N-term methionine excision as variable modification for the in silico digest
-* **--min-fr** specifies the minimum number of fragments per precursors in the spectral library being saved
+* **--min-fr-mz** specifies the minimum number of fragments per precursors in the spectral library being saved
+* **--max-fr-mz** specifies the maximum number of fragments per precursors in the spectral library being saved
 * **--min-peak** sets the minimum peak height to consider. Must be 0.01 or greater
 * **--min-pep-len [N]** sets the minimum precursor length for the in silico library generation or library-free search
 * **--min-pr-charge [N]** sets the minimum precursor charge for the in silico library generation or library-free search
@@ -431,6 +434,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--no-lib-filter** the input library will be used 'as is' without discarding fragments that might be harmful for the analysis; use with caution
 * **--no-main-report** do not produce the main report
 * **--no-maxlfq** disables MaxLFQ for protein quantification
+* **--no-nn** disables the neural network classifier. Default is single-pass mode, which has no command-line parameters
 * **--no-norm** disables cross-run normalisation
 * **--no-prot-inf** disables protein inference (that is protein grouping) - protein groups from the spectral library will be used instead
 * **--no-quant-files** instructs DIA-NN not to save .quant files to disk and store them in memory instead
@@ -458,8 +462,10 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--relaxed-prot-inf** instructs DIA-NN to use a very heuristical protein inference algorithm (similar to the one used by FragPipe and many other software tools), wherein DIA-NN aims to make sure that no protein is present simultaneously in multiple protein groups. This mode (i) is recommended for method optimisation & benchmarks, (ii) might be convenient for gene set enrichment analysis and related kinds of downstream processing. However the alternative protein inference strategy of DIA-NN is more reliable for differential expression analyses (this is one of the advantages of DIA-NN). Equivalent to the 'Heuristic protein inference' GUI setting.
 * **--report-lib-info** adds extra library information on the precursor and its fragments to the main output report
 * **--restrict-fr** some fragments will not be used for quantification, based on the value in the ExcludeFromAssay spectral library column
+* **--rt-profiling** when using IDs, RT & IM profiling for spectral library generation from DIA data. To use full profiling use no command line parameter. It is highly recommended to use --smart-profiling instead
 * **--scanning-swath** all runs will be analysed as if they were Scanning SWATH runs
 * **--semi** (experimental) when using the 'Reannotate' function, a peptide will be matched to a protein also if it could be obtained with one specific and one non-specific cut (at either of the termini)
+* **--sig-norm** (experimental) instructs DIA-NN to use RT & signal-dependent normalisation
 * **--smart-profiling** enables an intelligent algorithm which determines how to extract spectra, when creating a spectral library from DIA data. This is highly recommended and should almost always be enabled
 * **--species-genes** instructs DIA-NN to add the organism identifier to the gene names - useful for distinguishing genes from different species, when analysing mixed samples. Works with UniProt sequence databases.
 * **--sptxt-acc [N]** sets the fragment filtering mass accuracy (in ppm) when reading .sptxt/.msp libraries
@@ -468,6 +474,8 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--temp [folder]** specifies the Temp/.dia directory
 * **--threads [N]** specifies the number of CPU threads to use
 * **--tims-skip-errors** DIA-NN will ignore errors when loading dia-PASEF data
+* **--unimod35** considers Ox(M) methionine oxidation
+* **--unimod4** considers C carbamidomethylation
 * **--use-quant** use existing .quant files, if available
 * **--verbose [N]** sets the level of detail of the log. Reasonable values are in the range 0 - 4
 * **--var-mod [name],[mass],[sites],[optional: 'label']** - adds the modification name to the list of recognised names and specifies the modification as variable. [sites] can contain a list of amino acids and 'n' which codes for the N-terminus of the peptide. '\*n' indicates protein N-terminus. Examples: "--var-mod UniMod:21,79.966331,STY" - phosphorylation, "--var-mod UniMod:1,42.010565,*n" - N-terminal protein acetylation. Similar to --mod can be followed by 'label'
