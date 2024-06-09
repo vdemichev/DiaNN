@@ -599,6 +599,8 @@ Note that some options below are strongly detrimental to performance and are onl
 * **Quantity.Quality** when using QuantUMS is equal to 1.0 / (1.0 + SD), where SD is the standard deviation of the LC-MS-derived error in relative precursor quantification
 * **Empirical.Quality** when using QuantUMS reflects the agreement of relative precursor quantities obtained using different quantitative features (MS1 / fragment ions)
 * **Normalisation.Noise** reflects the noisiness of the RT-dependent normalisation factor calculated for the precursor
+* **RT.Start** and **RT.Stop** peak boundaries
+* **FWHM** estimated peak width at half-maximum; note that the accuracy of such estimates sometimes strongly depends on the DIA cycle time and sample injection amount, i.e. they can only be used to evaluate chromatographic performance in direct comparisons with similar settings, including the scan window; another caveat is that FWHM does not reflect any peak tailing
 * **PG.MaxLFQ** QuantUMS or MaxLFQ normalised quantity for the protein group, channel-specific
 * **Genes.MaxLFQ** QuantUMS or MaxLFQ normalised quantity for the genes group (corresponding to the 'Genes' column), channel-specific
 * **Genes.MaxLFQ.Unique** as above, but calculated solely using proteotypic (gene-specific) precursors, channel-specific
