@@ -300,7 +300,7 @@ For convenience, as well as for handling experiments consisting of thousands of 
 ### Visualisation
 DIA-NN provides two visualisation options.
 
-**Skyline**. To visualise chromatograms/spectra in Skyline, analyse your experiment with MBR and a FASTA database specified and then click the 'Skyline' button. DIA-NN will automatically launch Skyline (make sure you have Skyline/Skyline daily version 23.1.1.459 or later installed). Currently this workflow does not support multiplexing and will not work with modifications in any format other than UniMod.
+**Skyline**. To visualise chromatograms/spectra in Skyline, analyse your experiment with MBR and a FASTA database specified and then click the 'Skyline' button. DIA-NN will automatically launch Skyline (make sure you have Skyline/Skyline daily version 23.1.1.459 or later installed as 'Administrator install'). Currently this workflow does not support multiplexing and will not work with modifications in any format other than UniMod.
 
 **DIA-NN Viewer**. Analyse your experiment with the "XICs" checkbox checked and click the 'Viewer' button. By default "XICs" option will make DIA-NN extract chromatograms for the library fragment ions only and within 10s from the elution apex. Use --xic [N] to set the retention time window to N seconds (e.g. --xic 60 will extract chromatograms within a minute from the apex) and --xic-theoretical-fr to extract all charge 1 and 2 y/b-series fragments, including those with common neutral losses. Note that using --xic-theoretical-fr, especially in combination with large retention time window, might require a significant amount of disk space in the output folder. However the visualisation itself is effectively instantaneous, for any experiment size.
 
