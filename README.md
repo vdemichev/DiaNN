@@ -201,7 +201,7 @@ A text table containing precursor and protein IDs, as well as plenty of associat
 <details>
   <summary>Matrices</summary>
 
-These contain normalised MaxLFQ quantities for protein groups ('pg_matrix'), gene groups ('gg_matrix'), unique genes ('unique_genes_matrix'; i.e. genes identified and quantified using only proteotypic, that is gene-specific, peptides) as well as normalised quantities for precursors ('pr_matrix'). They are filtered at 1% FDR, using global q-values for protein groups and both global and run-specific q-values for precursors. Use --matrix-spec-q to force additional filtering of the protein/gene matrices using run-specific protein group q-values. Sometimes DIA-NN will report a zero as the best estimate for a precursor or protein quantity. Such zero quantities are omitted from protein/gene matrices.
+These contain normalised MaxLFQ quantities for protein groups ('pg_matrix'), gene groups ('gg_matrix'), unique genes ('unique_genes_matrix'; i.e. genes identified and quantified using only proteotypic, that is gene-specific, peptides) as well as normalised quantities for precursors ('pr_matrix'). They are filtered at 1% FDR, using global q-values for protein groups and both global and run-specific q-values for precursors. Additional 5% run-specific protein-level FDR filter is applied to the protein matrices, use --matrix-spec-q to adjust it. Sometimes DIA-NN will report a zero as the best estimate for a precursor or protein quantity. Such zero quantities are omitted from protein/gene matrices.
 </details>
 
 <details>
