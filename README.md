@@ -70,7 +70,7 @@ Using DIA-NN to process Slice-PASEF data: **Slice-PASEF: fragmenting all ions fo
 
 ### Installation
 
-On **Windows**, download the .exe installer and run it. Make sure not to run the installer from a network drive. It is recommended to install DIA-NN into the default folder suggested by the installer.   
+On **Windows**, download the .exe installer and run it. Make sure not to run the installer from a network drive. It is recommended to install DIA-NN into the default folder suggested by the installer. Alternatively, just unpack the .binaries.zip archive to a location of your choice.   
 
 On **Linux**, download the .deb or .rpm package. Install it using the preferred way for your Linux distribution, e.g. using gdebi for .deb installation on Ubuntu/Debian-based distributions. DIA-NN will be installed to the /usr/diann/[version number]/ folder. The Linux system must have glibc 2.27 or later (for example, Ubuntu 18.04 or CentOS 8 and later versions are fine). Note: a Linux release of the latest DIA-NN 1.9 will follow shortly, this section will be updated once it is available.
 
