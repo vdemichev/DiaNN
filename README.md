@@ -527,6 +527,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--prefix [string]** adds a string at the beginning of each file name (specified with --f) - convenient when working with automatic scripts for the generation of config files
 * **--pr-filter [file name]** specify a file containing a list of precursors (same format as the Precursor.Id column in DIA-NN output), FASTA digest will be filtered to only include these precursors
 * **--ptm-qvalues** enable the legacy PTM-specific q-value calculation for the scored modifications, i.e. those declared with --var-mod
+* **--qvalue [X]** specifies the precursor-level q-value filtering threshold
 * **--quant-acc [X]** sets the precision-accuracy balance for QuantUMS to X, where X must be between 0 and 1
 * **--quant-fr [N]** sets the number of top fragment ions among which the fragments that will be used for quantification are chosen for the legacy (pre-QuantUMS) quantification mode. Default value is 6
 * **--quick-mass-acc** (experimental) when choosing the MS2 mass accuracy setting automatically, DIA-NN will use a fast heuristical algorithm instead of IDs number optimisation
