@@ -505,7 +505,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--no-im-window** disables IM-windowed search
 * **--no-isotopes** do not extract chromatograms for heavy isotopologues
 * **--no-lib-filter** the input library will be used 'as is' without discarding fragments that might be harmful for the analysis; use with caution
-* **--no-main-report** do not produce the main report
+* **--no-main-report** produce the main report in .parquet format only, omitting .tsv
 * **--no-maxlfq** disables MaxLFQ for protein quantification
 * **--no-norm** disables cross-run normalisation
 * **--no-peptidoforms** disables automatic activation of peptidoform scoring when variable modifications are declared
