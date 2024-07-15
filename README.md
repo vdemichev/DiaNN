@@ -205,6 +205,12 @@ These contain normalised MaxLFQ quantities for protein groups ('pg_matrix'), gen
 </details>
 
 <details>
+  <summary>Protein description</summary>
+
+The .protein_description.tsv file is generated along with the Matrices and contains basic protein information known to DIA-NN (sequence IDs, names, gene names, description, sequence). Future versions of DIA-NN will include more information, e.g. protein molecular weight. 
+</details>
+
+<details>
   <summary>Stats report</summary>
 
 Contains a number of QC metrics which can be used for data filtering, e.g. to exclude failed runs or as a readout for method optimisation. Note that the number of proteins reported here corresponds to the number of unique proteins (i.e. identified with proteotypic precursors) in a given run at 1% unique protein q-value. This number can be reproduced from the main report generated using precursor FDR threshold of 100% and filtered using Protein.Q.Value <= 0.01 & Proteotypic == 1. What's counted as 'protein' here depends on the 'Protein inference' setting.    
