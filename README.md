@@ -14,8 +14,8 @@ DIA-NN is built on the following principles:
 - **Powerful tuning options** to enable unconventional experiments
 - **Scalability and speed**: up to 1000 mass spec runs processed per hour
 
-**Download**: https://github.com/vdemichev/DiaNN/releases/tag/1.9
-(it's recommended to use the latest version - DIA-NN 1.9)  
+**Download**: https://github.com/vdemichev/DiaNN/releases/tag/1.9.1
+(it's recommended to use the latest version - DIA-NN 1.9.1)  
 
 <img src="https://raw.githubusercontent.com/vdemichev/DiaNN/master/GUI/GUI%20window.png"></br>  
 
@@ -72,7 +72,7 @@ Using DIA-NN to process Slice-PASEF data: **Slice-PASEF: fragmenting all ions fo
 
 On **Windows**, download the .exe installer and run it. Make sure not to run the installer from a network drive. It is recommended to install DIA-NN into the default folder suggested by the installer. Alternatively, just unpack the .binaries.zip archive to a location of your choice.   
 
-On **Linux**, download the .deb or .rpm package. Install it using the preferred way for your Linux distribution, e.g. using gdebi for .deb installation on Ubuntu/Debian-based distributions. DIA-NN will be installed to the /usr/diann/[version number]/ folder. The Linux system must have glibc 2.27 or later (for example, Ubuntu 18.04 or CentOS 8 and later versions are fine). Note: a Linux release of the latest DIA-NN 1.9 will follow shortly, this section will be updated once it is available.
+On **Linux**, download and unpack the .Linux.zip file. The Linux version of DIA-NN is generated on Linux Mint 21.2, and the target system must have the standard libraries that are at least is recent. There is no such requirement, however, if you make a Docker or Apptainer/Singularity container image. To generate either container, we recommend starting with the latest debian docker image - in this case you only need to install `sudo apt install libgomp1` before you can run DIA-NN in it.
 
 It is also possible to run DIA-NN on Linux using **Wine** 6.8 or later.
 
@@ -131,7 +131,7 @@ Many mass spec formats, including those few that are not supported by DIA-NN dir
 
 ### Spectral library formats
 
-DIA-NN supports comma-separated (.csv) or tab-separated (.tsv, .xls or .txt), .speclib (compact format used by DIA-NN), .sptxt (SpectraST, experimental) and .msp (NIST, experimental) library files. Important: the library must not contain non-fragmented precursor ions as 'fragments': each fragment ion must actually be produced by the peptide backbone fragmentation.
+DIA-NN supports comma-separated (.csv), tab-separated (.tsv, .xls or .txt) or .parquet tables as spectral libraries, as well as .speclib (compact format used by DIA-NN), .sptxt (SpectraST, experimental) and .msp (NIST, experimental) library files. Important: the library must not contain non-fragmented precursor ions as 'fragments': each fragment ion must actually be produced by the peptide backbone fragmentation.
 
 <details>
   <summary>In detail</summary>
@@ -171,16 +171,16 @@ Use --sptxt-acc to set the fragment filtering mass accuracy (in ppm) when readin
 
 MaxQuant msms.txt can also be used (experimental) as a spectral library in DIA-NN, although fixed modifications might not be read correctly.
 
-DIA-NN can **convert** any library it supports into its own .tsv format. For this, click **Spectral library** (**Input** pane), select the library you want to convert, select the **Output library** file name (**Output** pane), click **Run**. If you use some exotic library format, it's a good idea to convert it to DIA-NN's .tsv and then examine the resulting library to see if the contents make sense.
+DIA-NN can **convert** any library it supports into its own .parquet format. For this, click **Spectral library** (**Input** pane), select the library you want to convert, select the **Output library** file name (**Output** pane), click **Run**. If you use some exotic library format, it's a good idea to convert it to DIA-NN's .parquet and then examine the resulting library (using R 'arrow' or Python 'pyarrow' package) to see if the contents make sense.
 
-All .tsv/.xls/.txt/.csv libraries are just simple tables with human-readable data, and can be explored/edited, if necessary, using Excel or (ideally) R/Python.
+All .tsv/.xls/.txt/.csv/.parquet libraries are just simple tables with human-readable data, and can be explored/edited, if necessary, using Excel or (ideally) R/Python.
 
-Importantly, when any library is being saved to this kind of text format, all numbers are rounded using certain decimal precision, meaning that they might not be exactly the same as in the original library (there might be a tiny difference). Thus, although the performance when analysing using a converted library will be comparable, the results will not match exactly.
+Importantly, when any library is being converted to a different format, all numbers could be rounded using certain decimal precision, meaning that they might not be exactly the same as in the original library (there might be a tiny difference). Thus, although the performance when analysing using a converted library will be comparable, the results will not match exactly.
 </details>
 
 ### Output
 
-The **Output** pane allows to specify where the output should be saved as well as the file names for the main output report and (optionally) the output spectral library. DIA-NN uses these file names to derive the names of all of its output files. Below one can find information on different types of DIA-NN output. For most workflows one only needs the main report (for analysis in R or Python - recommended) or the matrices (simplified output for MS Excel).
+The **Output** pane allows to specify where the output should be saved as well as the file names for the main output report and (optionally) the output spectral library. DIA-NN uses these file names to derive the names of all of its output files. Below one can find information on different types of DIA-NN output. For most workflows one only needs the main report (for analysis in R or Python - recommended) or the matrices (simplified output for MS Excel). When the generation of output matrices is enabled, DIA-NN also produces a .manifest.txt file with a brief description of the output files generated. 
 
 <details>
   <summary>Main report</summary>
@@ -489,6 +489,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--max-pr-charge [N]** sets the maximum precursor charge for the in silico library generation or library-free search
 * **--mbr-fix-settings** when using the 'Unrelated runs' option in combination with MBR, the same settings will be used to process all runs during the second MBR pass
 * **--met-excision** enables protein N-term methionine excision as variable modification for the in silico digest
+* **--min-corr [X]** forces DIA-NN to only consider peak group candidates with correlation scores at least X
 * **--min-fr** specifies the minimum number of fragments per precursors in the spectral library being saved
 * **--min-peak** sets the minimum peak height to consider. Must be 0.01 or greater
 * **--min-pep-len [N]** sets the minimum precursor length for the in silico library generation or library-free search
@@ -622,7 +623,7 @@ Note that some options below are strongly detrimental to performance and are onl
 **A:** Try adjusting the **Speed and RAM usage** setting. Can even try the **Ultra-fast** mode there, it does sacrifice identification performance and it might have somewhat higher effective FDR, but it is about ~5x faster. Another option is to reduce the precursor mass range, that is search mass ranges 400-500, 500-600, 600-700, etc, separately - create a spectral library from DIA data separately for each mass range, then merge these libraries (e.g. by supplying multiple --lib commands to DIA-NN) and reanalyse the whole dataset with the merged library (without MBR).
 
 The most important factor in library-free searches is the search space size. So here are some ways to reduce the search space and thus speed up library-free analyses:
-- Only search peptides which are likely to be detectable in your experiment. For example, for plasma/serum library-free analyses can consider using peptides from the PeptideAtlas [Human Plasma Non-Glyco 2017-04](https://db.systemsbiology.net/sbeams/cgi/PeptideAtlas/buildDetails?atlas_build_id=465) build. Technically, the way to implement this is to make a FASTA database wherein each entry corresponds to a single peptide sequence, in combination with "--cut " to disable the digest. Once an in silico spectral library is generated, can **Reannotate** it with protein information. Alternatively, can convert the predicted library from .speclib to .tsv, using DIA-NN, pull protein information from PeptideAtlas and annotate using R/Python.
+- Only search peptides which are likely to be detectable in your experiment. For example, for plasma/serum library-free analyses can consider using peptides from the PeptideAtlas [Human Plasma Non-Glyco 2017-04](https://db.systemsbiology.net/sbeams/cgi/PeptideAtlas/buildDetails?atlas_build_id=465) build. Technically, the way to implement this is to make a FASTA database wherein each entry corresponds to a single peptide sequence, in combination with "--cut " to disable the digest. Once an in silico spectral library is generated, can **Reannotate** it with protein information. Alternatively, can convert the predicted library from .speclib to .parquet, using DIA-NN, pull protein information from PeptideAtlas and annotate using R/Python.
 - Don't consider charge 1 precursors, that is use "--min-pr-charge 2" or the respective GUI option, when generating an in silico predicted library. This is particularly relevant for dia-PASEF.
 - To speed up deep learning-based prediction, limit the precursor mass range to the actual mass range of your runs. This also reduces RAM usage, in particular when using multiplexing.
 - When analysing a mulitplexed (plexDIA) experiment in lib-free setting, create an empirical DIA-based library by analysing only a single channel as a fixed modification (i.e. without using --channels). Then use this library with --channels (make sure to indicate correct mass shifts for the channels, with respect to the fixed modification used) and with MBR disabled.
