@@ -575,8 +575,8 @@ Note that some options below are strongly detrimental to performance and are onl
 <details>
   <summary>Description of selected columns in the main .parquet report</summary>
 
-* **Protein.Group** - inferred proteins. See the description of the **Protein inference** [GUI setting](#gui-settings-reference) and the --relaxed-prot-inf [option](#command-line-reference).
-* **Protein.Ids** - all proteins matched to the precursor in the library or, in case of library-free search, in the sequence database
+* **Protein.Group** inferred proteins. See the description of the **Protein inference** [GUI setting](#gui-settings-reference) and the --relaxed-prot-inf [option](#command-line-reference).
+* **Protein.Ids** all proteins matched to the precursor in the library or, in case of library-free search, in the sequence database
 * **Protein.Names** names (UniProt names) of the proteins in the Protein.Group
 * **Genes** gene names corresponding to the proteins in the Protein.Group. Note that protein and gene names will only be present in the output if either (i) **Protein inference** is disabled in DIA-NN and no sequence (FASTA) database is provided - then protein & gene names from the spectral library will be used, or (ii) protein IDs in the Protein.Group can be found in the sequence database provided, or (iii) the **Reannotate** function is used. (ii) and (iii) also require that DIA-NN recognises protein & gene names as recorded in the sequence database (e.g. the UniProt format is supported)
 * **Precursor.Channels.Group** channel-oblivious identifier of the precursor  
@@ -607,12 +607,26 @@ Note that some options below are strongly detrimental to performance and are onl
 * **Quantity.Quality** when using QuantUMS is equal to 1.0 / (1.0 + SD), where SD is the standard deviation of the LC-MS-derived error in relative precursor quantification
 * **Empirical.Quality** when using QuantUMS reflects the agreement of relative precursor quantities obtained using different quantitative features (MS1 / fragment ions)
 * **Normalisation.Noise** reflects the noisiness of the RT-dependent normalisation factor calculated for the precursor
-* **RT.Start** and **RT.Stop** peak boundaries
+* **RT.Start** the start of the precursor's elution peak boundaries
+* **RT.Stop** the end of the precursor's elution peak boundaries
 * **FWHM** estimated peak width at half-maximum; note that the accuracy of such estimates sometimes strongly depends on the DIA cycle time and sample injection amount, i.e. they can only be used to evaluate chromatographic performance in direct comparisons with similar settings, including the scan window; another caveat is that FWHM does not reflect any peak tailing
+* **PG.Quantity** non-normalised gene group quantity
+* **PG.Normalised** normalised protein group quantity
+* **Genes.Quantity** non-normalised gene quantity
+* **Genes.Normalised** normalised gene quantity
 * **PG.MaxLFQ** QuantUMS or MaxLFQ normalised quantity for the protein group, channel-specific
 * **Genes.MaxLFQ** QuantUMS or MaxLFQ normalised quantity for the genes group (corresponding to the 'Genes' column), channel-specific
 * **Genes.MaxLFQ.Unique** as above, but calculated solely using proteotypic (gene-specific) precursors, channel-specific
 * **PG.MaxLFQ.Quality** when using QuantUMS reflects the quality of PG.MaxLFQ
+* **iRT** the retention time of a peptide that has been scaled or normalized relative to a set of reference peptides, used to correct for variations in experimental conditions and improve the reproducibility of retention time measurements.
+* **Predicted.RT** the theoretical retention time of a peptide
+* **Predicted.iRT** theoretical rescaled retention time of a peptide, calculated based on the retention time of the iRT peptides
+* **IM** empirically measured ion mobility
+* **Predicted.IM** IM predicted based on iIM
+* **iIM** the reference ion mobility in the spectral library
+* **Predicted.iIM** iIM predicted based on IM.Averagine, is the measure of how well the MS1 isotopic profile relfects the predicted one based on the averagine
+* **Fragment.Correlations** the correlation scores for individual fragments
+* **MS2.Scan** the count of MS2 scans leading up to the apex of peptide elution, indexed internally by DIA-NN
 </details>
 
 ### Frequently asked questions
