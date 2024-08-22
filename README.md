@@ -489,7 +489,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--matrix-ch-qvalue [x]** sets the 'channel q-value' used to filter the output matrices
 * **--matrix-qvalue [x]** sets the q-value used to filter the output matrices
 * **--matrix-tr-qvalue [x]** sets the 'translated q-value' used to filter the output matrices
-* **--matrix-spec-q** run-specific protein q-value filtering will be used, in addition to the global q-value filtering, when saving protein matrices. The ability to filter based on run-specific protein q-values, which allows to generate highly reliable data, is one of the advantages of DIA-NN
+* **--matrix-spec-q [x]** run-specific protein q-value filtering will be used, in addition to the global q-value filtering, when saving protein matrices. The ability to filter based on run-specific protein q-values, which allows to generate highly reliable data, is one of the advantages of DIA-NN
 * **--max-fr** specifies the maximum number of fragments per precursors in the spectral library being saved
 * **--max-pep-len [N]** sets the maximum precursor length for the in silico library generation or library-free search
 * **--max-pr-charge [N]** sets the maximum precursor charge for the in silico library generation or library-free search
