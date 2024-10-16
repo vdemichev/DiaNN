@@ -295,11 +295,13 @@ Note that once you select a particular option in the DIA-NN GUI, some other sett
 ### Command-line tool
 DIA-NN is implemented as a graphical user interface (GUI), which invokes a command-line tool (diann.exe). The command-line tool can also be used separately, e.g. as part of custom automated processing pipelines. Further, even when using the GUI, one can pass options/commands to the command-line tool, in the **Additional options** text box. Some of such useful options are mentioned in this Documentation, and the full reference is provided in [Command-line reference](#command-line-reference).
 
-When the GUI launches the command-line tool, it prints in the log window the exact set of commands it used. So in order to reproduce the behaviour observed when using the GUI (e.g. if you want to do the analysis on a Linux cluster), one can just pass exactly the same commands to the command-line tool directly.
+When the GUI launches the command-line tool, it prints in the log window the exact set of commands it used. So in order to reproduce the behaviour observed when using the GUI (e.g. if you want to do the analysis on a Linux cluster), one can just pass exactly the same commands to the command-line tool directly.  
 ```
 diann.exe [commands]  
 ```
 Commands are processed in the order they are supplied, and with most commands this order can be arbitrary.
+
+On Linux, the semicolon ';' character is treated as a command separator, therefore ';' as part of DIA-NN commands (e.g. --channels) need to be replaced with '\;' on Linux for correct behaviour.   
 
 For convenience, as well as for handling experiments consisting of thousands of files, some of the options/commands can be stored in a config file. For this, create a text file with any extension, say, diann_config.cfg, type in any commands supported by DIA-NN in there, and then reference this file with --cfg diann_config.cfg (in the **Additional options** text box or in the command used to invoke the diann.exe command-line tool).
 
