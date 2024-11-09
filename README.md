@@ -14,8 +14,8 @@ DIA-NN is built on the following principles:
 - **Powerful tuning options** to enable unconventional experiments
 - **Scalability and speed**: up to 1000 mass spec runs processed per hour
 
-**Download**: https://github.com/vdemichev/DiaNN/releases/tag/1.9.1
-(it's recommended to use the latest version - DIA-NN 1.9.1)  
+**Download**: https://github.com/vdemichev/DiaNN/releases/tag/1.9.2
+(it's recommended to use the latest version - DIA-NN 1.9.2)  
 
 <img src="https://raw.githubusercontent.com/vdemichev/DiaNN/master/GUI/GUI%20window.png"></br>  
 
