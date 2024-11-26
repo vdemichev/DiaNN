@@ -412,8 +412,8 @@ Note that --lib-fixed-mod is no longer necessary as the library generated in Ste
 * **Contaminants** Adds common contaminants from the Cambridge Centre for Proteomics (CCP) database and automatically excludes them from quantification, see the description of the --cont-quant-exclude option. This option applies when generating a predicted spectral library from a FASTA database or analysing using such a library, if it was generated with **Contaminants** enabled.
 
 **Precursor ion generation** pane  
-* **FASTA digest** instructs DIA-NN to in silico digest the sequence database, for library-free search or to generate a spectral library in silico
-* **Deep learning-based spectra, RTs and IMs prediction** instructs DIA-NN to perform deep learning-based prediction of spectra, retention times and ion mobility values. This allows not only to make in silico spectral libraries from sequence databases, but also to replace spectra/RTs/IMs in existing libraries with predicted values
+* **FASTA digest** instructs DIA-NN to in silico digest the sequence database, for library-free search or to generate a spectral library in silico.
+* **Deep learning-based spectra, RTs and IMs prediction** instructs DIA-NN to perform deep learning-based prediction of spectra, retention times and ion mobility values. This allows not only to make in silico spectral libraries from sequence databases, but also to replace spectra/RTs/IMs in existing libraries with predicted values. This option must not be used together with raw data analysis, i.e. in silico predicted library generation must be done in a separate step.  
 
 **Output** pane
 * **Use existing .quant files when available** reuse IDs/quantification information from a previous analysis, see [Output](#output)
