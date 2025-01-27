@@ -1,1 +1,1 @@
-Please see the LICENSE.txt file in the ditribution package of the respective DIA-NN version.
+Please see the LICENSE.txt file distributed with the respective DIA-NN version.
