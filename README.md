@@ -14,8 +14,8 @@ DIA-NN is built on the following principles:
 - **Powerful tuning options** to enable unconventional experiments
 - **Scalability and speed**: up to 1000 mass spec runs processed per hour
 
-**Download DIA-NN 2.0** for academic research: https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
-**DIA-NN 2.0 Enterprise** for industry use: contact Aptila Biotech [aptila.bio](https://www.aptila.bio) to purchase or obtain a trial license.   
+**Download DIA-NN 2.0.1** for academic research: https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
+**DIA-NN 2.0.1 Enterprise** for industry use: contact Aptila Biotech [aptila.bio](https://www.aptila.bio) to purchase or obtain a trial license.   
 
 <img src="https://raw.githubusercontent.com/vdemichev/DiaNN/master/GUI/GUI%20window.png" width=1022></br>  
 
