@@ -14,8 +14,8 @@ DIA-NN is built on the following principles:
 - **Powerful tuning options** to enable unconventional experiments
 - **Scalability and speed**: up to 1000 mass spec runs processed per hour
 
-**Download DIA-NN 2.0.2** for academic research: https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
-**DIA-NN 2.0.2 Enterprise** for industry use: contact Aptila Biotech [aptila.bio](https://www.aptila.bio) to purchase or obtain a trial license.   
+**Download DIA-NN 2.1.0** for academic research: https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
+**DIA-NN 2.1.0 Enterprise** for industry use: contact Aptila Biotech [aptila.bio](https://www.aptila.bio) to purchase or obtain a trial license.   
 
 <img src="https://raw.githubusercontent.com/vdemichev/DiaNN/master/GUI/GUI%20window.png" width=1022></br>  
 
@@ -49,11 +49,11 @@ DIA-NN is built on the following principles:
 
 ### Installation
 
-On **Windows**, download and run the .msi file. It is recommended to install DIA-NN into the default folder suggested by the installer. If your system may not have the common packages from Microsoft installed, download and run [https://aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) as well as [https://go.microsoft.com/fwlink/?linkid=863265](https://go.microsoft.com/fwlink/?linkid=863265) and reboot your PC.
+On **Windows**, download and run the .msi file. It is recommended to install DIA-NN into the default folder suggested by the installer. If your system may not have the common packages from Microsoft installed, download and run [https://aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe), [https://go.microsoft.com/fwlink/?linkid=863265](https://go.microsoft.com/fwlink/?linkid=863265) as well as [https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-8.0.14-windows-x64-installer](https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-8.0.14-windows-x64-installer) and reboot your PC.  
 
 On **Linux** (command-line use only), download and unpack the Linux .zip file. The Linux version of DIA-NN is generated on Linux Mint 21.2, and the target system must have the standard libraries that are at least as recent. There is no such requirement, however, if you make a Docker or Apptainer/Singularity container image. To generate either container, we recommend starting with the latest debian docker image, the script make_docker.sh that does this is included. You can also check the excellent [guide](https://github.com/vdemichev/DiaNN/issues/1202#issuecomment-2417108281) by Roger Olivella. See [Command interface](#command-interface) for Linux-specific usage guidance.
 
-It is also possible to run DIA-NN on Linux using **Wine** 6.8 or later.
+It is also possible to run DIA-NN on Linux using **Wine** 6.8 or later.  
 
 ### Getting Started with DIA-NN
 
@@ -110,13 +110,11 @@ The rest of this guide references extra options/commands you can pass to DIA-NN,
 
 ### Raw data formats
 
-Formats supported: Sciex .wiff, Bruker .d, Thermo .raw, .mzML and .dia (format used by DIA-NN to store spectra). Conversion from any supported format to .dia is possible (except for Slice-type acqusitions on timsTOFs). When running on Linux (native builds, not Wine), only .d, .mzML, and .dia data are supported.  
+Formats supported: Sciex .wiff, Bruker .d, Thermo .raw, .mzML and .dia (format used by DIA-NN to store spectra). Conversion from any supported format to .dia is possible (except for Slice-type acqusitions on timsTOFs). When running on Linux (native builds, not Wine), only .d, .raw, .mzML, and .dia data are supported.  
 
 For .wiff support, download and install [ProteoWizard](http://proteowizard.sourceforge.net/download.html) - choose the version (64-bit) that supports "vendor files"). Then copy all files with 'Clearcore' or 'Sciex' in their name (these will be .dll files) from the ProteoWizard folder to the DIA-NN installation folder (the one which contains diann.exe, DIA-NN.exe and a bunch of other files).  
 
-Reading Thermo .raw files requires [Thermo MS File Reader](https://thermo.flexnetoperations.com/control/thmo/login?nextURL=%2Fcontrol%2Fthmo%2Fdownload%3Felement%3D6306677) to be installed. It is essential to use specifically the version by the link above (3.0 SP3).  
-
-.mzML files should be centroided and contain data as spectra (e.g. SWATH/DIA) and not chromatograms. 
+.mzML files should be centroided and contain data as spectra (e.g. SWATH/DIA) and not chromatograms.  
 
 <details>
   <summary>Technology support</summary>
@@ -168,7 +166,7 @@ The **Output** pane allows to specify where the output should be saved as well a
 <details>
   <summary>Main report</summary>
 
-A text table in .parquet format containing precursor and protein IDs, as well as plenty of associated information. Please use either R "arrow" or Python "pyarrow"/"polars" packages to process. In addition to using R or Python, you can also view .parquet files with the [TAD Viewer](https://www.tadviewer.com/). 
+A text table in .parquet format containing precursor and protein IDs, as well as plenty of associated information. Please use either R "arrow" or Python "pyarrow"/"polars" packages to process. In addition to using R or Python, you can also view .parquet files with the [TAD Viewer](https://www.tadviewer.com/). Similarly to R/Python, this app can be used to export .parquet to .csv.  
 
 Most column names are self-explanatory, and the full reference as well as guidance on how to filter the main report can be found in [Main output reference](#main-output-reference). The following keywords are used when naming columns:
 - **PG** means protein group
@@ -202,9 +200,9 @@ Contains a number of QC metrics which can be used for data filtering, e.g. to ex
 </details>
 
 <details>
-  <summary>PDF report</summary>
+  <summary>PDF reports</summary>
 
-A PDF file with a number of QC plots for each run in the experiment, generated on Windows only. Extra QC plots will be added in future DIA-NN versions.  
+Two PDF reports, one containing QC metrics for each acquisition, another with trends observed over the experiment. The PDF reports are generated automatically on Windows, on Linux you can use Python to invoke the diann-stats.py script (located next to the diann-linux binary). Please note that the PDF reports are meant to provide quick quality control for the experiment. If you would like to use them in a publication, please examine the diann-stats.py script for exact definition of what is being plotted by the report. 
 
 </details>
 
@@ -283,7 +281,7 @@ Distinguishing between peptidoforms bearing different sets of modifications is a
 
 **Note**: for purely peptidomics applications, such as a typical phosphoproteomics experiment, we recommend the **Proteoforms** **Scoring** mode, see [GUI settings reference](#gui-settings-reference) for details.
 
-Further, DIA-NN features an algorithm which reports PTM localisation confidence estimates (as posterior probabilities for correct localisation of all variable PTM sites on the peptide as well as scores for individual sites), included in the .parquet output report. The phosphosites_90 and phosphosites_99 .tsv files contain phosphosite-specific quantities, calculated using the Top 1 method (experimental), that is the highest intensity among precursors with the site localised with the specified confidence (0.9 or 0.99, respectively) is used as the phosphosite quantity in the given run. The 'top 1' algorithm is used here as it is likely the most robust against outliers and mislocalisation errors. However, whether or not this is indeed the best option needs to be investigated, which is currently challenging due to the lack of benchmarks with known ground truth. These matrices are currently not being produced when multiplexing is used (--channels), in this case please rely on the main report. 
+Further, DIA-NN features an algorithm which reports PTM localisation confidence estimates (as posterior probabilities for correct localisation of all variable PTM sites on the peptide as well as scores for individual sites), included in the .parquet output report. When matrix output is enabled, DIA-NN also produces quantitative matrices for the PTM sites, calculated using the Top 1 method (experimental), that is the highest intensity among precursors with the site localised with the specified confidence (0.9 or 0.99, respectively) is used as the PTM quantity in the given run. Here, the sum of top 3 fragment intensities (ordered by their reference library intensities), multiplied by the precursor-specific normalisation factor, is used as the precursor intensity. One can also replace these with normalised MS1 apex intensities using --site-ms1-quant. The 'top 1' algorithm is used here as it is likely the most robust against outliers and mislocalisation errors. However, whether or not this is indeed the best option needs to be investigated, which is currently challenging due to the lack of benchmarks with known ground truth (precision in LFQbench-type experiments is not a good proxy, as it does not model the possibly differential regulation of sites on the same peptide). These matrices are currently not being produced when multiplexing is used (--channels), in this case please rely on the main report. 
 
 In general, when looking for PTMs, we recommend the following:
 
@@ -444,8 +442,6 @@ How optimal specific parameters are for a particular experiment depends on the L
 
 * You would like to use the top N protein quantities (normally not recommended) instead of the built-in QuantUMS MaxLFQ-like algorithm, QuantUMS precursor quantities are currently not inteded to be used for top N as QuantUMS is inherently a 'relative quantification' method, whereas top N effectively implies comparing quantities of different precursor ion species. 
 
-* For the same reason, use the legacy mode if you would like use the quantities stored in the phosphosite matrices produced by DIA-NN, as these are generated using the top 1 method. These matrices are still being saved in the QuantUMS mode, however in this case they are only good as a quick reference of whether a site was identified. You can still perform phosphosite quantification using a MaxLFQ algorithm (in R) based on DIA-NN's QuantUMS precursor quantities in the main report.   
-
 * For the same reason, use the legacy mode for IBAQ.
 
 * In all the above (rare) cases where comparisons between quantities of different precursor species are performed (= absolute quantification is important) and the legacy mode is therefore appropriate, also consider just using the raw fragment quantities (at the apex), reported by DIA-NN when using --export-quant, e.g. summing the first 3 fragments may in some cases be better than using the legacy quantities. The normalisation factors calculated by DIA-NN in any mode can also be applied to the raw fragment quantities. Further, in all such scenarious you may want to use the top N approach (with N between 1 and 3) for any kind of precursor quantities aggregation (e.g. protein quant) rather than MaxLFQ (because if MaxLFQ were appropriate, would be better to use QuantUMS).  
@@ -469,6 +465,8 @@ A simple normalisation test can be carried in R or Python. For any two samples
 * Plot the histogram of the above log2 fold-changes.
 * Indicate the median and half sample mode (use hsm() function of the modeest R package) on the histogram. Both these values should be close to 0. 
 
+**Raw fragment quantities**. DIA-NN has the --export-quant option, that appends theoretical as well as observed (per-run) information on the library fragment ions of a precursor (top 12 sorted by the reference intensity), such as the observed signal intensity (non-normalised) as well as a score reflecting fragment XIC quality. These are useful for connecting DIA-NN to downstream packages that require raw fragment quantities as well as for applications such as setting up MRM/PRM assays, as these data can be used to select fragments that are reliably detectable.  
+
 ### Speed optimisation
 
 This section focuses on factors that allow to increase the speed of processing and reduce RAM usage with large predicted spectral libraries. 
@@ -477,11 +475,15 @@ This section focuses on factors that allow to increase the speed of processing a
 
 **Reducing the search space**. The time to search a file with a large library is approximately proportional to the size of the library. Therefore, we recommend to strictly follow the recommendations in this guide with respect to specifying variable modifications (i.e. only specify them if there are compelling reasons for this), at least for the first analysis. Once you have the data obtained using recommended settings, can see if including extra modifications improves identification numbers (in vast majority of cases it does not). 
 
-**Reducing RAM usage**. DIA-NN requires just under 0.5Gb RAM to store 1 million library precursors. That is a 3-million human tryptic digest library will require 1.5Gb RAM, while a 50-million library for phosphoproteomics will require about 25Gb of RAM. RAM is further used to store the raw data file that is being processed and for temporary storage of candidate PSMs. The requirements of the latter can be minimsed by adjusting **Speed and RAM usage**. There is currently a limit of max 1 billion precursor ions in the library, while DIA-NN is fine searching anything below that, provided it has enough RAM. If you are dealing with huge sequence databases, ubiquitous variable modifications or non-specific digests, resulting in libraries containing hundreds of millions precursors, it may make sense to split them and search separately. For example, a charge 2 length 8-13 (primary range for HLA peptides) non-specific human digest library (see --cut) is roughly 97 million precursors, i.e. including other charge states and the full length range here would not be manageable on regular desktop PCs. However, it is OK to search charge 1 and charge 2 separately, and then combine the resulting empirical libraries for the quantitative analysis. Similarly, predicted libraries can be also split based on the precursor m/z ranges. Further, imagine a metaproteomics experiment that is to be searched against 1000s of species. In this case, it may make sense to split the species into groups (e.g. by taxa or even randomly) and search those groups separately, looking, say, only for charge 2 precursors in 8-20 length range. This will allow to identify any confidently detected species (e.g. at least N proteins detected using proteotypic peptides) and then research only those in one go. 
+**Reducing RAM usage**. DIA-NN requires just under 0.5Gb RAM to store 1 million library precursors. That is a 3-million human tryptic digest library will require 1.5Gb RAM, while a 50-million library for phosphoproteomics will require about 25Gb of RAM. RAM is further used to store the raw data file that is being processed and for temporary storage of candidate PSMs. The requirements of the latter can be minimsed by adjusting **Speed and RAM usage**. There is currently a limit of max 1 billion precursor ions in the library, while DIA-NN is fine searching anything below that, provided it has enough RAM. If you are dealing with huge sequence databases, ubiquitous variable modifications or non-specific digests, resulting in libraries containing hundreds of millions precursors, it may make sense to split them and search separately. For example, a charge 2 length 8-13 (primary range for HLA peptides) non-specific human digest library (see --cut) is roughly 68 million precursors, i.e. including other charge states and the full length range here would not be manageable on regular desktop PCs. However, it is OK to search charge 1 and charge 2 separately, and then combine the resulting empirical libraries for the quantitative analysis. Similarly, predicted libraries can be also split based on the precursor m/z ranges. Further, imagine a metaproteomics experiment that is to be searched against 1000s of species. In this case, it may make sense to split the species into groups (e.g. by taxa or even randomly) and search those groups separately, looking, say, only for charge 2 precursors in 8-20 length range. This will allow to identify any confidently detected species (e.g. at least N proteins detected using proteotypic peptides) and then research only those in one go. 
+
+Note that during MBR search DIA-NN only stores .quant files on disk during the first pass, whereas during the second pass they are stored in-memory, increasing RAM usage for large experiments. MBR is just a convenience feature, for large experiments we recommend to reproduce it with a two-step procedure (create an empirical library and then analyse with this library) as described above.  
 
 **Speed and RAM usage**. This setting is useful on some instruments. Specifically, we have observed on a number of experiments that with **MBR** the peptidoform-confident identification numbers obtained in **Ultra-fast** mode can be the same or almost the same as in the **Optimal results** mode, while the **Ultra-fast** mode is often fold-change faster. This in particular applies to fairly heterogeneous samples (most real experiments). Therefore, on samples that take very long time to process (e.g. long-gradient slice/scanning methods on timsTOF or if searching with huge libraries) and require peptidoform confidence, an empirical library can indeed be generated using the **Ultra-fast** mode if you wish to obtain it quicker, we recommend trying this on Orbitrap, Orbitrap Astral and timsTOF data. 
 
 **RT window control**. During the analysis, DIA-NN automatically sets the width of the retention time (RT) window: this value provides guidance to DIA-NN's algorithms that make decisions at which points in the acquisition to look for each particular precursor ion. Reducing RT window makes the search faster but increases the chances of DIA-NN failing to identify precursors that have inaccurate reference RT values stored in the spectral library. For a further speed increase - when generating an empirical library - one can use --rt-window-mul 1.7 --rt-window-factor 100: if there are no modification-associated biases in the input library retention times (i.e. it's either an empirical library or a predicted library with models tuned, if necessary, as recommended in [Fine tuning prediction models](#fine-tuning-prediction-models)), this will likely result in comparable identification numbers. Before doing this, we recommend verifying on several acquisitions that reduced RT window does not result in a noticeable loss of identification numbers with particular sample type and LC-MS settings.   
+
+**Calibration speed**. DIA-NN will correctly process also raw data files with mass calibration that is off by up to ~100 ppm. DIA-NN also incorporates an algorithm that infers whether or not the data are well calibrated, and automatically tightens the mass tolerance used during the calibration state of the search, speeding it up. This algorithm may, in very rare cases, falsely misinterpret the MS/MS data (three such occurrances reported by the community before the release of DIA-NN 2.1.0). Therefore, given that in almost all cases it is known that the instrument is well calibrated, one can use --mass-acc-cal 25 to fix the calibration mass tolerance to 25 ppm.  
 
 **Optimising RAM access on Linux**. To possibly increase performance on some systems, one can use mimalloc with dynamic override as described here https://github.com/microsoft/mimalloc for all steps except predicted library generation. However, in most cases this will have no effect. When running multiple DIA-NN instances in parallel, one per NUMA node, one may want to check if assigning a specific node to each instance with numactl (--cpunodebind and --preferred options, along with the --privileged Docker option when running as a Docker container) results in a speed improvement on the specific system.  
  
@@ -566,7 +568,7 @@ Of note, by default DIA-NN reports 'normalised' quantities. This means it makes 
 * **Generate Prosit input** when performing FASTA digest, create an output file that can be used as input for the Prosit tool. This is helful if you are interested in testing Prosit, however not needed for DIA-NN itself.   
 * **Threads** suggest the number of CPU threads for DIA-NN to use. DIA-NN may not scale well beyond 64 threads. 
 * **Precursor FDR (%)** set the precursor q-value filtering to be applied to the main output report and the empirical spectral library to be generated. Normally should be kept at 1%, increasing up to 5% may be be helpful if the identification numbers are very low. Increasing beyond 5% is not recommended. Decreasing below 1% may result in worse protein quantification and is also not recommended. 
-* **PDF** generate a PDF report with some QC metrics based on the experiment.
+* **PDF** generate per-file and experiment-wide PDF reports with some QC metrics and trends.
 
 </details>
  
@@ -600,7 +602,7 @@ In the **Peptidoforms** mode, DIA-NN's main q-values correspond to the regular d
 
 * **Cross-run normalisation** whether to use global, RT-dependent (recommended) or also signal-dependent (experimental, be very careful about it) cross-run normalisation. Normalisation can also be disabled completely. Please see [Quantification](#quantification) for a detailed guide.
 
-* **Library generation** this setting determines if and how empirical RTs/IMs and spectra are added to the newly generated library, instead of the theoretical values. IDs, RT & IM profiling is strongly recommended for almost all workflows. When analysing with a high-quality project-specific library, can switch to IDs profiling. Full profiling means always using empirical information, and might only be beneficial (in very rare cases) when having less than ~1000 peptides identified per run.
+* **Library generation** this setting determines if and how empirical RTs/IMs and spectra are added to the newly generated library, instead of the theoretical values. IDs, RT & IM profiling is strongly recommended for almost all workflows. When analysing with a high-quality project-specific library, can switch to IDs profiling. Full profiling means always using empirical information, and might only be beneficial (in very rare cases) when having less than ~1000 peptides identified per run. Note that the recommended way to obtain empirically observed fragment intensities (e.g. for MRM method design) is to use --export-quant and not Full/Smart profiling. 
 
 * **Speed and RAM usage** this setting is primarily useful for library-free analyses. The first three modes will typically have little difference in terms of ID numbers, while the **Ultra-fast** mode is rather extreme: up to 5x faster, but ID numbers are not as good. The setting affects only the first pass when using MBR. Therefore, in many cases, analysing in **Ultra-fast** mode with large predicted libraries with **MBR** enabled may produce same identification numbers during the second **MBR** pass, especially if the data has been acquired on Orbitrap, Orbitrap Astral or timsTOF instruments. 
 
@@ -612,7 +614,9 @@ In the **Peptidoforms** mode, DIA-NN's main q-values correspond to the regular d
 
 Note that some options below are strongly detrimental to performance and are only there for benchmarking purposes. So the recommendation is to only use the options which are expected to be beneficial for a particular experiment (e.g. those recommended in the present guide) based on some clear rationale.
 
+* **--about** display information with basic links and notices for this DIA-NN version  
 * **--cal [N]** set the calibration mode, valid values are 0 (off), 1, 3, 5 and 7, default is 7
+* **--cal-channel [channel name]** specifies which channel to use for calibration: if there is a channel that is expected to produce good identification numbers in all samples, use this command to possibly improve calibration  
 * **--cfg [file name]** specifies a file to load options/commands from
 * **--channel-run-norm** normalisation of multiplexed samples will be performed in run-specific manner, i.e. to perform normalisation, for each precursor ion DIA-NN will sum the respective channels within each run and will normalise these sums across runs: use e.g. for protein turnover SILAC experiments
 * **--channel-spec-norm** normalisation of multiplexed samples will be performed in channel-specific manner, i.e. each channel in each run is treated as a separate sample to be normalised: use to analyse experiments wherein multiplexing of independent samples is used to boost throughput
@@ -640,6 +644,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--fasta [file name]** specifies a sequence database in FASTA format (full support for UniProt proteomes), use multiple --fasta commands to specify multiple databases
 * **--fasta-filter [file name]** only consider peptides matching the stripped sequences specified in the text file provided (one sequence per line), when processing a sequence database
 * **--fasta-search** instructs DIA-NN to perform an in silico digest of the sequence database
+* **--fixed-loss [modification name],[loss mass],[modification sites]** instructs DIA-NN to apply a neutral loss (i.e. subtract the specified mass) to each fragment ion containing the specified modification(s) on the specified sites, proportional to the number of such sites within the fragment; this functionality is highly experimental and untested, there should be no more than one --fixed-loss or --var-loss declaration  
 * **--fixed-mod [name],[mass],[sites],[optional: 'label']** - adds the modification name to the list of recognised names and specifies the modification as fixed. Same syntax as for --var-mod. Has an effect of (i) applying fixed modifications during FASTA digest or (ii) declaring fixed modifications that can be applied to a library with --lib-fixed-mod
 * **--force-swissprot** only consider SwissProt (i.e. marked with '>sp|') sequences when processing a sequence database
 * **--full-profiling** enable using empirical spectra for empirical library generation
@@ -649,6 +654,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--high-acc** QuantUMS settings will be otimised for maximum accuracy, i.e. to minimise any ratio compression quantitative bias
 * **--ids-to-names** protein sequence ids will also be used as protein names and genes, any information on actual protein names or genes will be ignored
 * **--id-profiling** set the empirical library generation mode to IDs profiling
+* **--ignore-decoys** ignore decoys when loading a .parquet library  
 * **--il-eq** when using the 'Reannotate' function, peptides will be matched to proteins while considering isoleucine and leucine equivalent
 * **--im-acc [X]** a parameter that should roughly correspond to the magnitude of observed IM value differences between different ion species matching the same precursor, default X = 0.02
 * **--im-model [file]** specifies the file containing the IM deep learning prediction model
@@ -701,6 +707,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--no-skyline** do not generate .skyline.speclib
 * **--no-stats** disables the generation of the stats file
 * **--no-swissprot** instruct DIA-NN not to give preference for SwissProt proteins when inferring protein groups
+* **--no-tims-scan** force processing of timsTOF .d acquisitions as dia-PASEF (i.e. not slice/diagonal), use this to process 'dia-PASEF' files that are wrongly recognised as Slice-PASEF by DIA-NN - this may happen e.g. if the files that have a single window within the frame split in several windows with identical m/z bounds but different IM ranges (not recommended)  
 * **--original-mods** disables the automatic conversion of known modifications to the UniMod format names known to DIA-NN
 * **--out [file name]** specifies the name of the main output report. The names of all other report files will be derived from this one
 * **--out-lib [file name]** specifies the name of a spectral library to be generated
@@ -717,6 +724,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--pr-filter [file name]** specify a file containing a list of precursors (same format as the Precursor.Id column in DIA-NN output), FASTA digest will be filtered to only include these precursors
 * **--qvalue [X]** specifies the precursor-level q-value filtering threshold
 * **--quant-acc [X]** sets the precision-accuracy balance for QuantUMS to X, where X must be between 0 and 1
+* **--quant-pep [X]** sets the posterior error probability threshold for precursor ions to be used for quantification: precursors not passing the threshold may be ignored by some algorithms of DIA-NN, default X value is 0.05  
 * **--quant-ori-names** .quant files will retain original raw file names even if saved to a separate directory, convenient for .quant file manipulation
 * **--quant-fr [N]** sets the number of top fragment ions among which the fragments that will be used for quantification are chosen for the legacy (pre-QuantUMS) quantification mode. Default value is 6
 * **--quick-mass-acc** (experimental) when choosing the MS2 mass accuracy setting automatically, DIA-NN will use a fast heuristical algorithm instead of IDs number optimisation
@@ -730,6 +738,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--ref [file name]** (experimental) specify a special (small) spectral library which will be used exclusively for calibration - this function can speed up calibration in library-free searches; this special library must have the same RT and IM scales as the main predicted/experimental library used for the analysis; use with caution
 * **--regular-swath** all runs will be analysed as if they were not Scanning SWATH runs
 * **--report-decoys** save decoy PSMs to the main .parquet report
+* **--report-file-name** save the full run name, including the file path, to the main report  
 * **--restrict-fr** some fragments will not be used for quantification, based on the value in the ExcludeFromAssay spectral library column; marking all fragments of a precursor as excluded will, together with --restrict-fr, suppress the use of this precursor for protein quantification whenever possible
 * **--rt-model [file]** specifies the file containing the RT deep learning prediction model
 * **--rt-profiling** set the empirical library generation mode to IDs, RT and IM profiling
@@ -740,6 +749,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--scanning-swath** all runs will be analysed as if they were Scanning SWATH runs
 * **--semi** when using the 'Reannotate' function, a peptide will be matched to a protein also if it could be obtained with one specific and one non-specific cut (at either of the termini)
 * **--sig-norm** enable signal-dependent normalisation, not recommended
+* **--site-ms1-quant** use MS1 quantities for modification site quantification matrices
 * **--skip-unknown-mods** instructs DIA-NN to ignore peptides with modifications that are not supported by the deep learning predictor, when performing the prediction
 * **--smart-profiling** enables an intelligent algorithm which determines how to extract spectra, when creating a spectral library from DIA data, use with --full-profiling. The performance has so far always been observed to be comparable to IDs, RT and IM profiling
 * **--species-genes** instructs DIA-NN to add the organism identifier to the gene names - useful for distinguishing genes from different species, when analysing mixed samples. Works with UniProt sequence databases.
@@ -761,6 +771,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--tune-rt** tune the RT deep learning predictor, requires --tune-lib
 * **--use-quant** use existing .quant files, if available
 * **--verbose [N]** sets the level of detail of the log. Reasonable values are in the range 0 - 4
+* **--var-loss [modification name],[loss mass],[modification sites]** instructs DIA-NN to apply a neutral loss (i.e. subtract the specified mass) to each fragment ion containing the specified modification(s) on the specified sites, max 1 time regardless of the number of sites, and then append such modified fragments to the original list of fragments without losses; this functionality is highly experimental and untested, it is in particular not known how this can affect identification numbers; there should be no more than one --fixed-loss or --var-loss declaration  
 * **--var-mod [name],[mass],[sites],[optional: 'label']** - adds the modification name to the list of recognised names and specifies the modification as variable. [sites] can contain a list of amino acids and 'n' which codes for the N-terminus of the peptide. '\*n' indicates protein N-terminus. Examples: "--var-mod UniMod:21,79.966331,STY" - phosphorylation, "--var-mod UniMod:1,42.010565,*n" - N-terminal protein acetylation. Similar to --mod can be followed by 'label'. Has an effect of (i) applying variable modifications during FASTA digest or (ii) declaring modifications to be localised during raw data analysis
 * **--var-mods** sets the maximum number of variable modifications
 * **--xic [optional: X]** instructs DIA-NN to extract MS1/fragment chromatograms for identified precursors within X seconds from the elution apex, with X set to 10s if not provided; the chromatograms are saved in .parquet files (one per run) located in a folder that is created in the same location as the main output report; equivalent to the 'XICs' option in the GUI
@@ -949,7 +960,7 @@ In most cases, the reasons for any unexpected performance can be identified with
 
 * If you see zero or too few identifications from a particular run with a predicted library that you have generated from a sequence database, see what results you can get with an empirical spectral library instead. Can use any suitable public library or a DIA-based library generated by DIA-NN from any other runs (could be from a different platform, e.g. some public data). If still not working, try to see if it's a mass calibration problem, by searching with a wide mass window first using --mass-acc-cal 100. Further, make sure that the predicted/empirical library used reflects the background proteome of your samples, not just specific proteins of interest.
 
-* If DIA-NN has exited unexpectedly, could it be that it ran out of memory? Memory usage is expected to be high when (i) the search space is large, e.g. for phospho or metaproteomics searches, or when allowing lots of variable modifications - see the number of library precursors reported by DIA-NN: RAM usage to store the spectral library in memory is approximately 1Gb per 1 million of precursors. Try following the steps for reducing RAM usage outlined in [Frequently asked questions (FAQ)](#frequently-asked-questions).
+* If DIA-NN has exited unexpectedly, could it be that it ran out of memory? Memory usage is expected to be high when (i) the search space is large, e.g. for phospho or metaproteomics searches, or when allowing lots of variable modifications - see the number of library precursors reported by DIA-NN: RAM usage to store the spectral library in memory is approximately 0.5 Gb per 1 million of precursors. Try following the steps for reducing RAM usage outlined in [Speed optimisation](#speed-optimisation).  
 
 ### Key publications
 Please cite:   
@@ -981,4 +992,3 @@ Using DIA-NN as part of the MSBooster workflow in FragPipe: **MSBooster: improvi
 **Visualisation** of peptide positions in the protein: https://github.com/MannLabs/alphamap (AlphaMap by Mann lab)
 
 **Notes and discussions** on proteomics in general and the use of DIA-NN: https://github.com/vdemichev/DiaNN/discussions/categories/dia-proteomics-in-detail (this section will be further expanded).
-
