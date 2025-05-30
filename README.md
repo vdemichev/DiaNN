@@ -14,8 +14,8 @@ DIA-NN is built on the following principles:
 - **Powerful tuning options** to enable unconventional experiments
 - **Scalability and speed**: up to 1000 mass spec runs processed per hour
 
-**Download DIA-NN 2.1.0** for academic research: https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
-**DIA-NN 2.1.0 Enterprise** for industry use: contact Aptila Biotech [aptila.bio](https://www.aptila.bio) to purchase or obtain a trial license.   
+**Download DIA-NN 2.2.0** for academic research: https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
+**DIA-NN 2.2.0 Enterprise** for industry use: contact Aptila Biotech [aptila.bio](https://www.aptila.bio) to purchase or obtain a trial license.   
 
 <img src="https://raw.githubusercontent.com/vdemichev/DiaNN/master/GUI/GUI%20window.png" width=1022></br>  
 
@@ -51,7 +51,7 @@ DIA-NN is built on the following principles:
 
 On **Windows**, download and run the .msi file. It is recommended to install DIA-NN into the default folder suggested by the installer. If your system may not have the common packages from Microsoft installed, download and run [https://aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe), [https://go.microsoft.com/fwlink/?linkid=863265](https://go.microsoft.com/fwlink/?linkid=863265) as well as [https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/sdk-8.0.407-windows-x64-installer](https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/sdk-8.0.407-windows-x64-installer) and reboot your PC.  
 
-On **Linux** (command-line use only), download and unpack the Linux .zip file. The Linux version of DIA-NN is generated on Linux Mint 21.2, and the target system must have the standard libraries that are at least as recent. There is no such requirement, however, if you make a Docker or Apptainer/Singularity container image. To generate either container, we recommend starting with the latest debian docker image, the script make_docker.sh that does this is included. You can also check the excellent [guide](https://github.com/vdemichev/DiaNN/issues/1202#issuecomment-2417108281) by Roger Olivella. See [Command interface](#command-interface) for Linux-specific usage guidance.
+On **Linux** (command-line use only), download and unpack the Linux .zip file. The Linux version of DIA-NN is generated on Linux Mint 21.2, and the target system must have the standard libraries that are at least as recent plus .NET SDK 8.0.407 or later. There is no such requirement, however, if you make a Docker or Apptainer/Singularity container image. To generate either container, we recommend starting with the latest debian docker image, the script make_docker.sh that does this is included. You can also check the excellent [guide](https://github.com/vdemichev/DiaNN/issues/1202#issuecomment-2417108281) by Roger Olivella. See [Command interface](#command-interface) for Linux-specific usage guidance.
 
 It is also possible to run DIA-NN on Linux using **Wine** 6.8 or later.  
 
@@ -183,7 +183,7 @@ Most column names are self-explanatory, and the full reference as well as guidan
 <details>
   <summary>Matrices</summary>
 
-These contain normalised QuantUMS or MaxLFQ quantities for protein groups ('pg_matrix'), gene groups ('gg_matrix'), unique genes ('unique_genes_matrix'; i.e. genes identified and quantified using only proteotypic, that is gene-specific, peptides) as well as normalised quantities for precursors ('pr_matrix'). They are filtered at 1% FDR, using global q-values for protein groups and both global and run-specific q-values for precursors. Additional 5% run-specific protein-level FDR filter is applied to the protein matrices, use --matrix-spec-q to adjust it. Sometimes DIA-NN will report a zero as the best estimate for a precursor or protein quantity. Such zero quantities are omitted from protein/gene matrices. Special phosphosite quantification matrices (phosphosites_90 and phosphosites_99 .tsv) are generated when phosphorylation (UniMod:21) is declared as a variable modification, see [PTMs and peptidoforms](#ptms-and-peptidoforms).
+These contain normalised QuantUMS or MaxLFQ quantities for protein groups ('pg_matrix'), gene groups ('gg_matrix'), unique genes ('unique_genes_matrix'; i.e. genes identified and quantified using only proteotypic, that is gene-specific, peptides) as well as normalised quantities for precursors ('pr_matrix'). They are filtered at 1% FDR, using global q-values for protein groups and both global and run-specific q-values for precursors. Additional 5% run-specific protein-level FDR filter is applied to the protein matrices, use --matrix-spec-q to adjust it. Sometimes DIA-NN will report a zero as the best estimate for a precursor or protein quantity. Such zero quantities are omitted from protein/gene matrices. A site-level report and site quantification matrices are also generated when variable modifications are declared and the FASTA database is provided, see [PTMs and peptidoforms](#ptms-and-peptidoforms). 
 </details>
 
 <details>
@@ -224,7 +224,7 @@ diann.exe [commands]
 ```
 Commands are processed in the order they are supplied, and with most commands this order can be arbitrary.
 
-On Linux, the semicolon ';' character is treated as a command separator, therefore, ';' as part of DIA-NN commands (e.g. --channels) needs to be replaced with '\;' on Linux for correct behaviour. Likewise, the exclamation mark '!' (e.g. in --cut) needs to be replaced with '\!'.  
+On Linux, some symbols have special meaning in the terminal, therefore, e.g. ';' (e.g. as part of --channels) or the exclamation mark '!' (e.g. in --cut) need to be preceded by a backslash on Linux for correct behaviour.  
 
 For convenience, as well as for handling experiments consisting of thousands of files, some of the options/commands can be stored in a config file. For this, create a text file with any extension, say, diann_config.cfg, type in any commands supported by DIA-NN in there, and then reference this file with --cfg diann_config.cfg (in the **Additional options** text box or in the command used to invoke the diann.exe command-line tool).
 
@@ -281,7 +281,9 @@ Distinguishing between peptidoforms bearing different sets of modifications is a
 
 **Note**: for purely peptidomics applications, such as a typical phosphoproteomics experiment, we recommend the **Proteoforms** **Scoring** mode, see [GUI settings reference](#gui-settings-reference) for details.
 
-Further, DIA-NN features an algorithm which reports PTM localisation confidence estimates (as posterior probabilities for correct localisation of all variable PTM sites on the peptide as well as scores for individual sites), included in the .parquet output report. When matrix output is enabled, DIA-NN also produces quantitative matrices for the PTM sites, calculated using the Top 1 method (experimental), that is the highest intensity among precursors with the site localised with the specified confidence (0.9 or 0.99, respectively) is used as the PTM quantity in the given run. Here, the sum of top 3 fragment intensities (ordered by their reference library intensities), multiplied by the precursor-specific normalisation factor, is used as the precursor intensity. One can also replace these with normalised MS1 apex intensities using --site-ms1-quant. The 'top 1' algorithm is used here as it is likely the most robust against outliers and mislocalisation errors. However, whether or not this is indeed the best option needs to be investigated, which is currently challenging due to the lack of benchmarks with known ground truth (precision in LFQbench-type experiments is not a good proxy, as it does not model the possibly differential regulation of sites on the same peptide). These matrices are currently not being produced when multiplexing is used (--channels), in this case please rely on the main report. 
+Further, DIA-NN features an algorithm which reports PTM localisation confidence estimates (as posterior probabilities for correct localisation of all variable PTM sites on the peptide as well as scores for individual sites), included in the .parquet output report. When matrix output is enabled and a FASTA database is provided, DIA-NN also produces a site-level report (.site_report.parquet). The site report contains the list of all occupied and unoccupied variable modification protein sites with the respective occupancy probabilities, for each precursor identification. Sites on a precursor are matched to sites on all proteins included in the respective protein group, in each case reported in a separate row of the site report. The entries in the site report can be matched to the main report and annotated with the information from it, as each row of the site report corresponds to a single row in the main report, defined by the combination of the run index, channel name and precursor library index. 
+
+For quick preliminary analyses, DIA-NN also generates ready-to-use quantitative matrices for the PTM sites, calculated using the Top 1 method, that is the highest intensity among precursors (passing certain confidence filters) with the site localised with the specified confidence (0.9 or 0.99, respectively) is used as the PTM quantity in the given run. Here, the sum of top 3 fragment intensities (ordered by their reference library intensities), multiplied by the precursor-specific normalisation factor, is used as the precursor intensity. One can also replace these with normalised MS1 apex intensities using --site-ms1-quant. The 'top 1' algorithm is used here as it is likely the most robust against outliers and mislocalisation errors. However, whether or not this is indeed the best option needs to be investigated, which is currently challenging due to the lack of benchmarks with known ground truth (precision in LFQbench-type experiments is not a good proxy, as it does not model the possibly differential regulation of sites on the same peptide). It is recommended to rather rely on the site report, with matrices intended only for quick preliminary analyses, as the site report provides one with full control over filtering as well as the quantification method. The matrices also are currently not being produced when multiplexing is used (--channels), in this case please rely on the site report. 
 
 In general, when looking for PTMs, we recommend the following:
 
@@ -321,9 +323,9 @@ Example for L/H SILAC labels on K and R:
 ```
 Note that in the above SILAC is declared as label, i.e. it is not supposed to change the retention time of the peptide. It is also a zero-mass label here, as it only serves to designate the amino acids that will be labelled. What the combination of --fixed-mod and --lib-fixed-mod does here is simply put (SILAC) after each K or R in the precursor id sequence, in the internal library representation used by DIA-NN. --channels then splits each library entry into two, one with masses 0 (K) and 0 (R) added upon each occurrence of K(SILAC) or R(SILAC) in the sequence, respectively, and another one with  8.014199 (K) and 10.008269 (R).
 
-**Scenario 2**. The library is a regular label-free library (empirical or predicted), and multiplexing is achieved via chemical labelling with mTRAQ.
+**Scenario 2**. The library is a regular label-free library (empirical or predicted), and multiplexing is achieved via chemical labelling with mTRAQ or any other label for which DIA-NN's predictor has been fine-tuned (recommended: see [Fine tuning prediction models](#fine-tuning-prediction-models)).
 
-<u>Scenario 2: Step 1</u>. Label the library in silico with mTRAQ and run the deep learning predictor to adjust spectra/RTs/IMs. For this, run DIA-NN with the input library in the **Spectral library** field, an **Output library** specified, **Deep learning-based spectra, RTs and IMs prediction** enabled, list of raw data files empty and the following options in **Additional options**:
+<u>Scenario 2: Step 1</u>. Label the library in silico with mTRAQ (or the respective label) and run the deep learning predictor to adjust spectra/RTs/IMs. For this, run DIA-NN with the input library in the **Spectral library** field, an **Output library** specified, **Deep learning-based spectra, RTs and IMs prediction** enabled, list of raw data files empty and the following options in **Additional options**:
 ```
 --fixed-mod mTRAQ,140.0949630177,nK
 --lib-fixed-mod mTRAQ
@@ -340,7 +342,7 @@ Use the .predicted.speclib file with the name corresponding to the **Output libr
 ```
 Note that --lib-fixed-mod is no longer necessary as the library generated in Step 1 already contains (mTRAQ) at the N-terminus and lysines of each peptide.
 
-**Scenario 3**. The library is a regular label-free library (empirical or predicted), and multiplexing is achieved via chemical labelling with a label other than mTRAQ. The reason this scenario is treated differently from Scenario 2 is that DIA-NN's in silico predictor has not been specifically trained for labels other than mTRAQ, and therefore an extra step to generate predictions is not necessary. Simply run DIA-NN as you would do in Scenario 1, except the --fixed-mod declaration will have a non-zero mass in this case and will not be a label. For example, for 5-channel dimethyl as described by [Thielert et al](https://doi.org/10.15252/msb.202211503):
+**Scenario 3**. The library is a regular label-free library (empirical or predicted), and multiplexing is achieved via chemical labelling with a label other than mTRAQ or a label for which DIA-NN has been fine-tuned. The reason this scenario is treated differently from Scenario 2 is that if DIA-NN's in silico predictor has not been specifically trained for a label, the extra step to generate label-specific predictions is not necessary. Simply run DIA-NN as you would do in Scenario 1, except the --fixed-mod declaration will have a non-zero mass in this case and will not be a label. For example, for 5-channel dimethyl as described by [Thielert et al](https://doi.org/10.15252/msb.202211503):
 ```
 ‐‐fixed‐mod Dimethyl, 28.0313, nK
 --lib-fixed-mod Dimethyl
@@ -365,7 +367,7 @@ Note that --lib-fixed-mod is no longer necessary as the library generated in Ste
 This section summarises manipulations with spectral libraries that can be helpful for certain fancy experiments.
 
 DIA-NN itself can: 
-* Convert any spectral library compatible with it to .parquet format. For this, specify the input library in **Spectral library** field and click **Run** (**Raw** field must be empty). 
+* Convert any spectral library compatible with it to .parquet format. For this, specify the input library in **Spectral library** field and click **Run** (**Raw** field must be empty). Note that analysis with a converted library may produce results that are not identical to the analysis with the original library, e.g. due to real number precision limits, DIA-NN discarding decoy peptides that match target sequences, DIA-NN adjusting protein annotation of decoy peptides or in general changing the order in which proteins are listed.  
 * Merge several .parquet or .tsv libraries, for this use multiple --lib commands in **Additional options**. Note the warnings printed by DIA-NN.
 * Replace the spectra, RTs and IMs in the library with predicted ones using deep learning. Note --dl-no-fr, --dl-no-rt and --dl-no-im that allow to control what gets replaced.
 * Apply fixed modifications to the library using --lib-fixed-mod. This changes peptide names and, if the modification has non-zero mass, also precursor and fragment masses. 
@@ -485,7 +487,7 @@ Note that during MBR search DIA-NN only stores .quant files on disk during the f
 
 **Calibration speed**. DIA-NN will correctly process also raw data files with mass calibration that is off by up to ~100 ppm. DIA-NN also incorporates an algorithm that infers whether or not the data are well calibrated, and automatically tightens the mass tolerance used during the calibration state of the search, speeding it up. This algorithm may, in very rare cases, falsely misinterpret the MS/MS data (three such occurrances reported by the community before the release of DIA-NN 2.1.0). Therefore, given that in almost all cases it is known that the instrument is well calibrated, one can use --mass-acc-cal 25 to fix the calibration mass tolerance to 25 ppm.  
 
-**Optimising RAM access on Linux**. To possibly increase performance on some systems, one can use mimalloc with dynamic override as described here https://github.com/microsoft/mimalloc for all steps except predicted library generation. However, in most cases this will have no effect. When running multiple DIA-NN instances in parallel, one per NUMA node, one may want to check if assigning a specific node to each instance with numactl (--cpunodebind and --preferred options, along with the --privileged Docker option when running as a Docker container) results in a speed improvement on the specific system.  
+**Optimising thread number, CPU affinity and RAM access**. On systems with <= 16 physical cores, it is often beneficial to set the number of threads to the total number of logical cores, while on systems with higher number of cores it may be preferable to keep it equal to the number of physical cores. The Enterprise version further allows to control CPU affinities (please see --aff and --auto-aff commands) - this option is particularly beneficial on Windows when dealing with > 64 logical cores (e.g. running 64 threads on 64 physical/128 logical core system). When running multiple DIA-NN instances in parallel, one can use --aff to assign these to specific groups of CPU cores (in case of NUMA HPC systems, ideally to a dedicated NUMA node for each instance). To possibly increase performance on some Linux systems, one can use mimalloc with dynamic override as described here https://github.com/microsoft/mimalloc for all steps except predicted library generation. However, in most cases this will have no effect. 
  
 ### Incremental processing
 
@@ -537,7 +539,7 @@ Of note, by default DIA-NN reports 'normalised' quantities. This means it makes 
 * **Convert to .dia** Convert the selected raw files to DIA-NN's .dia format, for faster subsequent processing, and save them either to the same folder as the respective source raw files or to **Temp/.dia dir** (**Output** pane), if the latter is specified. Conversion is recommended for Sciex files, typically makes little difference for Thermo files and is not recommended for Bruker files.
 * **Spectral library** specify the spectral library.  
 * **Add FASTA** add one or more FASTA files. FASTA files must always be specified if **Protein inference** is not disabled (see below) or you would like to obtain protein-matched phosphosite information. The only reason not to specify FASTA files is a situation when you are using an empirical library generated with the use of a different FASTA database that is not available, and in such case specifying FASTA files will overwrite the annotation of protein sequence IDs in the library, potentially replacing protein names, genes and descriptions. 
-* **Reannotate** option allows to reannotate the spectral library with protein information from the FASTA database, using the specified digest specificity.
+* **Reannotate** option allows to reannotate the spectral library with protein information from the FASTA database, using the specified digest specificity. 
 * **Contaminants** Adds common contaminants from the Cambridge Centre for Proteomics (CCP) database and automatically excludes them from quantification, see the description of the --cont-quant-exclude option. This option applies when generating a predicted spectral library from a FASTA database or analysing using such a library, if it was generated with **Contaminants** enabled.
 
 </details>
@@ -614,7 +616,9 @@ In the **Peptidoforms** mode, DIA-NN's main q-values correspond to the regular d
 
 Note that some options below are strongly detrimental to performance and are only there for benchmarking purposes. So the recommendation is to only use the options which are expected to be beneficial for a particular experiment (e.g. those recommended in the present guide) based on some clear rationale.
 
-* **--about** display information with basic links and notices for this DIA-NN version  
+* **--about** display information with basic links and notices for this DIA-NN version 
+* **--aff M:K-N** (Enteprise version) attempt to set the CPU affinity of the main thread to logical core M and all other threads to logical cores K to N (core indices start with 0); consider using --aff when (i) running DIA-NN on NUMA HPC systems or (ii) running multiple DIA-NN analyses in parallel 
+* **--auto-aff** (Enteprise version) attempt to automatically set thread affinities to spread CPU threads over logical CPU cores, first assigning to cores with even indices (starting with 0), to avoid placing two threads on a single physical core; this setting may be highly beneficial in particular on Windows systems with > 64 logical cores in a single CPU. On NUMA HPC systems, consider using --aff instead; when using --auto-aff, do not run any other DIA-NN analyses in parallel on the same PC     
 * **--cal [N]** set the calibration mode, valid values are 0 (off), 1, 3, 5 and 7, default is 7
 * **--cal-channel [channel name]** specifies which channel to use for calibration: if there is a channel that is expected to produce good identification numbers in all samples, use this command to possibly improve calibration  
 * **--cfg [file name]** specifies a file to load options/commands from
@@ -660,13 +664,15 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--im-model [file]** specifies the file containing the IM deep learning prediction model
 * **--im-prec [X]** a parameter that should roughly correspond to the magnitude of IM errors due to noise, default X = 0.01
 * **--im-window [X]** IM extraction window will not be less than the specified value
-* **--im-window-mul [X]** Affects the IM window/tolerance, larger values result in larger IM extraction window, default X = 2.0
+* **--im-window-mul [X]** affects the IM window/tolerance, larger values result in larger IM extraction window, default X = 2.0
 * **--individual-mass-acc** mass accuracies, if set to automatic, will be determined independently for different runs
 * **--individual-reports** a separate output report will be created for each run
 * **--individual-windows** scan window, if set to automatic, will be determined independently for different runs
 * **--int-removal 0** disables the removal of interfering precursors, not recommended
 * **--lib [file]** specifies a spectral library. The use of multiple --lib commands (experimental) allows to load multiple libraries in .tsv format
 * **--lib-fixed-mod [name]** in silico applies a modification, previously declared using --fixed-mod, to a spectral library
+* **--loc-factor [X]** a factor affecting reported PTM localisation confidence, higher values result in higher confidence reported, default X = 40.0, valid range: 2.0 to 1000.0
+* **--loc-no-h3po4** DIA-NN will not generate fragments with H3PO4 losses to localise phosphosites 
 * **--mass-acc [N]** sets the MS2 mass accuracy to N ppm
 * **--mass-acc-cal [N]** sets the mass accuracy used during the calibration phase of the search to N ppm (default is 100 ppm, which is adjusted automatically to lower values based on the data)
 * **--mass-acc-ms1 [N]** sets the MS1 mass accuracy to N ppm
@@ -733,6 +739,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--quant-sel-runs [N]** instructs QuantUMS to train its parameters on N automatically chosen runs, to speed up training for large experiments, N here must be 6 or greater
 * **--quant-tims-sum** for slice/scanning timsTOF methods, calculate intensities by taking the sum of all cognate signals across the cycle, as opposed to taking the maximum, use this for Synchro-PASEF
 * **--quant-train-runs [N1]:[N2]** instructs QuantUMS to train its parameters on runs with indices in the range N1 to N2 (inclusive), e.g. --quant-train-runs 0:5 will perform training on 6 runs with indices 0 to 5
+* **--read-threads [N]** use a particular number of CPU threads when reading raw files 
 * **--reanalyse** enables MBR
 * **--reannotate** reannotate the spectral library with protein information from the FASTA database, using the specified digest specificity
 * **--ref [file name]** (experimental) specify a special (small) spectral library which will be used exclusively for calibration - this function can speed up calibration in library-free searches; this special library must have the same RT and IM scales as the main predicted/experimental library used for the analysis; use with caution
@@ -760,7 +767,8 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--threads [N]** specifies the number of CPU threads to use
 * **--time-corr-only** restrict machine learning during calibration
 * **--time-corr-only-force** restrict the use of machine learning for peak group selection during all search stages
-* **--tims-min-int [N]** specifies the minimum peak intensity (an integer ion count) to be considered when loading timsTOF data
+* **--tims-min-cnt [N]** specifies the minimum number of peaks to constitute a centroided peak when loading timsTOF data  
+* **--tims-min-int [N]** specifies the minimum peak intensity (an integer ion count) to be considered when loading timsTOF data  
 * **--tims-ms1-cycle [N]** merge the MS/MS spectra from N consecutive cycles, each cycle defined as the set of MS/MS scans following an MS1 scan, use this option only for slice/scanning timsTOF data and always test if the performance is better than without it
 * **--tokens [file]** specify the file name for the text file that contains a mapping between modified residues or N-term modifications and integers in the range 0-255, this file is used by the deep learning predictor
 * **--top [N]** set N for the top N protein quantification, default N = 1
@@ -992,3 +1000,4 @@ Using DIA-NN as part of the MSBooster workflow in FragPipe: **MSBooster: improvi
 **Visualisation** of peptide positions in the protein: https://github.com/MannLabs/alphamap (AlphaMap by Mann lab)
 
 **Notes and discussions** on proteomics in general and the use of DIA-NN: https://github.com/vdemichev/DiaNN/discussions/categories/dia-proteomics-in-detail (this section will be further expanded).
+
