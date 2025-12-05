@@ -15,7 +15,7 @@ DIA-NN is built on the following principles:
 - **Scalability and speed**: up to 1000 mass spec runs processed per hour
 
 **Download DIA-NN 2.3.1** for academic research: https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
-**DIA-NN 2.2.0 Enterprise** or **DIA-NN 2.3.1 Enterprise**: contact Aptila Biotech [aptila.bio](https://www.aptila.bio) or [Request a Quote | Thermo Fisher Scientific](https://www.thermofisher.com/uk/en/home/global/forms/product-request-for-quote-2.html?catalogNumbers=PROTEOMEDISC3) to purchase or obtain a trial license.   
+**DIA-NN 2.2.0 Enterprise** or **DIA-NN 2.3.1 Enterprise**: contact Aptila Biotech [aptila.bio](https://www.aptila.bio) or [Speak with a Solutions Specialist | Thermo Fisher Scientific](https://www.thermofisher.com/uk/en/home/global/forms/industrial/contact-solutions-specialist.html?erpType=Global_E1) to purchase or obtain a trial license.   
 
 <img src="https://github.com/vdemichev/DiaNN/blob/30bfc23313f6b36f17b4e20459004d3ff8b9ccaf/GUI/GUI%20window%2023.png" width=1022></br>  
 
@@ -1071,6 +1071,7 @@ Using DIA-NN as part of the MSBooster workflow in FragPipe: **MSBooster: improvi
 **Visualisation** of peptide positions in the protein: https://github.com/MannLabs/alphamap (AlphaMap by Mann lab)
 
 **Notes and discussions** on proteomics in general and the use of DIA-NN: https://github.com/vdemichev/DiaNN/discussions/categories/dia-proteomics-in-detail (this section will be further expanded).
+
 
 
 
