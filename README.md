@@ -14,8 +14,8 @@ DIA-NN is built on the following principles:
 - **Powerful tuning options** to enable unconventional experiments
 - **Scalability and speed**: up to 1000 mass spec runs processed per hour
 
-**Download DIA-NN 2.3.0** for academic research: https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
-**DIA-NN 2.2.0 Enterprise** for industry use: contact Aptila Biotech [aptila.bio](https://www.aptila.bio) to purchase or obtain a trial license.   
+**Download DIA-NN 2.3.1** for academic research: https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
+**DIA-NN 2.2.0 Enterprise** or **DIA-NN 2.3.1 Enterprise** for industry use: contact Aptila Biotech [aptila.bio](https://www.aptila.bio) to purchase or obtain a trial license.   
 
 <img src="https://github.com/vdemichev/DiaNN/blob/30bfc23313f6b36f17b4e20459004d3ff8b9ccaf/GUI/GUI%20window%2023.png" width=1022></br>  
 
@@ -53,7 +53,7 @@ DIA-NN is built on the following principles:
 
 On **Windows**, download and run the .msi file. It is recommended to install DIA-NN into the default folder suggested by the installer. If your system may not have the common packages from Microsoft installed, download and run [https://aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) as well as [https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/sdk-8.0.407-windows-x64-installer](https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/sdk-8.0.407-windows-x64-installer) and reboot your PC.  
 
-On **Linux** (command-line use only), download and unpack the Linux .zip file. The Linux version of DIA-NN is generated on Linux Mint 21.2, and the target system must have the standard libraries that are at least as recent plus .NET SDK 8.0.407 or later. There is no such requirement, however, if you make a Docker or Apptainer/Singularity container image. To generate either container, we recommend starting with the latest debian docker image, the script make_docker.sh that does this is included. You can also check the excellent [guide](https://github.com/vdemichev/DiaNN/issues/1202#issuecomment-2417108281) by Roger Olivella. See [Command interface](#command-interface) for Linux-specific usage guidance.
+On **Linux** (command-line use only), download and unpack the Linux .zip file. The Linux version of DIA-NN is generated on Linux Mint 21.2, and the target system must have the standard libraries that are at least as recent plus .NET SDK 8.0-series, version 8.0.407 or later. There is no such requirement, however, if you make a Docker or Apptainer/Singularity container image. To generate either container, we recommend starting with the latest debian docker image, the script make_docker.sh that does this is included. You can also check the excellent [guide](https://github.com/vdemichev/DiaNN/issues/1202#issuecomment-2417108281) by Roger Olivella. See [Command interface](#command-interface) for Linux-specific usage guidance.
 
 It is also possible to run DIA-NN on Linux using **Wine** 6.8 or later.  
 
@@ -226,7 +226,7 @@ diann.exe [commands]
 ```
 Commands are processed in the order they are supplied, and with most commands this order can be arbitrary.
 
-On Linux, some symbols have special meaning in the terminal, therefore, e.g. ';' (e.g. as part of --channels) or the exclamation mark '!' (e.g. in --cut) need to be preceded by a backslash on Linux for correct behaviour.  
+On Linux, some symbols have special meaning in the terminal, therefore, e.g. the semicolon ';' (e.g. as part of --channels), the asterisk '*' or the exclamation mark '!' (e.g. in --cut) need to be preceded by a backslash on Linux for correct behaviour.  
 
 For convenience, as well as for handling experiments consisting of thousands of files, some of the options/commands can be stored in a config file. For this, create a text file with any extension, say, diann_config.cfg, type in any commands supported by DIA-NN in there, and then reference this file with --cfg diann_config.cfg (in the **Additional options** text box or in the command used to invoke the diann.exe command-line tool).
 
@@ -256,7 +256,7 @@ changes the DIA-NN binary file location to that of a specific version, adjusts s
 
 DIA-NN 2.0 introduces the ability to fine-tune its retention time (RT) and ion mobility (IM) prediction models. This is highly beneficial when looking for modifications on which DIA-NN's built-in models have not been trained on. Fine-tuning of the fragmentation predictor will also become available in the future. 
 
-Currently, the following modifications do no require any fine-tuning: UniMod:4 (C, carbamidomethylation), UniMod:35 (M, oxidation), UniMod:42 (N-term, acetylation), UniMod:21 (STY, phosphorylation), UniMod:121 (K, diglycine), UniMod:7 (NQ, deamidation). Fine-tuning may be somewhat beneficial for the following modifications: UniMod:888 (N-term, K, mTRAQ), UniMod:255 (N-term, K, dimethyl). Fine-tuning is likely to signficantly boost detection of other modifications as well as unmodified cysteines.  
+Currently, the following modifications do no require any fine-tuning: UniMod:4 (C, carbamidomethylation), UniMod:35 (M, oxidation), UniMod:1 (N-term, acetylation), UniMod:21 (STY, phosphorylation), UniMod:121 (K, diglycine), UniMod:7 (NQ, deamidation). Fine-tuning may be somewhat beneficial for the following modifications: UniMod:888 (N-term, K, mTRAQ), UniMod:255 (N-term, K, dimethyl). Fine-tuning is likely to signficantly boost detection of other modifications as well as unmodified cysteines.  
 
 **Tuning**. To fine-tune DIA-NN's predictors, all you need is a spectral library (say, tune_lib.tsv, more on how to generate it yourself below) containing peptides bearing the modifications of interest. Type the following in **Additional options** and click **Run**:
 ```
@@ -271,7 +271,7 @@ If the library does not contain ion mobility information, omit --tune-im. If som
 --im-model tune_lib.tuned_im.pt
 ```
 
-DIA-NN 2.3 further allows to fine-tune also the fragmentation model, using --tune-fr. Here, however, the end result is highly sensitive to the quality of the library used for tuning, and the tuned model should always be verified to perform better than the base model. For fragmentation model tuning it makes sense to further test the effect of --tune-restrict-layers as well as different learning rates as set by --tune-lr.  
+DIA-NN 2.3 and later further allow to fine-tune also the fragmentation model, using --tune-fr. Here, however, the end result is highly sensitive to the quality of the library used for tuning, and the tuned model should always be verified to perform better than the base model. For fragmentation model tuning it makes sense to further test the effect of --tune-restrict-layers as well as different learning rates as set by --tune-lr.  
 
 **Generating the tuning library**. If there is no suitable tuning library, one can always generate it directly from DIA data. For this, select one or several 'good' (typically, largest size) runs that are expected to contain peptides with the modifications of interest. These runs can also come from some public data set. Make a predicted library with DIA-NN by specifying all modifications of interest as variable or fixed (including those the predictor has already been trained on, if you expect to find them in the raw data). In vast majority of cases the max number of variable modifications can be set to 1-3, going higher is unlikely to be beneficial. Search the raw files using this predicted library in **Proteoforms** scoring mode, with **Generate spectral library** selected and **MBR** disabled. If the search space is large, the data comes from timsTOF, Orbitrap or Orbitrap Astral, and you would like to obtain the results quicker, set **Speed: peak filtering** to **Ultra-fast**. Optional: to optimise the performance, change the name of the output library and search the data again using **Speed: RT/IM filtering** set to Relaxed and --im-window 0.2. Out of the two empirical libraries, choose the one with more modified peptides of interest detected. Use this empirical library for fine-tuning. If using DIA-NN to generate a tuning library for the fragmentation predictor, set **Library generation** strategy to **Full profiling**. 
 
@@ -662,7 +662,7 @@ In the **Peptidoforms** mode, DIA-NN's main q-values correspond to the regular d
 
 * **Cross-run normalisation** whether to use global, RT-dependent (recommended) or also signal-dependent (experimental, be very careful about it) cross-run normalisation. Normalisation can also be disabled completely. Please see [Quantification](#quantification) for a detailed guide.
 
-* **Library generation** this setting determines if and how empirical RTs/IMs and spectra are added to the newly generated library, instead of the theoretical values. IDs, RT & IM profiling is strongly recommended for almost all workflows. When analysing with a high-quality project-specific library, can switch to IDs profiling. Full profiling means always using empirical information, and is meant exclusively for creation of libraries that can be used to fine-tune in silico fragmentation predictors. Note that the recommended way to obtain empirically observed fragment intensities (e.g. for MRM method design) is to use --export-quant and not Full/Smart profiling. 
+* **Library generation** this setting determines if and how empirical RTs/IMs and spectra are added to the newly generated library, instead of the theoretical values. IDs, RT & IM profiling is strongly recommended for almost all workflows. When analysing with a high-quality project-specific library, can switch to IDs profiling. Full profiling means always using empirical information, and is meant exclusively for creation of libraries that can be used to fine-tune in silico fragmentation predictors (--tune-fr). Note that the recommended way to obtain empirically observed fragment intensities for downstream analyses (e.g. for MRM method design) is to use --export-quant and not Full/Smart profiling. 
 
 * **Speed: peak filtering** this setting is primarily useful for library-free analyses. The first three modes will typically have little difference in terms of ID numbers, while the **Ultra-fast** mode is rather extreme: up to 5x faster, but ID numbers are not as good. The setting affects only the first pass when using MBR. Therefore, in many cases, analysing in **Ultra-fast** mode with large predicted libraries with **MBR** enabled may produce same identification numbers during the second **MBR** pass, especially if the data has been acquired on Orbitrap, Orbitrap Astral or timsTOF instruments. 
 
@@ -749,6 +749,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--min-class [N]** provide a guidance to DIA-NN suggesting the minimum number of IDs to use for linear classifier training
 * **--min-corr [X]** forces DIA-NN to only consider peak group candidates with correlation scores at least X
 * **--min-fr** specifies the minimum number of fragments per precursors in the spectral library being saved
+* **--min-fr-aas [N]** library will be filtered to only retain fragments comprising at least N residues, default N = 3
 * **--min-peak** sets the minimum peak height to consider. Must be 0.01 or greater
 * **--min-pep-len [N]** sets the minimum precursor length for the in silico library generation or library-free search
 * **--min-pr-charge [N]** sets the minimum precursor charge for the in silico library generation or library-free search
@@ -896,6 +897,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **Ms1.Total.Signal.Before** total Ms1 signal recorded in the MS1 spectrum immediately preceding the apex MS2 scan of the PSM
 * **Ms1.Total.Signal.After** total Ms1 signal recorded in the MS1 spectrum immediately following the apex MS2 scan of the PSM
 * **RT.Start** and **RT.Stop** peak boundaries
+* **Profile.Before**, **Profile.HM** and **Profile.After** (Enterprise) proportion of signal attributable to the peptide elution before it reaches half-maximum, at half-maximum and after it is no longer at half-maximum; these ratios may be indicative of peak sharpness and tailing as well as dynamic range issues  
 * **FWHM** estimated peak width at half-maximum; note that the accuracy of such estimates sometimes strongly depends on the DIA cycle time and sample injection amount, i.e. they can only be used to evaluate chromatographic performance in direct comparisons with similar settings, including the scan window; another caveat is that FWHM does not reflect any peak tailing
 * **PG.TopN** Normalised protein group quantity calculated using top N method (default N = 1, i.e. max normalised precursor quantity in the given run is used), relevant in **Legacy (direct)** quantification mode
 * **PG.MaxLFQ** QuantUMS or MaxLFQ normalised quantity for the protein group, channel-specific
