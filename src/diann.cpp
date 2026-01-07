@@ -2957,10 +2957,11 @@ public:
 class DecoyEntry {
 public:
 	int index = -1;
+	int apex = 0; // scan index for the decoy
 	float qvalue = 1.0, lib_qvalue = 0.0, dratio = 1.0, cscore = 0.0; // constructor below must have these intialised explicitly
 
 	DecoyEntry() {  }
-	DecoyEntry(int _index, float _qvalue, float _lib_qvalue, float _dratio, float _cscore) { index = _index; qvalue = _qvalue; lib_qvalue = _lib_qvalue; dratio = _dratio; cscore = _cscore; }
+	DecoyEntry(int _index, int _apex, float _qvalue, float _lib_qvalue, float _dratio, float _cscore) { index = _index; apex = _apex; qvalue = _qvalue; lib_qvalue = _lib_qvalue; dratio = _dratio; cscore = _cscore; }
 
 	template <class F> void write(F &out) {
 		out.write((char*)this, sizeof(DecoyEntry));
@@ -4027,10 +4028,10 @@ public:
 					int index = it->index;
 					auto pos = decoy_map.find(index);
 					if (pos != decoy_map.end())
-						pos->second.push_back(std::pair<int, DecoyEntry>(i, DecoyEntry(index, it->qvalue, it->lib_qvalue, it->dratio, it->cscore)));
+						pos->second.push_back(std::pair<int, DecoyEntry>(i, DecoyEntry(index, it->apex, it->qvalue, it->lib_qvalue, it->dratio, it->cscore)));
 					else {
 						std::vector<std::pair<int, DecoyEntry> > v;
-						v.push_back(std::pair<int, DecoyEntry>(i, DecoyEntry(index, it->qvalue, it->lib_qvalue, it->dratio, it->cscore)));
+						v.push_back(std::pair<int, DecoyEntry>(i, DecoyEntry(index, it->apex, it->qvalue, it->lib_qvalue, it->dratio, it->cscore)));
 						decoy_map.insert(std::pair<int, std::vector<std::pair<int, DecoyEntry> > >(index, v));
 					}
 				}
@@ -4072,10 +4073,10 @@ public:
 				int index = it->index;
 				auto pos = decoy_map.find(index);
 				if (pos != decoy_map.end())
-					pos->second.push_back(std::pair<int, DecoyEntry>(0, DecoyEntry(index, it->qvalue, it->lib_qvalue, it->dratio, it->cscore)));
+					pos->second.push_back(std::pair<int, DecoyEntry>(0, DecoyEntry(index, it->apex, it->qvalue, it->lib_qvalue, it->dratio, it->cscore)));
 				else {
 					std::vector<std::pair<int, DecoyEntry> > v;
-					v.push_back(std::pair<int, DecoyEntry>(0, DecoyEntry(index, it->qvalue, it->lib_qvalue, it->dratio, it->cscore)));
+					v.push_back(std::pair<int, DecoyEntry>(0, DecoyEntry(index, it->apex, it->qvalue, it->lib_qvalue, it->dratio, it->cscore)));
 					decoy_map.insert(std::pair<int, std::vector<std::pair<int, DecoyEntry> > >(index, v));
 				}
 			}
@@ -5947,7 +5948,7 @@ public:
 					out << '\t';
 					if (fasta_files.size()) out << '\t';
 					out << entry->target.lib_qvalue << "\t\t\t\t"
-						<< jt->second.cscore << "\t\t\t\t\t\t";
+						<< jt->second.cscore << "\t\t\t\t\t" << jt->second.apex;
 
 					if (ReportLibraryInfo) out << "\t\t";
 #ifdef TDFREADER
@@ -10645,6 +10646,7 @@ public:
 			float lib_q = lib->entries[it->target.pep->index].target.lib_qvalue;
 			if (result == NULL) if (it->decoy.flags & fFound) if (it->decoy.info[0].qvalue <= QFilter) {
 				de.index = it->target.pep->index;
+				de.apex = it->decoy.info[0].apex;
 				de.qvalue = it->decoy.info[0].qvalue;
 				de.lib_qvalue = lib_q;
 				de.dratio = it->decoy.info[0].dratio;
