@@ -14,8 +14,8 @@ DIA-NN is built on the following principles:
 - **Powerful tuning options** to enable unconventional experiments
 - **Scalability and speed**: up to 1000 mass spec runs processed per hour
 
-**Download DIA-NN 2.5.0 Academia** (limited functionality, for non-profit academic research): https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
-**DIA-NN 2.5.0 Enterprise** (full functionality, for both Industry and Academia): contact Aptila Biotech [aptila.bio](https://www.aptila.bio) or [Speak with a Solutions Specialist | Thermo Fisher Scientific](https://www.thermofisher.com/uk/en/home/global/forms/industrial/contact-solutions-specialist.html?erpType=Global_E1) to purchase or obtain a trial license.   
+**Download DIA-NN 2.5.1 Academia** (limited functionality, for non-profit academic research): https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
+**DIA-NN 2.5.1 Enterprise** (full functionality, for both Industry and Academia): contact Aptila Biotech [aptila.bio](https://www.aptila.bio) or [Speak with a Solutions Specialist | Thermo Fisher Scientific](https://www.thermofisher.com/uk/en/home/global/forms/industrial/contact-solutions-specialist.html?erpType=Global_E1) to purchase or obtain a trial license.   
 
 ### Table of Contents
 **[Installation](#installation)**<br>
@@ -1393,4 +1393,3 @@ Using DIA-NN's ion mobility module for timsTOF data analysis or using DIA-NN in 
 Using DIA-NN to analyse scanning quadrupole data (non-timsTOF): **Ultra-fast proteomics with DIA-NN and Scanning SWATH** [Nature Biotechnology, 2021](https://www.nature.com/articles/s41587-021-00860-4)
 
 **Notes and discussions** on proteomics in general and the use of DIA-NN: https://github.com/vdemichev/DiaNN/discussions/categories/dia-proteomics-in-detail (this section will be further expanded).
-
