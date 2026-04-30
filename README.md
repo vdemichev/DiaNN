@@ -58,7 +58,7 @@ It is also possible to run DIA-NN on Linux using **Wine** 6.8 or later.
 ### Getting Started with DIA-NN
 
 <div style="text-align:center">
-  <img src="assets/images/diann-gui-main-window.png" style="width:100%">
+  <img src="assets/images/diann-gui-main-window.png?v=2" style="width:100%">
 </div>
 
 If you are new to DIA proteomics, please take a look at the [Basics of DIA data analysis](#basics-of-dia-data-analysis).  
