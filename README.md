@@ -1380,7 +1380,7 @@ Using DIA-NN for the analysis of multiplexed samples (SILAC, mTRAQ, etc): **Incr
 
 Using DIA-NN as part of the CysQuant workflow: **CysQuant: Simultaneous quantification of cysteine oxidation and protein abundance using data dependent or independent acquisition mass spectrometry** [Redox Biology, 2023](https://doi.org/10.1016/j.redox.2023.102908)
 
-Using DIA-NN's QuantUMS module for quantification: **QuantUMS: uncertainty minimisation enables confident quantification in proteomics** [biorxiv](https://www.biorxiv.org/content/10.1101/2023.06.20.545604v1)
+Using DIA-NN's QuantUMS module for quantification: **Accurate quantification in proteomics with QuantUMS** [Nature Biotechnology, 2026](https://www.nature.com/articles/s41587-026-03131-2)
 
 Using DIA-NN to process Slice-PASEF data: **Slice-PASEF: fragmenting all ions for maximum sensitivity in proteomics** [biorxiv](https://www.biorxiv.org/content/10.1101/2022.10.31.514544v3)
 
