@@ -14,8 +14,8 @@ DIA-NN is built on the following principles:
 - **Powerful tuning options** to enable unconventional experiments
 - **Scalability and speed**: up to 1000 mass spec runs processed per hour
 
-**Download DIA-NN 2.5.1 Academia** (limited functionality, for non-profit academic research): https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
-**DIA-NN 2.5.1 Enterprise** (full functionality, for both Industry and Academia): contact Aptila Biotech [aptila.bio](https://www.aptila.bio) or [Speak with a Solutions Specialist | Thermo Fisher Scientific](https://www.thermofisher.com/uk/en/home/global/forms/industrial/contact-solutions-specialist.html?erpType=Global_E1) to purchase or obtain a trial license.   
+**Download DIA-NN 2.6.0 Academia** (limited functionality, for non-profit academic research): https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
+**DIA-NN 2.6.0 Enterprise** (full functionality, for both Industry and Academia): contact Aptila Biotech [aptila.bio](https://www.aptila.bio) or [Speak with a Solutions Specialist | Thermo Fisher Scientific](https://www.thermofisher.com/uk/en/home/global/forms/industrial/contact-solutions-specialist.html?erpType=Global_E1) to purchase or obtain a trial license.   
 
 ### Table of Contents
 **[Installation](#installation)**<br>
@@ -58,7 +58,7 @@ It is also possible to run DIA-NN on Linux using **Wine** 6.8 or later.
 ### Getting Started with DIA-NN
 
 <div style="text-align:center">
-  <img src="assets/images/diann-gui-main-window.png?v=2" style="width:100%">
+  <img src="assets/images/diann-gui-main-window.png" style="width:100%">
 </div>
 
 If you are new to DIA proteomics, please take a look at the [Basics of DIA data analysis](#basics-of-dia-data-analysis).  
@@ -399,6 +399,8 @@ All heatmaps respect the column order from the Experiment Design tab.
 
 **JavaScript notebook**. For each analysis, DIA-NN generates a self-contained JavaScript script that reproduces the analysis step by step. The code can be viewed, edited, and re-executed within a sandboxed environment (30-second execution time limit) directly in the Report Window. 
 
+**Export HTML**. The **Export HTML** button (in the sub-tab bar) saves all completed analysis sub-tabs as a single self-contained HTML file. The exported report includes interactive SVG charts with hover tooltips, per-figure dimension controls for resizing and re-rendering plots, per-figure SVG download buttons, result tables (with TSV export), summary statistics, and methods text. The report is fully self-contained (no external dependencies) and can be opened in any web browser or printed to PDF.
+
 </details>
 
 <details>
@@ -666,7 +668,7 @@ A simple normalisation test can further be carried in R or Python. For any two s
 * Plot the histogram of the above log2 fold-changes.
 * Indicate the median and half sample mode (use hsm() function of the modeest R package) on the histogram. Both these values should be close to 0. 
 
-**Raw fragment quantities**. DIA-NN has the --export-quant option, that appends theoretical as well as observed (per-run) information on the library fragment ions of a precursor (top 12 sorted by the reference intensity), such as the observed signal intensity (non-normalised) as well as a score reflecting fragment XIC quality. These are useful for connecting DIA-NN to downstream packages that require raw fragment quantities as well as for applications such as setting up MRM/PRM assays, as these data can be used to select fragments that are reliably detectable.  
+**Raw fragment quantities and MS1 isotope intensities**. DIA-NN has the --export-quant option, that appends theoretical as well as observed (per-run) information on the library fragment ions of a precursor (top 12 sorted by the reference intensity), such as the observed signal intensity (non-normalised) as well as a score reflecting fragment XIC quality. These are useful for connecting DIA-NN to downstream packages that require raw fragment quantities as well as for applications such as setting up MRM/PRM assays, as these data can be used to select fragments that are reliably detectable. Further, for each precursor, the per-isotope MS1 intensities and quality scores are likewise saved in the report.
 
 ### Speed optimisation
 
@@ -752,9 +754,12 @@ Starting with version 2.3, DIA-NN implements beta-stage support for DDA data (wi
 Currently, the output is not specifically optimised or filtered for DDA, therefore, only the following information present in the main .parquet report should be used:  
 * Any q-values or PEP values.
 * RT and IM values.
-* Precursor.Normalised (recommended) or, on some data, MS1.Normalised quantity, either if calculated using the Legacy (direct) Quantification strategy.
+* Precursor.Normalised quantity (recommended), either if calculated using the Legacy (direct) Quantification strategy.
 * MaxLFQ (recommended) or TopN protein-level quantities. 
-* Ms1.Apex.Area, Ms1.Area and Normalisation.Factor. 
+* Ms1.Normalised, Ms1.Apex.Area, Ms1.Area, Normalisation.Factor and Averagine. 
+* Ms1.Q.Value, Ms1.Global.Q.Value and Ms1.Global.Quality.
+
+While DIA-NN outputs can be used in quantitative experiments as is, including in case of DDA, it is often beneficial to apply extra filtering to DDA data (on top of regular filters applicable to either DIA or DDA) using a combination of Ms1.Global.Q.Value (< 0.0001 - 0.01) and Ms1.Global.Quality (> 0.5 - 0.9), possibly with addition of Ms1.Q.Value (< 0.01 - 0.5) and Averagine (> 0.1 - 0.9). Note that global filters increase data completeness while run-specific filters typically decrease it. This is motivated by the inherently reduced confidence in MS1 signal actually originating from the cognate peptide and not a co-eluting unrelated peptide species in DDA compared to DIA. The above filters increase this confidence significantly.
 
 The PTM localisation probabilities should not be relied upon with DDA data. Here we note that DIA is highly advantageous for correctly localising PTM sites.  
 
@@ -1014,7 +1019,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--dl-no-im** when using the deep learning predictor, prediction of ion mobilities will not be performed
 * **--dl-no-rt** when using the deep learning predictor, prediction of retention times will not be performed
 * **--duplicate-proteins** instructs DIA-NN not to skip entries in the sequence database with duplicate IDs (while by default if several entries have the same protein ID, all but the first entry will be skipped)
-* **--export-quant** add fragment quantities, fragment IDs and quality information to the .parquet output report
+* **--export-quant** add fragment quantities, fragment IDs and quality information as well as per-isotope MS1 intensities and quality information to the .parquet output report
 * **--ext [string]** adds a string to the end of each file name (specified with --f)
 * **--f [file name]** specifies a run to be analysed, use multiple --f commands to specify multiple runs
 * **--fasta [file name]** specifies a sequence database in FASTA format (full support for UniProt proteomes), use multiple --fasta commands to specify multiple databases
@@ -1116,13 +1121,15 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--predictor** instructs DIA-NN to perform deep learning-based prediction of spectra, retention times and ion mobility values
 * **--prefix [string]** adds a string at the beginning of each file name (specified with --f) &ndash; convenient when working with automatic scripts for the generation of config files
 * **--prosit** export prosit input based on the FASTA digest
+* **--protein-quant-qvalue [X]** a hint to DIA-NN indicating the preferred q-value threshold at which precursors will be prioritised for protein quantification, default value is 0.01
 * **--proteoforms** enables the proteoform confidence scoring mode
 * **--pr-filter [file name]** specify a file containing a list of precursors (same format as the Precursor.Id column in DIA-NN output), FASTA digest will be filtered to only include these precursors
 * **--qvalue [X]** specifies the precursor-level q-value filtering threshold for the main report
 * **--quant-acc [X]** sets the precision-accuracy balance for QuantUMS to X, where X must be between 0 and 1
-* **--quant-pep [X]** sets the posterior error probability threshold for precursor ions to be used for quantification: precursors not passing the threshold may be ignored by some algorithms of DIA-NN, default value is 0.05  
-* **--quant-ori-names** .quant files will retain original raw file names even if saved to a separate directory, convenient for .quant file manipulation
 * **--quant-fr [N]** sets the number of top fragment ions among which the fragments that will be used for quantification are chosen for the legacy (pre-QuantUMS) quantification mode. Default value is 6
+* **--quant-ori-names** .quant files will retain original raw file names even if saved to a separate directory, convenient for .quant file manipulation
+* **--quant-pep [X]** a hint to DIA-NN indicating the preferred PEP threshold at which precursor intensities will be used for relative quantification across the experiment, default value is 0.05
+* **--quant-qvalue [X]** a hint to DIA-NN indicating the preferred q-value threshold at which precursor intensities will be used for relative quantification across the experiment, default value is 0.01
 * **--quick-mass-acc** (experimental) when choosing the MS2 mass accuracy setting automatically, DIA-NN will use a fast heuristical algorithm instead of IDs number optimisation
 * **--quant-no-ms1** instructs QuantUMS not to use the recorded MS1 quantities directly
 * **--quant-params [params]** use previously obtained QuantUMS parameters
@@ -1194,7 +1201,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **Decoy** 0 or 1 based on whether the precursor is decoy, relevant when using --report-decoys 
 * **Proteotypic** 0 or 1 based on whether the precursor is considered proteotypic
 * **Precursor.Mz** library m/z value of the precursor
-* **Protein.Group** inferred proteins. See the description of the **Protein inference** [GUI setting](#gui-settings-reference) and the --relaxed-prot-inf [option](#command-line-reference).
+* **Protein.Group** inferred proteins. See the description of the **Protein inference** [GUI setting](#gui-settings-reference).
 * **Protein.Ids** &ndash; all proteins matched to the precursor in the library or, in case of library-free search, in the sequence database
 * **Protein.Names** names (UniProt names) of the proteins in the Protein.Group
 * **Genes** gene names corresponding to the proteins in the Protein.Group. Note that protein and gene names will only be present in the output if either (i) **Protein inference** is disabled in DIA-NN and no sequence (FASTA) database is provided &ndash; then protein & gene names from the spectral library will be used, or (ii) protein IDs in the Protein.Group can be found in the sequence database provided, or (iii) the **Reannotate** function is used. (ii) and (iii) also require that DIA-NN recognises protein & gene names as recorded in the sequence database (e.g. the UniProt format is supported)
@@ -1214,6 +1221,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **Empirical.Quality** when using QuantUMS reflects the agreement of relative precursor quantities obtained using different quantitative features (MS1 / fragment ions)
 * **Normalisation.Noise** reflects the noisiness of the RT-dependent normalisation factor calculated for the precursor
 * **Ms1.Profile.Corr** a score that reflects the similarity between MS1 and MS2 extracted ion chromatograms (XICs)
+* **Averagine** a score that reflects how well the isotope cluster matches the averagine model
 * **Evidence** the sum of correlation scores for the XICs of the top 6 library fragments and the precursor m/z (MS1)
 * **Mass.Evidence** a score that reflects MS2-level evidence for the spectrum originating from an ion with m/z matching that of the reported precursor
 * **Channel.Evidence** a score that reflects the quality of evidence supporting correct channel assignment for the precursor
@@ -1248,6 +1256,9 @@ Note that some options below are strongly detrimental to performance and are onl
 * **Protein.Q.Value** run-specific q-value for the unique protein/gene, that is protein/gene identified with proteotypic (=specific to it) peptides, not channel-specific
 * **Global.PG.Q.Value** global q-value for the protein group
 * **Lib.PG.Q.Value** protein group q-value for the respective library entry, 'global' if the library was created by DIA-NN. In case of [MBR](#match-between-runs), this applies to the empirical library created based on the first MBR pass
+* **Ms1.Q.Value** (DDA-only) reflects the likelihood that MS1 signal near the identified retention time originates from the cognate precursor, under assumption that empirical library entry was derived from a PSM where MS1 signal originated entirely from the cognate precursor
+* **Ms1.Global.Q.Value** (DDA-only) estimated rate at which the error corresponding to Ms1.Q.Value occurs in all runs where the precursor was detected
+* **Ms1.Global.Quality** (DDA-only) reflects the likelihood of precursor MS1 signal being high-quality on average across the experiment
 </details>
 
 <details>
@@ -1384,12 +1395,9 @@ Using DIA-NN's QuantUMS module for quantification: **Accurate quantification in 
 
 Using DIA-NN to process Slice-PASEF data: **Slice-PASEF: fragmenting all ions for maximum sensitivity in proteomics** [biorxiv](https://www.biorxiv.org/content/10.1101/2022.10.31.514544v3)
 
-Using DIA-NN as part of the MSFragger-DIA workflow in FragPipe: **Analysis of DIA proteomics data using MSFragger-DIA and FragPipe computational platform** [Nature Communications, 2023](https://www.nature.com/articles/s41467-023-39869-5), or, in case of timsTOF data analysis with MSFragger-DIA, **diaTracer enables spectrum-centric analysis of diaPASEF proteomics data** [biorxiv](https://www.biorxiv.org/content/10.1101/2024.05.25.595875v2)  
-
-Using DIA-NN as part of the MSBooster workflow in FragPipe: **MSBooster: improving peptide identification rates using deep learning-based features** [Nature Communications, 2023](https://www.nature.com/articles/s41467-023-40129-9)
-
 Using DIA-NN's ion mobility module for timsTOF data analysis or using DIA-NN in combination with FragPipe-generated spectral libraries: **dia-PASEF data analysis using FragPipe and DIA-NN for deep proteomics of low sample amounts** [Nature Communications, 2022](https://www.nature.com/articles/s41467-022-31492-0)
 
 Using DIA-NN to analyse scanning quadrupole data (non-timsTOF): **Ultra-fast proteomics with DIA-NN and Scanning SWATH** [Nature Biotechnology, 2021](https://www.nature.com/articles/s41587-021-00860-4)
 
 **Notes and discussions** on proteomics in general and the use of DIA-NN: https://github.com/vdemichev/DiaNN/discussions/categories/dia-proteomics-in-detail (this section will be further expanded).
+
