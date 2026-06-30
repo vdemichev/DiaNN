@@ -14,8 +14,9 @@ DIA-NN is built on the following principles:
 - **Powerful tuning options** to enable unconventional experiments
 - **Scalability and speed**: up to 1000 mass spec runs processed per hour
 
-**Download DIA-NN 2.6.0 Academia** (limited functionality, for non-profit academic research): https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
-**DIA-NN 2.6.0 Enterprise** (full functionality, for both Industry and Academia): contact Aptila Biotech [aptila.bio](https://www.aptila.bio) or [Speak with a Solutions Specialist | Thermo Fisher Scientific](https://www.thermofisher.com/uk/en/home/global/forms/industrial/contact-solutions-specialist.html?erpType=Global_E1) to purchase or obtain a trial license.   
+**DIA-NN 2.6.1 Enterprise** (full functionality, for both Industry and Academia): contact Aptila Biotech [aptila.bio](https://www.aptila.bio) or [Speak with a Solutions Specialist | Thermo Fisher Scientific](https://www.thermofisher.com/uk/en/home/global/forms/industrial/contact-solutions-specialist.html?erpType=Global_E1) to purchase or obtain a trial license. 
+
+**Download DIA-NN 2.6.1 Academia** (limited functionality, for non-profit academic research): https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
 
 ### Table of Contents
 **[Installation](#installation)**<br>
@@ -1121,6 +1122,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--predictor** instructs DIA-NN to perform deep learning-based prediction of spectra, retention times and ion mobility values
 * **--prefix [string]** adds a string at the beginning of each file name (specified with --f) &ndash; convenient when working with automatic scripts for the generation of config files
 * **--prosit** export prosit input based on the FASTA digest
+* **--prot-norm** enable protein-level normalisation
 * **--protein-quant-qvalue [X]** a hint to DIA-NN indicating the preferred q-value threshold at which precursors will be prioritised for protein quantification, default value is 0.01
 * **--proteoforms** enables the proteoform confidence scoring mode
 * **--pr-filter [file name]** specify a file containing a list of precursors (same format as the Precursor.Id column in DIA-NN output), FASTA digest will be filtered to only include these precursors
