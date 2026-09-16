@@ -1,4 +1,3 @@
-
 <p align="center" style="margin-bottom: 0px !important;">
   <img src="assets/icons/DIA-NN-512.png" width="100" height="100">
 </p>
@@ -14,9 +13,9 @@ DIA-NN is built on the following principles:
 - **Powerful tuning options** to enable unconventional experiments
 - **Scalability and speed**: up to 1000 mass spec runs processed per hour
 
-**DIA-NN 2.6.1 Enterprise** (full functionality, for both Industry and Academia): contact Aptila Biotech [aptila.bio](https://www.aptila.bio) or [Speak with a Solutions Specialist | Thermo Fisher Scientific](https://www.thermofisher.com/uk/en/home/global/forms/industrial/contact-solutions-specialist.html?erpType=Global_E1) to purchase or obtain a trial license. 
+**DIA-NN 2.7.0 Enterprise** (full functionality, for both Industry and Academia): contact Aptila Biotech [aptila.bio](https://www.aptila.bio) or [Speak with a Solutions Specialist | Thermo Fisher Scientific](https://www.thermofisher.com/uk/en/home/global/forms/industrial/contact-solutions-specialist.html?erpType=Global_E1) to purchase or obtain a trial license. 
 
-**Download DIA-NN 2.6.1 Academia** (limited functionality, for non-profit academic research): https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
+**Download DIA-NN 2.7.0 Academia** (limited functionality, for non-profit academic research): https://github.com/vdemichev/DiaNN/releases/tag/2.0.  
 
 ### Table of Contents
 **[Installation](#installation)**<br>
@@ -311,7 +310,7 @@ The **Filter** tab provides data-level filtering controls that are applied befor
 
 The **Interpret** tab provides statistical analysis and interactive visualisation tools. It covers differential testing, principal component and factor analysis, pathway enrichment, and protein-level inspection including sequence coverage and regulation of individual precursors.
 
-The analysis results are exportable as both text tables and vector/raster graphics. DIA-NN automatically generates a description of all Methods used to produce the analysis. For advanced applications, the user is provided with a JavaScript sandbox with code to reproduce or modify the analysis.
+The analysis results are exportable as both text tables and vector/raster graphics. For built-in analyses, DIA-NN automatically generates a description of the Methods used to produce the result. For advanced applications, the user is provided with a JavaScript sandbox with generated code that can be inspected or modified.
 
 The tab is divided into a **sidebar** (configuration controls) and a **main area** (results, interactive plots, tables, and methods text).
 
@@ -322,7 +321,7 @@ The tab is divided into a **sidebar** (configuration controls) and a **main area
 * **Genes &ndash; Unique** (`Genes.MaxLFQ.Unique`) &ndash; gene-level quantities using only proteotypic (gene-specific) peptides.
 * **PTM Sites** &ndash; requires a `.site_report.parquet` next to the main report. When selected, a **localisation-confidence slider** (default >= 0.75) controls the minimum site-localisation probability.
 
-When **QuantUMS quality metrics** are detected in the data, two additional thresholds appear: a **per-sample quality** filter (minimum quality metric for each entity in each run) and an **average quality** filter (minimum average quality across runs). These provide an independent layer of quantitative quality control on top of standard FDR filtering and can be used to enhance the statistical analyses.
+When **QuantUMS quality metrics** are detected in the data, two additional thresholds appear: a **per-sample quality** filter (minimum quality metric for each entity in each run) and an **average quality** filter. The average threshold gives every effective run equal weight: available quality values from positive-quantity observations are averaged within each entity/run first, then those per-run means are averaged. This calculation is independent of the per-sample threshold. Correlation, plexDIA ratio, and PTM Site analyses disable the average threshold. These controls provide an independent layer of quantitative quality control on top of standard FDR filtering.
 
 **Analysis types**. Five analysis modes are available from the Analysis Type dropdown (Differential Abundance is selected by default):
 
@@ -330,41 +329,47 @@ When **QuantUMS quality metrics** are detected in the data, two additional thres
 
 * **Differential Abundance**. Identifies entities that are significantly up- or down-regulated between experimental conditions. Two comparison modes are supported:
 
-  - *Pairwise (A vs B)*. Select a factor column and two conditions. Choose between **Welch's t-test** (default) and **Mann-Whitney U** for the per-entity test, or check one or more covariate columns to switch to a **linear model** (ordinary least squares per entity). An optional **interaction factor** enables full-factorial models: select a second factor and a **coefficient of interest** &ndash; Main effect (Factor A), Main effect (Factor B), or Interaction (A x B) &ndash; to test the corresponding term in the two-factor model. The **FDR threshold** and **|log2 FC| cutoff** can be adjusted after a run and update the display without recomputation. Results include a **volcano plot** (or MA plot), a results table, a fold-change histogram, and an auto-generated **expression heatmap** of top hits across all runs. Clicking a point on the volcano or a row in the table opens the Entity Detail overlay. 
+  - *Pairwise (A vs B)*. Select a factor column and two conditions. Choose between **Welch's t-test** (default) and **Mann-Whitney U** for the per-entity test, or check one or more covariate columns to switch to a **linear model** (ordinary least squares per entity). An optional **interaction factor** enables full-factorial models: select a second factor and a **coefficient of interest** &ndash; Main effect (Factor A), Main effect (Factor B), or Interaction (A x B) &ndash; to test the corresponding treatment-coded term. Main A is the A-versus-B effect at categorical Factor B's reference level (or at Factor B = 0 when continuous); Main B is the comparison-versus-reference Factor B effect in condition B (or its per-unit effect when continuous); Interaction is the corresponding between-level change in the A-versus-B effect (or its change per unit). The **FDR threshold** and **|Effect| cutoff** can be adjusted after a run and update the display without recomputation; the effect is log2 fold change for an ordinary pairwise test and the selected coefficient for an interaction model. Results include a **volcano plot** (or MA plot), a results table, a fold-change histogram, and an auto-generated **expression heatmap** of top hits across all runs. Clicking a point on the volcano or a row in the table opens the Entity Detail overlay. 
 
-  - *ANOVA (all conditions)*. A one-way ANOVA F-test across all conditions in the selected factor. Results are shown as a **strip chart** of the top 20 significant entities (with individual data points coloured by condition) alongside an auto-generated expression heatmap.
+  - *ANOVA (conditions with at least 2 samples)*. A one-way ANOVA F-test across conditions in the selected factor containing at least two samples. Results are shown as a **strip chart** of the top 20 significant entities (with individual data points coloured by condition) alongside an auto-generated expression heatmap.
 
-  Options for **extra normalisation** (two-tier median equalisation that adapts to varying data completeness &ndash; a warning is shown when the available reference set is sparse, and normalisation is skipped if no reliable reference entities can be found) and **half-minimum imputation** (replaces each missing value with half the observed minimum across all runs) are available for both pairwise and ANOVA modes. A **minimum unique precursors** filter allows excluding entities with insufficient peptide evidence.
+  Options for **extra normalisation** (two-tier median equalisation that adapts to varying data completeness &ndash; a warning is shown when the available reference set is sparse, and normalisation is skipped if no reliable reference entities can be found) and **half-minimum imputation** (for each entity, replaces missing values with half its minimum among the samples used by that test) are available for both pairwise and ANOVA modes. In adjusted pairwise models, missing or invalid model terms and model estimability are resolved first; requested normalisation and imputation then use exactly the fitted samples remaining after those exclusions. ANOVA preprocesses all eligible condition groups together. For **channel ratios in every analysis**, half-minimum imputation operates on channel abundances before division. One minimum per analyte is taken across both numerator and denominator channels in the preprocessing samples. When protein ratios are recalculated from precursors, the minimum is taken separately per precursor within its analyte, across both channels; missing abundances are filled before calculating precursor ratios and combining them by geometric mean. Both missing channels receive the same value, giving a log2 ratio of zero. A precursor or analyte with no abundance in either channel cannot be filled. Detection/completeness filters and any extra-normalisation references and shifts use observed ratios; the same shifts are applied to the ratios recalculated after imputation. Differential analysis, ANOVA and CAMERA use their eligible testing samples, whereas z-score profiles use all samples in their abundance matrix. A **minimum unique precursors** filter allows excluding entities with insufficient peptide evidence.
 
 * **PCA and factor analysis**. Principal component analysis of the quantification matrix. Two modes are available:
   - *Ubiquitous* (default): uses only entities quantified in every run, yielding a complete data matrix &ndash; no imputation is required.
-  - *NA-tolerant O-ALS*: uses entities meeting a configurable minimum detection threshold (default 50 %), decomposed via alternating least squares on observed values only &ndash; missing values are neither imputed nor interpolated.
+  - *NA-tolerant O-ALS*: uses entities meeting a configurable minimum detection threshold (default 50 %). O-ALS estimates components from observed values only; final loadings are orthonormalised and sample scores project observed centred values onto those loadings with missing centred contributions omitted. Missing expression values are not imputed or interpolated.
 
-  **Metadata regression** ("Regress out") removes variance explained by selected design columns (e.g. batch, sex, instrument) before PCA by regressing them out per entity.
+  **Metadata regression** ("Regress out") removes variance explained by selected design columns (e.g. batch, sex, instrument) before PCA by regressing them out per entity. A requested constant, confounded, or undefined regression design is rejected rather than silently skipped. With a valid design, entity-specific rows that cannot be estimated are excluded from the residual PCA matrix and the excluded count is reported.
 
   Results include a **PCA scores scatter plot** (with configurable axes and colour-by metadata), a **scree chart** (variance explained per component), an expression heatmap for **top entities by loading magnitude**, annotated with PC loading values. The heatmap supports search, row/column clustering and configuring the colour-coded metadata rows.
 
   A link from PCA leads to **Pathway Analysis using PCA loadings** &ndash; see below.
 
-* **Correlation**. Pairwise Pearson correlation coefficients computed across all pairs of runs, displayed as a **clustered correlation heatmap** (hierarchical clustering with average linkage). A minimum detection threshold controls which entities are included. Useful for checking sample similarity, spotting outlier runs, and detecting batch effects.
+* **Correlation**. Pairwise Pearson correlation coefficients computed across all pairs of runs, displayed as a **clustered correlation heatmap**. At most 200 runs are ordered by average-linkage hierarchical clustering; larger matrices use deterministic greedy nearest-neighbour ordering seeded by the sample with the highest upper-middle finite pairwise-correlation score. A minimum detection threshold controls which entities are included. Useful for checking sample similarity, spotting outlier runs, and detecting batch effects.
 
 * **Pathway Analysis** offers two methods:
 
-  - **CAMERA** (Wu and Smyth, 2012 &ndash; a competitive enrichment test that accounts for inter-gene correlations). Two analytical sources are supported:
+  - **CAMERA** ([Wu and Smyth, 2012](https://pmc.ncbi.nlm.nih.gov/articles/PMC3458527/) &ndash; a competitive enrichment test that accounts for inter-gene correlations). Two analytical sources are supported:
 
-    - *Condition-based*: ranks entities between two selected conditions using a configurable **gene ranking statistic**: fold change, t-statistic, or moderated t-statistic. An **Ignore empirical inter-gene correlations** option (enabled by default) uses a fixed inter-gene correlation of 0.05 (a commonly recommended CAMERA default) instead of estimating correlations empirically per gene set from the data. Optionally, **Covariates** can be specified.
-    - *PCA loadings*: uses per-entity loading magnitudes from a previously completed PCA. This mode performs enrichment across all principal components simultaneously, presenting a **PC summary table** (which components carry significant pathway hits) with click-through to per-PC detail views.
+    - *Condition-based*: compares two selected conditions using a configurable **gene ranking statistic**: moderated t-statistic (default), ordinary t-statistic, or fold change. With fixed correlation 0.05, the statistic is selectable; empirical correlation requires moderated t-statistics. Covariates and an interaction factor can be specified. Adjusted models use the same model-eligibility-before-preprocessing rule and treatment-coded coefficient meanings described for Differential Abundance above; an interaction or Factor B coefficient is not a simple fold-change ranked list.
+      - Ordinary t-statistics use a minimum protein residual variance of **0.0001 (log2 quantity)²**, equivalent to a residual standard deviation of 0.01 log2 units. Moderated t-statistics apply the same minimum after variance moderation, without changing prior estimation or degrees of freedom. The floor applies in both correlation modes. This protein-level floor does not change raw fold changes, PCA loadings or correlation estimation. For raw fitted coefficients, it is used with each protein’s fitted design to calculate a coefficient standard error. All coefficients are divided by the median standard error across proteins with valid statistics. Separately, both parametric pathway modes bound the pooled variance of gene statistics within the set and background below by **0.0001 in squared statistic units**; for raw coefficients this means a minimum pooled SD of 1% of the shared median coefficient standard error, independent of the units of continuous metadata. This custom regularisation can only increase p-values for fixed gene statistics and can suppress small, consistent effects; identical statistics give p = 1. Ranked PCA pathway tests do not use this pooled-variance floor.
+      - With **Ignore empirical inter-gene correlations** enabled (the default), testing uses the limma `cameraPR` calculation with a fixed correlation of 0.05. Missing-value handling remains selectable. Parametric pathway tests use the number of analytes with valid statistics minus two degrees of freedom.
+      - When empirical correlations are enabled, **half-minimum imputation and moderated t-statistics are selected automatically and required**. Completeness is assessed on observed values before imputation, using the samples retained in the model. For abundance data, after any requested extra normalisation, missing values are replaced with half each entity's minimum across those samples (minimum minus one on the log2 scale); ratio data follow the channel-first rule below. Entities with no observed values in those samples cannot be imputed and are excluded from testing. The same completed matrix supplies moderated protein statistics and the residuals used to estimate each pathway's variance inflation factor. Pathway tests use the smaller of the model residual degrees of freedom (included samples minus design rank) and the number of valid analytes minus two. Per-pathway correlations and p-values match limma 3.58.1 `camera(..., inter.gene.cor=NA, allow.neg.cor=FALSE, trend.var=FALSE)` on the same completed matrix, design and contrast, within numerical precision for defined tests when neither variance floor is active. Otherwise, reproducing the app requires applying the same minima to CAMERA's moderated residual variances and pooled pathway-statistic variances. Multiple-testing adjustment follows the distinct-membership policy below. Imputed values are treated as observed; uncertainty about the missing measurements is not modelled.
+      - Both empirical and fixed-correlation CAMERA apply Benjamini–Hochberg adjustment once per distinct tested protein or gene membership by default, after filtering and excluding analytes without valid statistics. Pathways with identical tested memberships share the same adjusted p-value, while all annotation names remain visible. This applies to condition comparisons and separately to each PCA component. The `--no-dedup-fdr` option counts all tested annotation records separately, as limma does. Undefined tests and sets without background entities are omitted from either adjustment.
+    - *PCA loadings*: performs enrichment across principal components using the finalized PCA result. **Imputation and empirical inter-gene correlation estimation are unavailable for this source**; pathway testing uses fixed correlation **0.05**. Retained PCA entities keep their signed native loadings. For ordinary PCA, each additional eligible expression entity is centred over its observed quantities and projected onto the saved component scores, dividing its dot product by the score sum of squares across all runs. Missing centred contributions are zero, so incomplete entities are attenuated. After metadata regression, pathway testing instead uses only the PCA-retained residual matrix and loadings, with no supplementary projection. Completeness is counted from observed measurements across the stored PCA runs. Filtering and pathway testing preserve the saved PCA axes, protein loadings and preceding covariate regression. Ranked pathway tests use cameraPR's normal-distribution tails and adjust for multiple testing separately for each component. This is an extension to PCA loadings; uncertainty in the estimated axes is not modelled. Results are presented as a **PC summary table** with click-through to per-PC detail views.
 
   - **Gene set z-score testing** (Lee et al., 2008). An independent analysis that computes per-run mean z-scores for each gene set and tests for differential activity. Two comparison modes are supported:
 
     - *Pairwise (A vs B)*: select a factor and two conditions. Choose between Welch's t-test, Mann-Whitney U, or (with covariates checked) a linear model. 
-    - *ANOVA (all conditions)*: a one-way ANOVA F-test of mean z-scores across all conditions in the selected factor.
+    - *ANOVA (conditions with at least 2 samples)*: a one-way ANOVA F-test of mean z-scores across conditions in the selected factor containing at least two samples.
 
   An optional **interaction factor** enables full-factorial models with coefficient selection (Main effect (Factor A), Main effect (Factor B), or Interaction (A x B)), identical in semantics to the Differential Abundance interaction controls. 
 
-  A **Min. Detected per Sample** control (default 3) excludes a sample's activity score for a gene set when fewer than the threshold number of gene set member entities are detected in that sample, preventing noisy scores from influencing the test. **Extra normalisation** and **half-minimum imputation** operate on the entity-level expression matrix prior to z-score computation.
+  A **Min. Detected per Sample** control (default 3) excludes a sample's activity score for a gene set when fewer than the threshold number of gene set member entities are detected in that sample, preventing noisy scores from influencing the test. **Extra normalisation** and **half-minimum imputation** operate across all runs on the entity-level expression matrix prior to z-score computation.
 
-  **Annotation files** are loaded via a dialog with automatic format detection. Supported formats include WikiPathways GMT, GO Annotation (GAF/GPAD), QuickGO TSV, Reactome TSV, Reactome Complexes, HGNC, and generic 2-column or multi-column GMT. ID mapping files (NCBI gene_info for Entrez->Symbol, HGNC for UniProt<->Symbol) and GO definition files (.obo for human-readable term names) can also be loaded. The dialog includes download links organised by ID type. Loaded annotation files are cached across sessions.
+  **Annotation files** are loaded via a dialog with automatic format detection. Supported formats include WikiPathways GMT, GO Annotation (GAF/GPAD), QuickGO TSV, Reactome TSV, Reactome Complexes, and generic 2-column or multi-column GMT. ID mapping files (NCBI gene_info for Entrez->Symbol, HGNC for UniProt<->Symbol) and GO definition files (.obo for human-readable term names) can also be loaded. The dialog includes download links organised by ID type. Loaded annotation files are cached across sessions.
+
+  Condition CAMERA and PCA-CAMERA reject gross identifier mismatches (fewer than five matching annotation memberships) and warn when fewer than 20 % of quantified entities overlap the annotation. Gene set z-score testing intentionally applies exact member matching and the selected detected-member size limits without a global identifier-coverage rejection or warning.
 
   **Min set size** and **max set size** controls filter gene sets by the number of detected member genes (defaults: 3 and 500, respectively).
 
@@ -389,16 +394,16 @@ A **Spectra** button (when available) navigates directly to that protein in the 
 **Interactive heatmaps**. All expression and activity heatmaps (Differential, PCA, Pathway Analysis) share a common interactive toolbar:
 
 * **Search**: add any entity or gene set by name (autocomplete with already-displayed items indicated).
-* **Cluster Rows / Columns**: hierarchical clustering (Euclidean distance, average linkage).
+* **Cluster Rows / Columns**: Euclidean average-linkage clustering through 200 items in that dimension; larger dimensions use deterministic greedy nearest-neighbour ordering.
 * **Annotation rows**: select which factor and continuous metadata columns from the experiment design are displayed as colour-bar rows above the heatmap (characteristic columns are excluded &ndash; see the column type classification note under Experiment Design).
 * **Reset**: return to the default selection and ordering.
 * **Click-through**: click any row to open the Entity Detail overlay. In GSEA activity heatmaps, clicking a row shows the per-gene expression heatmap for that gene set.
 
 All heatmaps respect the column order from the Experiment Design tab.
 
-**Methods text**. After each analysis, a reproducible methods text is generated describing the complete workflow, including the report file, applied filters, quantification column, log2 transformation, normalisation, imputation, statistical test, multiple-testing correction, and all parameter values. For multi-step workflows (e.g. PCA followed by Pathway Analysis), the text chains all steps into a single narrative. A Copy button places this text on the clipboard.
+**Methods text**. Each built-in result receives a reproducible methods text describing the complete workflow, including the report file, applied filters, quantification column, log2 transformation, normalisation, imputation, statistical test, multiple-testing correction, and all parameter values. For multi-step workflows (e.g. PCA followed by Pathway Analysis), the text chains all steps into a single narrative. Output from edited notebook JavaScript instead receives an explicit custom-code warning: automatic built-in prose cannot describe arbitrary edits, and the exact saved script is the reproducibility record. Exported HTML does not include that script, so it must be saved separately. A Copy button places the visible methods text on the clipboard.
 
-**JavaScript notebook**. For each analysis, DIA-NN generates a self-contained JavaScript script that reproduces the analysis step by step. The code can be viewed, edited, and re-executed within a sandboxed environment (30-second execution time limit) directly in the Report Window. 
+**JavaScript notebook**. DIA-NN automatically generates notebook programs for built-in Differential Abundance, ANOVA, PCA, correlation, condition CAMERA, z-score pairwise, and z-score ANOVA results; the registered generator also provides the result-ranked heatmap route used by headless `codegen heatmap`. These eight routes use captured finalized operation inputs and call the same complete shared operation through the app-provided `AnalysisEngine` and numerical-kernel environment. A generated program is editable but is not standalone. Unchanged code returns the complete shared operation for the captured configuration; edited code produces a custom result whose exact executed script is authoritative. Programs can be viewed, edited, and re-executed within the Report Window's sandbox (30-second execution time limit). Exported HTML omits the executed script, which must be saved separately. 
 
 **Export HTML**. The **Export HTML** button (in the sub-tab bar) saves all completed analysis sub-tabs as a single self-contained HTML file. The exported report includes interactive SVG charts with hover tooltips, per-figure dimension controls for resizing and re-rendering plots, per-figure SVG download buttons, result tables (with TSV export), summary statistics, and methods text. The report is fully self-contained (no external dependencies) and can be opened in any web browser or printed to PDF.
 
@@ -829,7 +834,7 @@ Of note, by default DIA-NN reports 'normalised' quantities. This means it makes 
 * **Detailed log**. Output extra information which may be useful for troubleshooting of any issues. 
 * **FDR (%)** sets the precursor q-value filtering to be auto-applied to the main output report. The default is 5%, which is suitable for downstream analyses at the protein level. 
 * **Threads** suggests the number of CPU threads for DIA-NN to use. 
-* **Additional options** is a free-text area for passing extra command-line arguments to DIA-NN (any `--` option listed in the [Command-line reference](#command-line-reference)). For advanced automation, it also supports several special control characters. A `>` character splits the text into DIA-NN arguments (before `>`) and an external command (after `>`) that will be launched automatically after DIA-NN finishes successfully &ndash; this is useful for chaining post-processing scripts, converters or downstream tools. The external command supports variable substitution: `$(report)` is replaced with the main output path, `$(stats)` with the stats TSV path, `$(lib)` with the spectral library path, `$(out-lib)` with the output library path, `$(fasta)` with all FASTA paths and `$(temp)` with the temp directory path (all auto-quoted). Other control characters: `!` at the very start saves the command line to a config file, `#` forwards the additional options before the main DIA-NN arguments (configured via the GUI), and `~` forwards them with no main arguments at all.
+* **Additional options** is a free-text area for passing extra command-line arguments to DIA-NN (any `--` option listed in the [Command-line reference](#command-line-reference)). For advanced automation, it also supports several special control characters. A `>` character splits the text into DIA-NN arguments (before `>`) and an external command (after `>`) that will be launched automatically after DIA-NN finishes successfully &ndash; this is useful for chaining post-processing scripts, converters or downstream tools. The external command supports variable substitution: `$(report)` is replaced with the main output path, `$(stats)` with the stats TSV path, `$(lib)` with the spectral library path, `$(out-lib)` with the output library path, `$(fasta)` with all FASTA paths and `$(temp)` with the temp directory path (all auto-quoted). Other control characters: `#` places the additional options before the options from the settings you selected in the app. With `~`, DIA-NN receives your additional options and the selected raw-data files; other settings selected in the app are omitted.
 
 </details>
  
@@ -891,18 +896,29 @@ These options are meant to facilitate advanced automated workflows and are passe
 
 * **--pipeline [file]** run a saved pipeline (.pipeline.json) without user interaction.  
 * **--pdf \<parquet\>** generate QC PDF reports from a DIA-NN main report (.parquet) without opening the GUI. Cannot be combined with --pipeline.  
+* **--ozone-platform=headless** on Linux, enable command-line operation without a graphical display (for example, on a server or in a remote shell). Pass this option directly to the GUI executable, before `--pipeline`, `--pdf` or `--analyse`.
 * **--dark** launch the GUI with dark mode enabled. Can be added to DIA-NN's desktop shortcut to always launch the GUI in dark mode. 
-* **--analyse \<parquet\> \<command\> [options]** headless CLI mode &ndash; run statistical analyses on a DIA-NN main report without opening the GUI. Produces text output (optionally JSON with --json). Uses the same statistical methods and data processing as the interactive Analyse mode. See the section below for available commands and options. 
+* **--analyse \<parquet\> \<command\> [options]** headless CLI mode &ndash; run statistical analyses on a DIA-NN main report without opening the GUI. Produces text output (optionally JSON with --json). Supported commands use the same shared matrix policies, statistical operations, defaults and result finalization as the corresponding Analyse mode operations. See the section below for available commands and options. 
 
 </details>
 
 <details>
   <summary>Headless analysis CLI (--analyse)</summary>
 
-The `--analyse` mode provides scriptable, headless access to all Analyse-window functionality. Invocation:
+The `--analyse` mode provides scriptable access to the supported analysis and figure routes below. For configurations represented by the CLI, these routes use the same shared matrix policies, operation orchestration, statistical kernels, defaults and result finalization as the GUI. GUI-only interactive views are not implied by this command list. Invocation:
 ```
 DIA-NN --analyse <report.parquet> <command> [options]
 ```
+
+On Linux without a graphical display, include `--ozone-platform=headless` before `--analyse`:
+
+```bash
+DIA-NN --ozone-platform=headless --analyse report.parquet info
+```
+
+`--quant` accepts exactly `PG.MaxLFQ`, `Genes.MaxLFQ`, `Genes.MaxLFQ.Unique`, or `Sites`; an unsupported or unavailable quantity is not guessed or replaced. When `--entity` is omitted, the entity is derived from the quantity (`Protein.Group`, `Genes`, or `site_id`). An explicit `--entity` is supported for non-Sites quantities when that column exists in the effective schema. `Sites` always uses `site_id` and requires the matching `--site-report`. If a required quantity or entity is unavailable, create or assign that canonical column in the GUI Filter pipeline. `--filter` is only a repeatable SQL row predicate over report columns; it does not create computed columns or reproduce a saved GUI pipeline.
+
+Source run/design identity is resolved before row filtering. A run or plex sample with no positive quantity left after pipeline, quality and coverage filtering can therefore be absent from the final matrix; no synthetic all-missing sample column is added.
 
 **Analysis commands**
 
@@ -917,7 +933,7 @@ DIA-NN --analyse <report.parquet> <command> [options]
 | `pca` | Principal component analysis |
 | `correlation` | Pairwise sample correlation |
 | `camera` | CAMERA pathway enrichment (condition-based) |
-| `camera-pca` | CAMERA on PCA loadings (all components) |
+| `camera-pca` | CAMERA on PCA loadings (up to 50 components by default; configurable with `--n-components`) |
 | `zscore-da` | Gene-set z-score differential abundance |
 | `zscore-anova` | Gene-set z-score ANOVA |
 | `precursors` | Precursor-level confirmation for a protein (DA confidence) |
@@ -936,52 +952,73 @@ DIA-NN --analyse <report.parquet> <command> [options]
 | `svg heatmap` | Top-N expression heatmap (z-scored) |
 | `svg enrichment` | CAMERA enrichment plot for one gene set |
 
-SVG output file is set with `--out <path>` (default: `figure-<type>.svg`). Dimensions can be overridden with `--svg-width` and `--svg-height`.
+SVG output is written to `--out <path>` (default: `figure-<type>.svg`); `--svg-width` and `--svg-height` override the figure-specific dimensions. Figures consume finalized shared analysis results and reuse the app's drawing primitives, but static layout, dimensions, text metrics, palette resolution and serialization are intentionally independent from interactive GUI exports. PCA colouring is descriptive: an explicit metadata column wins; otherwise a condition pair may identify its metadata column; all result-run levels, singleton levels and blank values (`Unassigned`) are retained. Explicit run lists provide only a two-label fallback when no metadata colour column is selected, and a PCA with no grouping input remains ungrouped. A covariate-adjusted CAMERA enrichment figure shows adjusted set significance with the result-owned unadjusted descriptive entity ranking; interaction-coefficient CAMERA enrichment figures are not supported. SVG files are not automatically validated and no validation command is provided.
 
-**Validation commands**
-
-| Command | Description |
-|---------|-------------|
-| `validate-svg <file> [...]` | Validate SVG structure and XML well-formedness |
+A result-linked expression heatmap rebuilds a visualization matrix with the shared baseline of one precursor and no minimum quantified-run percentage; the upstream differential or ANOVA result retains its own statistical admission policy. The visual route applies its shared extra normalization, recomputes row-wise z-scores and selects rows in stable raw-p-value/original order. With no explicit `--top`, a heatmap uses the shared 100-row visual default; a finite value or `all` changes only the figure selection.
 
 **Common options**
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--quant <col>` | PG.MaxLFQ | Quantification column |
-| `--entity <col>` | Protein.Group | Entity column |
+| `--quant <name>` | PG.MaxLFQ | `PG.MaxLFQ`, `Genes.MaxLFQ`, `Genes.MaxLFQ.Unique`, or `Sites` (exact names) |
+| `--entity <col>` | derived | Explicit effective-schema entity override for non-Sites quantities |
 | `--cond-a` / `--cond-b` | &ndash; | Condition names (auto-detect matching) |
 | `--runs-a` / `--runs-b` | &ndash; | Comma-separated run basenames per condition |
 | `--groups <spec>` | &ndash; | ANOVA groups: `A:r1,r2;B:r3,r4` |
 | `--metadata <path>` | &ndash; | Metadata file (TSV or SDRF, auto-detected) |
 | `--factor <col>` | &ndash; | Primary factor column from metadata |
 | `--annotation <path>` | &ndash; | Annotation file (GMT, GAF, Reactome, etc.) |
-| `--gene-info <path>` | &ndash; | NCBI gene_info for ID mapping |
+| `--gene-info <path>` | &ndash; | NCBI `gene_info` mapping for explicitly Entrez-based formats |
+| `--hgnc <path>` | &ndash; | HGNC mapping for explicitly UniProt-based formats |
+| `--obo <path>` | &ndash; | GO ontology names for formats that require them |
 | `--exclude-runs <list>` | &ndash; | Comma-separated runs to exclude |
 | `--filter <expr>` | &ndash; | SQL WHERE filter on parquet (repeatable) |
 | `--fdr <val>` | 0.05 | FDR threshold |
-| `--fc <val>` | 1 | log2 fold-change threshold |
+| `--fc <val>` | 1 differential / 0 `zscore-da` | Minimum size of the effect, regardless of direction: for differential, the log2 change in quantity; for `zscore-da`, the change in the calculated pathway activity score. With a statistical model, this is the estimated effect being tested, including the selected main or interaction effect. For a continuous variable such as time, the effect is per unit of that variable (for example, per hour if time is recorded in hours). Applies only to these two commands |
 | `--test <type>` | welch | Statistical test: `welch`, `mwu` |
-| `--statistic <type>` | fc | CAMERA ranking statistic: `fc`, `tstat`, `modt` |
+| `--statistic <type>` | modt | CAMERA ranking statistic: `fc`, `tstat`, `modt`; empirical mode forces `modt` |
 | `--extra-norm` | off | Apply two-tier median normalisation |
 | `--imputation <type>` | none | Imputation: `none`, `half-min` |
 | `--covariates <keys>` | &ndash; | Comma-separated covariate columns |
 | `--interaction-factor` | &ndash; | Second factor for interaction models |
-| `--interaction-coeff` | interaction | Coefficient: `main`, `factor2`, `interaction` |
+| `--interaction-coeff` | main | Coefficient: `main`, `factor2`, or `interaction` |
 | `--interaction-cond-a` | &ndash; | First level of the interaction factor |
 | `--interaction-cond-b` | &ndash; | Second level of the interaction factor |
 | `--min-set` / `--max-set` | 3 / 500 | Gene set size limits |
-| `--min-reps <n>` | off | Min replicates per condition |
-| `--n-components <n>` | 50 | PCA components for camera-pca |
-| `--min-entities <n>` | 3 | Min detected members for z-score activity |
-| `--comparison-mode` | pairwise | Z-score mode: `pairwise`, `anova` |
+| `--min-completeness <fraction>` | 0.5 | Minimum fraction of testing runs with an observed protein or gene quantity before imputation, across the included conditions or stored PCA runs (0–1; 0 disables this additional filter) |
+| `--min-reps <n>` | off | Keep a protein, gene or site if it is quantified in at least N runs in at least one of the two conditions (differential and condition CAMERA only; sites are supported by differential analysis only). Count measurements before normalisation, filling in missing values, or excluding runs from the statistical model. This does not require N measurements in both conditions or guarantee N remain in the final comparison; the minimum number of runs needed for each analysis is unchanged |
+| `--min-precursors <n>` | 1 | Minimum precursors for differential, ANOVA and condition CAMERA matrices |
+| `--min-quant <pct>` | route-specific | Minimum quantified-run percentage where the route permits it |
+| `--pca-mode <mode>` | ubiquitous | PCA matrix mode: `ubiquitous` or `na-tolerant` |
+| `--quality-sample <q>` | 0.5 when detected | Per-sample QuantUMS threshold; `0` disables it |
+| `--quality-average <q>` | 0.75 when detected | Average QuantUMS threshold; disabled for correlation, ratios and Sites; `0` disables it |
+| `--regress <keys>` | &ndash; | Comma-separated metadata columns to regress before PCA |
+| `--n-components <n>` | 50 | PCA components tested by `camera-pca` |
+| `--min-entities <n>` | 3 | Minimum detected members for z-score activity |
+| `--ignore-correlation` / `--no-ignore-correlation` | ignore | Fixed correlation 0.05 with cameraPR, or condition-based empirical CAMERA with required half-minimum imputation and moderated t-statistics. PCA pathways require fixed correlation and no imputation |
+| `--no-dedup-fdr` | off | Adjust all tested annotation records instead of distinct tested memberships in either CAMERA correlation mode |
 | `--protein <name>` | &ndash; | Protein group name for `precursors` command |
 | `--set-name <name>` | &ndash; | Gene set to plot in the enrichment figure |
-| `--plexdia` | off | plexDIA independent-channels mode |
-| `--no-auto-filters` | off | Disable default Q.Value <= 0.01 filters |
-| `--json` | off | Output as JSON |
-| `--top <n>` | 20 | Number of top results to print |
+| `--plexdia` | off | Treat plex channels as independent `Run:Channel` samples |
+| `--plex-ratio <NUM/DEN>` | &ndash; | Within-acquisition channel ratio; takes precedence over `--plexdia` |
+| `--plex-recalc` | off | Recalculate ratio protein values from matched precursors |
+| `--plex-prec-quant <col>` | Precursor.Normalised | Precursor quantity used for recalculated ratios |
+| `--site-report <path>` | &ndash; | Matching DIA-NN site report required by `--quant Sites` |
+| `--site-confidence <q>` | 0.75 | Site-localization confidence threshold |
+| `--no-auto-filters` | off | Disable all seeded UI-default filters: Q.Value <= 0.01, Global.PG.Q.Value <= 0.01, and applicable plex PG.Q.Value / Channel.Q.Value <= 0.05 |
+| `--json` | off | Emit exactly one JSON envelope on stdout; diagnostics use stderr |
+| `--top <N\|all>` | 20 text / all JSON | Limit ranked result copies; structural arrays remain complete |
 | `--help` | &ndash; | Show help message |
+
+Annotation identifiers follow the detected format. Members of a generic GMT file are treated as symbols, including numeric-looking symbols. `--gene-info`, `--hgnc`, and `--obo` are used only for the explicit mapping formats they represent; filenames and member spelling do not select a mapping strategy. Gene-symbol annotations normally use `Genes.MaxLFQ` or `Genes.MaxLFQ.Unique`, rather than pairing protein-group quantity with `--entity Genes`.
+
+For an adjusted pairwise model, fitted sample selection and estimability checks occur before normalization or imputation. Preprocessing, model fitting, summaries and descriptive ranking all use those fitted samples. A requested coefficient that is constant, confounded or undefined is rejected with the reason; remove the invalid covariate and rerun.
+
+Per-sample and average QuantUMS thresholds are independent. Where average quality is enabled, quality values are rounded to six decimal places and averaged within each effective run; these run means are rounded to six decimal places and averaged with equal weight over runs with available quality. The calculation does not first apply the per-sample threshold. Correlation may use per-sample quality but not average quality; ratios and Sites also disable average quality, while PCA retains its exposed average-quality control.
+
+In plex ratio mode, numerator and denominator precursor values are matched by acquisition run, modified sequence, charge and entity. Their log2 abundance differences are rounded to six decimal places (halfway values away from zero) and averaged, giving the log2 geometric mean directly. Quality averages and precursor log-ratio averages use integer accumulation to give repeatable results without sorting all input measurements. Precursor ratios recalculated after half-minimum channel filling use the same rounding and averaging. Run exclusions use the actual analysis identity: ordinary acquisition runs or independent `Run:Channel` samples, including precursor confirmation. Independent plex samples retain Channel as metadata. Without a metadata file, the headless fallback infers base conditions without the channel suffix and assigns replicate numbers sequentially within each base condition in source order; Channel remains a separate factor and does not split replicate numbering. The GUI still requires an explicitly configured independent-channel design.
+
+`--top` accepts a positive safe base-10 integer or `all`. Omitted human ranked output shows 20 rows; omitted JSON and explicit `all` return all ranked rows. A finite limit never truncates matrices, PCA scores/loadings, group/run membership, QC or precursor evidence. The JSON envelope reports `resultLimit` as the finite number or `null`, with tested/returned counts for ranked results; it writes one document to stdout and returns a nonzero status after a failure envelope is flushed. In the REPL, `set top N|all` persists; a trailing `--top N|all` is local to the supported ranked command. Terminal and piped sessions continue after a line error, but a piped session exits nonzero if any line failed. Differential abundance, precursor evidence and the FC histogram consistently report A-minus-B on the log2 scale.
 
 </details>
 
@@ -1034,6 +1071,7 @@ Note that some options below are strongly detrimental to performance and are onl
 * **--fr-model [file]** specifies the file containing the fragmentation deep learning prediction model
 * **--full-profiling** enable using empirical spectra for empirical library generation
 * **--full-unimod** loads the complete UniMod modification database and disables the automatic conversion of modification names to the UniMod format
+* **--fwhm [X]** gives DIA-NN a hint on the expected peak FWHM (same units as encoded in the LC-MS run: typically minutes), may affect quantification, in particular in DDA mode  
 * **--gen-spec-lib** instructs DIA-NN to generate a spectral library
 * **--global-norm** instructs DIA-NN to use simple global normalisation instead of RT-dependent normalisation
 * **--high-acc** QuantUMS settings will be optimised for maximum accuracy, i.e. to minimise any ratio compression quantitative bias
@@ -1402,4 +1440,3 @@ Using DIA-NN's ion mobility module for timsTOF data analysis or using DIA-NN in 
 Using DIA-NN to analyse scanning quadrupole data (non-timsTOF): **Ultra-fast proteomics with DIA-NN and Scanning SWATH** [Nature Biotechnology, 2021](https://www.nature.com/articles/s41587-021-00860-4)
 
 **Notes and discussions** on proteomics in general and the use of DIA-NN: https://github.com/vdemichev/DiaNN/discussions/categories/dia-proteomics-in-detail (this section will be further expanded).
-
