@@ -1,0 +1,3 @@
+liblzf
+https://software.schmorp.de/pkg/liblzf.html
+https://dist.schmorp.de/liblzf/

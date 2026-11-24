@@ -1,0 +1,10 @@
+Eigen source code
+
+Eigen is made available under the Mozilla Public License 2.0.
+The license text is provided in LICENSE.txt alongside this file.
+
+Official source repository:
+https://gitlab.com/libeigen/eigen
+
+Release tags and source downloads:
+https://gitlab.com/libeigen/eigen/-/tags
