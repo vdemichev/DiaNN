@@ -1,0 +1,228 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: libproxy
+Source: https://github.com/libproxy/libproxy
+
+Files: *
+Copyright: 2022-2023, The Libproxy Team
+           Nathaniel McCallum
+           Alex Panait
+           Dominique Leuenberger
+           Jan-Michael Brummer
+License: LGPL-2.1+
+
+Files: data/lineup-parameters
+Copyright: 2019, Michael Catanzaro <mcatanzaro@gnome.org>
+License: GPL-3+
+
+Files: debian/*
+Copyright: Emilio Pozuelo Monfort
+License: LGPL-2.1+
+
+Files: debian/tests/*
+Copyright: 2020 Simon McVittie
+License: LGPL-2.1+
+
+Files: debian/tests/build
+Copyright: Rafał Cieślak
+License: LGPL-2.1+
+
+Files: docs/samples/dotnet/proxy.cs
+Copyright: 2009, Dominique Leuenberger
+License: LGPL-2.1+
+
+Files: docs/samples/libcurl/curlget.c
+Copyright: 2006 Nathaniel McCallum
+           2008 Dominique Leuenberger
+License: LGPL-2.1+
+
+Files: src/tools/proxy.8
+Copyright: Jan-Michael Brummer
+License: LGPL-2.1+
+
+Files: src/tools/proxy.c
+Copyright: 2006 Nathaniel McCallum
+License: LGPL-2.1+
+
+Files: src/backend/pacutils.h
+Copyright: 1998 Netscape Communications Corporation
+License: LGPL-2.1+ or GPL-2+ or NPL-1.1
+Comment: This was originally copied in 2007 from Mozilla's
+ nsProxyAutoConfig.js (perhaps from Firefox 1.0).
+ That version was triple-licensed and explicitly allowed
+ it to be relicensed to be used only under the LGPL-2.1+.
+ .
+ It appears like that was done because of this comment:
+ "The following Javascript code was taken from Mozilla
+ (http://www.mozilla.org) and is licensed according to
+ the LGPLv2.1+."
+ .
+ For completeness, the NPL-1.1+ license is included in case the
+ file is still triple-licensed.
+ .
+ Finally, the latest Mozilla version of this file is named
+ ascii_pac_utils.js and is licensed under the MPL-2.0.
+
+License: GPL-2+
+ This package is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <https://www.gnu.org/licenses/>
+ .
+ On Debian systems, the complete text of the GNU General
+ Public License version 2 can be found in "/usr/share/common-licenses/GPL-2".
+
+License: GPL-3+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ .
+ On Debian systems, the complete text of the GNU General
+ Public License can be found in `/usr/share/common-licenses/GPL-3'.
+
+License: LGPL-2.1+
+ This file is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 2.1 of the License, or (at your option) any later version.
+ .
+ This file is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+ .
+ You should have received a copy of the GNU Lesser General Public
+ License along with this library; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ .
+ On Debian systems, the complete text of the GNU Lesser General Public
+ License version 2.1 can be found in "/usr/share/common-licenses/LGPL-2.1".
+
+License: MPL-1.1
+ SPDX license expression "MPL-1.1":
+ https://spdx.org/licenses/MPL-1.1.html
+ .
+ On Debian systems, the complete text of the Mozilla Public License
+ version 1.1 can be found in "/usr/share/common-licenses/MPL-1.1".
+
+License: NPL-1.1
+ The contents of this file are subject to the Netscape Public
+ License Version 1.1 (the "License"); you may not use this file
+ except in compliance with the License. You may obtain a copy of
+ the License at http://www.mozilla.org/NPL/
+ .
+ Software distributed under the License is distributed on an "AS
+ IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
+ implied. See the License for the specific language governing
+ rights and limitations under the License.
+ .
+ The Original Code is mozilla.org code.
+ .
+ The Initial Developer of the Original Code is
+ Netscape Communications Corporation.
+ Portions created by the Initial Developer are Copyright (C) 1998
+ the Initial Developer. All Rights Reserved.
+ .
+ Contributor(s):
+   Akhil Arora
+   Tomi Leppikangas
+ .
+ Alternatively, the contents of this file may be used under the terms of
+ either the GNU General Public License Version 2 or later (the "GPL"), or
+ the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ in which case the provisions of the GPL or LGPL are applicable instead
+ of those above. If you wish to allow use of your version of this file only
+ under the terms of either the GPL or the LGPL, and not to allow others to
+ use your version of this file under the terms of the NPL, indicate your
+ decision by deleting the provisions above and replace them with the notice
+ and other provisions required by the GPL or the LGPL.  If you do not delete
+ the provisions above, a recipient may use your version of this file under
+ the terms of any one of the NPL, the GPL, or the LGPL.
+ .
+ The Netscape Public License Version 1.1 ("NPL") consists of the
+ Mozilla Public License Version 1.1 with the following Amendments,
+ including Exhibit A-Netscape Public License.  Files identified with
+ "Exhibit A-Netscape Public License" are governed by the Netscape
+ Public License Version 1.1.
+ .
+ Additional Terms applicable to the Netscape Public License.
+ .
+     I. Effect.
+ .
+        These additional terms described in this Netscape Public
+        License -- Amendments shall apply to the Mozilla Communicator
+        client code and to all Covered Code under this License.
+ .
+    II. ''Netscape's Branded Code'' means Covered Code that Netscape
+        distributes and/or permits others to distribute under one or
+        more trademark(s) which are controlled by Netscape but which
+        are not licensed for use under this License.
+ .
+   III. Netscape and logo.
+ .
+        This License does not grant any rights to use the trademarks
+        "Netscape'', the "Netscape N and horizon'' logo or the
+        "Netscape lighthouse" logo, "Netcenter", "Gecko", "Java" or
+        "JavaScript", "Smart Browsing" even if such marks are included
+        in the Original Code or Modifications.
+ .
+    IV. Inability to Comply Due to Contractual Obligation.
+ .
+        Prior to licensing the Original Code under this License,
+        Netscape has licensed third party code for use in Netscape's
+        Branded Code. To the extent that Netscape is limited
+        contractually from making such third party code available under
+        this License, Netscape may choose to reintegrate such code into
+        Covered Code without being required to distribute such code in
+        Source Code form, even if such code would otherwise be
+        considered ''Modifications'' under this License.
+ .
+     V. Use of Modifications and Covered Code by Initial Developer.
+ .
+         V.1. In General.
+ .
+              The obligations of Section 3 apply to Netscape, except to
+              the extent specified in this Amendment, Section V.2 and
+              V.3.
+ .
+         V.2. Other Products.
+ .
+              Netscape may include Covered Code in products other than
+              the Netscape's Branded Code which are released by
+              Netscape during the two (2) years following the release
+              date of the Original Code, without such additional
+              products becoming subject to the terms of this License,
+              and may license such additional products on different
+              terms from those contained in this License.
+ .
+         V.3. Alternative Licensing.
+ .
+              Netscape may license the Source Code of Netscape's
+              Branded Code, including Modifications incorporated
+              therein, without such Netscape Branded Code becoming
+              subject to the terms of this License, and may license
+              such Netscape Branded Code on different terms from those
+              contained in this License.
+ .
+    VI. Litigation.
+ .
+        Notwithstanding the limitations of Section 11 above, the
+        provisions regarding litigation in Section 11(a), (b) and (c)
+        of the License shall apply to all disputes relating to this
+        License.

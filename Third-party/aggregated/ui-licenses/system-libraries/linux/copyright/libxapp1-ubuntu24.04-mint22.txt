@@ -1,0 +1,22 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: xapp
+Upstream-Contact: https://www.linuxmint.com/teams.php
+Source: https://github.com/linuxmint/xapp
+
+Files: *
+Copyright: 2016, Linux Mint
+License: LGPL-3
+ This program is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public License V3.
+ .
+ The complete text of the GNU Lesser General Public License version 3 can be
+ found in "/usr/share/common-licenses/LGPL-3".
+
+Files: scripts/xfce4-set-wallpaper
+Copyright: Weitian Leung <weitianleung@gmail.com>
+License: GPL-3
+ This program is free software; you can redistribute it and/or
+ modify it under the terms of the GNU General Public License V3.
+ .
+ The complete text of the GNU General Public License version 3 can be found in
+ "/usr/share/common-licenses/GPL-3".

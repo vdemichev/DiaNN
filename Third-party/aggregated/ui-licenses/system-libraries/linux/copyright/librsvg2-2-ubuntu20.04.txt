@@ -1,0 +1,459 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: librsvg
+Source: https://download.gnome.org/sources/librsvg/
+Files-Excluded:
+ vendor/winapi-*-pc-windows-gnu/lib/*.a
+
+Files: *
+Copyright: 2000 Eazel, Inc.
+           1999 - 2003 Ximian, Inc.
+           1999 Michael Zucchi
+           1998 - 2000, 2005 Red Hat, Inc.
+           2002 - 2005 Dom Lachowicz <cinamod@hotmail.com>
+           2002 Matthias Clasen
+           2003 - 2005 Caleb Moore <c.moore@student.unsw.edu.au>
+           2006 Robert Staudinger <robert.staudinger@gmail.com>
+           2010 - 2012 Christian Persch
+           2010 Igalia, S.L.
+License: LGPL-2+
+
+Files:
+ tests/fixtures/reftests/svg1.1/*
+Copyright:
+ 2008-2009 World Wide Web Consortium (Massachusetts Institute of
+ Technology, European Research Consortium for Informatics and
+ Mathematics (ERCIM), Keio University)
+License: BSD-3-clause
+
+Files:
+ tests/fixtures/render-crash/feMerge-color-interpolation-srgb.svg
+Copyright:
+ 2018 Reizner Evgeniy
+License: Expat
+
+Files:
+ vendor/aho-corasick/*
+ vendor/byteorder/*
+ vendor/csv-core/*
+ vendor/csv/*
+ vendor/memchr/*
+ vendor/same-file/*
+ vendor/utf8-ranges/*
+ vendor/walkdir/*
+ vendor/winapi-util/*
+Copyright:
+ 2015-2017 Andrew Gallant
+License: Expat or Unlicense
+
+Files:
+ vendor/arrayvec/*
+ vendor/backtrace-sys/*
+ vendor/bitflags*/*
+ vendor/c_vec/*
+ vendor/cast/*
+ vendor/cc/*
+ vendor/cfg-if/*
+ vendor/chrono/*
+ vendor/criterion-plot/*
+ vendor/criterion-stats/*
+ vendor/criterion/*
+ vendor/crossbeam-deque/*
+ vendor/crossbeam-epoch/*
+ vendor/crossbeam-utils/*
+ vendor/downcast-rs/*
+ vendor/dtoa/*
+ vendor/either/*
+ vendor/failure/*
+ vendor/failure_derive/*
+ vendor/itertools/*
+ vendor/itertools-num/*
+ vendor/itoa/*
+ vendor/lazy_static*/*
+ vendor/libc/*
+ vendor/libm/*
+ vendor/log/*
+ vendor/matrixmultiply/*
+ vendor/nodrop/*
+ vendor/num-complex/*
+ vendor/num-integer/*
+ vendor/num-traits*/*
+ vendor/num_cpus/*
+ vendor/pest/*
+ vendor/pest_derive/*
+ vendor/pkg-config/*
+ vendor/proc-macro2/*
+ vendor/procedural-masquerade/*
+ vendor/quick-error/*
+ vendor/quote*/*
+ vendor/rand*/*
+ vendor/rawpointer/*
+ vendor/rayon*/*
+ vendor/regex*/*
+ vendor/rustc-demangle/*
+ vendor/scopeguard/*
+ vendor/serde/*
+ vendor/serde_derive/*
+ vendor/serde_json/*
+ vendor/simplelog/*
+ vendor/siphasher/*
+ vendor/smallvec/*
+ vendor/stable_deref_trait/*
+ vendor/syn*/*
+ vendor/term/*
+ vendor/thread_local/*
+ vendor/time/*
+ vendor/typenum/*
+ vendor/ucd-util/*
+ vendor/unicode-width/*
+ vendor/unicode-xid/*
+ vendor/unreachable/*
+ vendor/vec_map/*
+ vendor/version_check/*
+ vendor/winapi/*
+ vendor/winapi-i686-pc-windows-gnu/*
+ vendor/winapi-x86_64-pc-windows-gnu/*
+Copyright:
+ 2009-2016 compiler-builtins Developers
+ 2010-2018 The Rust Project Developers
+ 2014-2018 Jorge Aparicio
+ 2014-2017 Kang Seonghoon and contributors
+ 2014 Alex Crichton
+ 2014 Paho Lurie-Gregg
+ 2015 Ashish Myles
+ 2015 Guillaume Gomez
+ 2015-2017 Ulrik Sverdrup (bluss)
+ 2015 Andrew Gallant
+ 2015 The rust-unreachable Developers
+ 2015 John Nagle
+ 2015 Sean McArthur
+ 2015 The quick-error Developers
+ 2015-2016 Victor Brekenfeld
+ 2016 Itoa Developers
+ 2016 lazy-static.rs Developers
+ 2015-2018 winapi-rs developers
+ 2017-2018 Sergio Benitez
+ 2017 Amanieu d'Antras
+ 2017 Serde Developers
+ 2017 Robert Grosse
+ 2018 Syn Developers
+ 2018 Dragoș Tiselice
+ 2018 The Servo Project Developers
+ Simon Sapin
+ Brook Heisler
+ Without Boats
+License: Apache-2.0 or Expat
+Comment:
+ Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+ http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+ <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+ option. This file may not be copied, modified, or distributed
+ except according to those terms.
+
+Files:
+ vendor/alga/*
+ vendor/approx/*
+Copyright:
+ 2013-2014 The Algebra Developers
+ 2015 Brendan Zabarauskas
+ Darin Morrison
+ Sébastien Crozet
+ Wadelma
+License: Apache-2.0
+
+Files:
+ vendor/cssparser/*
+ vendor/cssparser-macros/*
+ vendor/dtoa-short/*
+Copyright:
+ Simon Sapin
+ Xidorn Quan
+License: MPL-2.0
+
+Files:
+ vendor/ansi_term/*
+ vendor/atty/*
+ vendor/cairo-rs/*
+ vendor/clap/*
+ vendor/dtoa/src/diyfp.rs
+ vendor/dtoa/src/dtoa.rs
+ vendor/float-cmp/*
+ vendor/gdk-pixbuf/*
+ vendor/gdk-pixbuf-sys/*
+ vendor/generic-array/*
+ vendor/gio/*
+ vendor/gio-sys/*
+ vendor/glib/*
+ vendor/glib-sys/*
+ vendor/gobject-sys/*
+ vendor/handlebars/*
+ vendor/kernel32-sys/*
+ vendor/language-tags/*
+ vendor/locale_config/*
+ vendor/matches/*
+ vendor/memoffset/*
+ vendor/owning_ref/*
+ vendor/pango/*
+ vendor/pango-sys/*
+ vendor/pangocairo/*
+ vendor/phf*/*
+ vendor/redox_syscall/*
+ vendor/redox_termios/*
+ vendor/strsim/*
+ vendor/synstructure/*
+ vendor/termion/*
+ vendor/textwrap/*
+ vendor/thread-scoped/*
+ vendor/void/*
+ vendor/winapi-0.2.8/*
+Copyright:
+ 2014 Benjamin Sago
+ 2013-2018 The Gtk-rs Project Developers
+ 2014-2016 Simon Sapin
+ 2014-2018 Optimal Computing (NZ) Ltd
+ 2014 Ning Sun
+ 2015-2017 Doug Tangren
+ 2015-2016 Peter Atashian
+ 2015-2016 Kevin B. Knapp
+ 2015-2016 clap-rs contributors
+ 2015 grabbag contributors
+ 2015 Dmitry Roschin
+ 2015 Corey Richardson
+ 2015 Alex Daniel Jones
+ 2015 Brian Vincent
+ 2015 Jordan Miner
+ 2015 skdltmxn
+ 2015 Connor Hilarides
+ 2015 Gigih Aji Ibrahim
+ 2015 Bartłomiej Kamiński
+ 2015 Marvin Löbel
+ 2015 Danny Guo
+ 2015 arcnmx
+ 2015 THL A29 Limited, a Tencent company
+ 2015 Milo Yip
+ 2015 Pyfisch
+ 2016 Titus Wormer
+ 2016 bitbegin
+ 2016 Ticki
+ 2016 Martin Geisler
+ 2016 Jan Hudec
+ 2016 A.J. Gardner
+ 2016 Nika Layzell
+ 2017 Gilad Naaman
+ 2017 Redox OS Developers
+ Steven Fackler
+ Jonathan Reem
+ Ryan Scheel
+ Josh Triplett
+ Aaron Trent
+ Michael Layzell
+License: Expat
+
+Files:
+ vendor/cloudabi/*
+ vendor/libm/src/math/exp2.rs
+ vendor/libm/src/math/exp2f.rs
+ vendor/libm/src/math/fmaf.rs
+Copyright:
+ 2005-2011 David Schultz
+ 2016-2018 Nuxi
+License: BSD-2-clause
+
+Files:
+ vendor/fuchsia-zircon*/*
+ vendor/backtrace-sys/src/libbacktrace/*
+ vendor/nalgebra/*
+Copyright:
+ 2012-2018 Free Software Foundation, Inc.
+ 2013 Sébastien Crozet
+ 2016-2017 The Fuchsia Authors
+License: BSD-3-clause
+
+Files:
+ vendor/libm/src/math/a*.rs
+ vendor/libm/src/math/cbrt*.rs
+ vendor/libm/src/math/cos.rs
+ vendor/libm/src/math/cosf.rs
+ vendor/libm/src/math/exp.rs
+ vendor/libm/src/math/expf.rs
+ vendor/libm/src/math/expm*.rs
+ vendor/libm/src/math/k_cos.rs
+ vendor/libm/src/math/k_cosf.rs
+ vendor/libm/src/math/k_sin.rs
+ vendor/libm/src/math/k_sinf.rs
+ vendor/libm/src/math/k_tan.rs
+ vendor/libm/src/math/k_tanf.rs
+ vendor/libm/src/math/log*.rs
+ vendor/libm/src/math/pow*.rs
+ vendor/libm/src/math/rem_pio2*.rs
+ vendor/libm/src/math/sin.rs
+ vendor/libm/src/math/sinf.rs
+ vendor/libm/src/math/sqrt*.rs
+ vendor/libm/src/math/tan.rs
+ vendor/libm/src/math/tanf.rs
+Copyright:
+ Sun Microsystems, Inc.
+License: Sun-permissive
+
+Files:
+ vendor/ryu/*
+Copyright:
+ 2018 Ulf Adams
+ David Tolnay
+License: Apache-2.0 or Boost-1.0
+
+License: LGPL-2+
+ This package is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 2 of the License, or (at your option) any later version.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <https://www.gnu.org/licenses/>.
+ .
+ On Debian systems, the complete text of the GNU Lesser General
+ Public License can be found in "/usr/share/common-licenses/LGPL-2".
+
+License: Apache-2.0
+ On Debian systems, the complete text of the Apache License can be
+ found in "/usr/share/common-licenses/Apache-2.0".
+
+License: Expat
+ Permission is hereby granted, free of charge, to any
+ person obtaining a copy of this software and associated
+ documentation files (the "Software"), to deal in the
+ Software without restriction, including without
+ limitation the rights to use, copy, modify, merge,
+ publish, distribute, sublicense, and/or sell copies of
+ the Software, and to permit persons to whom the Software
+ is furnished to do so, subject to the following
+ conditions:
+ .
+ The above copyright notice and this permission notice
+ shall be included in all copies or substantial portions
+ of the Software.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+ TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+ PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+ SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ DEALINGS IN THE SOFTWARE.
+
+License: MPL-2.0
+ This Source Code Form is subject to the terms of the Mozilla Public
+ License, v. 2.0. If a copy of the MPL was not distributed with this
+ file, You can obtain one at http://mozilla.org/MPL/2.0/.
+Comment:
+ On Debian systems, the complete text of the Mozilla Public License can
+ be found in "/usr/share/common-licenses/MPL-2.0".
+
+License: Unlicense
+ This is free and unencumbered software released into the public domain.
+ .
+ Anyone is free to copy, modify, publish, use, compile, sell, or
+ distribute this software, either in source code form or as a compiled
+ binary, for any purpose, commercial or non-commercial, and by any
+ means.
+ .
+ In jurisdictions that recognize copyright laws, the author or authors
+ of this software dedicate any and all copyright interest in the
+ software to the public domain. We make this dedication for the benefit
+ of the public at large and to the detriment of our heirs and
+ successors. We intend this dedication to be an overt act of
+ relinquishment in perpetuity of all present and future rights to this
+ software under copyright law.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ OTHER DEALINGS IN THE SOFTWARE.
+ .
+ For more information, please refer to <http://unlicense.org/>
+
+License: BSD-2-clause
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+ 1. Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ SUCH DAMAGE.
+
+License: BSD-3-clause
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions are
+ met:
+ .
+    * Redistributions of [source code/works] must retain the above
+ copyright notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above
+ copyright notice, this list of conditions and the following disclaimer
+ in the documentation and/or other materials provided with the
+ distribution.
+    * Neither the name of [the copyright holder] nor the names of its
+ contributors may be used to endorse or promote products derived from
+ this software without specific prior written permission.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License: Sun-permissive
+ Permission to use, copy, modify, and distribute this
+ software is freely granted, provided that this notice
+ is preserved.
+
+License: Boost-1.0
+ Permission is hereby granted, free of charge, to any person or organization
+ obtaining a copy of the software and accompanying documentation covered by
+ this license (the "Software") to use, reproduce, display, distribute,
+ execute, and transmit the Software, and to prepare derivative works of the
+ Software, and to permit third-parties to whom the Software is furnished to
+ do so, all subject to the following:
+ .
+ The copyright notices in the Software and this entire statement, including
+ the above license grant, this restriction and the following disclaimer,
+ must be included in all copies of the Software, in whole or in part, and
+ all derivative works of the Software, unless such copies or derivative
+ works are solely in the form of machine-executable object code generated by
+ a source language processor.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE, TITLE AND NON-INFRINGEMENT. IN NO EVENT
+ SHALL THE COPYRIGHT HOLDERS OR ANYONE DISTRIBUTING THE SOFTWARE BE LIABLE
+ FOR ANY DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE,
+ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ DEALINGS IN THE SOFTWARE.
