@@ -1,0 +1,116 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: libayatana-indicator
+Upstream-Contact: Mike Gabriel <mike.gabriel@das-netzwerkteam.de>
+Source: https://github.com/AyatanaIndicators/libayatana-indicator
+
+Files: .build.yml
+ .travis.yml
+ AUTHORS
+ ChangeLog
+ CMakeLists.txt
+ INSTALL.md
+ NEWS
+ NEWS.Canonical
+ README.md
+ data/CMakeLists.txt
+ data/ayatana-indicator.pc.in
+ data/ayatana-indicator3-no-IDO.pc.in
+ data/ayatana-indicator3.pc.in
+ src/CMakeLists.txt
+ src/indicator-object-enum-types.c.template
+ src/indicator-object-enum-types.h.template
+ src/indicator-object-marshal.list
+ src/indicator-service.xml
+ src/indicator.symbols
+ tests/CMakeLists.txt
+ tests/indicator-test-service.c
+ tests/org.ayatana.indicator.no-such-service
+ tests/org.ayatana.indicator.test
+ tests/org.ayatana.indicator.test.service.in
+ tests/run-xvfb.sh
+ tests/service-manager-connect.service.in
+ tests/service-version-bad.service.in
+ tests/service-version-good.service.in
+ tests/session.conf.in
+ tests/test-indicator-ng.c
+ tests/test-well-formed.desktop
+ tools/80indicator-debugging
+ tools/CMakeLists.txt
+Copyright: 2010-2013, Canonical Ltd.
+  2021, Robert tari
+License: GPL-3
+Comment:
+ Assuming same license and copyright holdership as found
+ in other files in this project.
+
+Files: src/indicator-ng.c
+ src/indicator-service.c
+ tests/dummy-indicator-blank.c
+ tests/dummy-indicator-entry-func.h
+ tests/dummy-indicator-null.c
+ tests/dummy-indicator-signaler.c
+ tests/dummy-indicator-simple.c
+ tests/dummy-indicator-visible.c
+ tests/service-manager-connect-service.c
+ tests/service-manager-connect.c
+ tests/service-manager-no-connect.c
+ tests/service-manager-nostart-connect.c
+ tests/service-shutdown-timeout.c
+ tests/service-version-bad-service.c
+ tests/service-version-good-service.c
+ tests/service-version-manager.c
+ tests/service-version-multiwatch-manager-impolite.c
+ tests/service-version-multiwatch-manager.c
+ tests/service-version-multiwatch-service.c
+ tests/test-desktop-shortcuts.c
+ tests/test-loader.c
+ tools/indicator-loader.c
+Copyright: 2009, Canonical Ltd.
+  2012, Canonical Ltd.
+  2013, Canonical Ltd.
+  2021, Robert Tari
+  2021-2022, Robert Tari
+  2022, Robert Tari
+License: GPL-3
+
+Files: src/dbus-shared.h
+ src/indicator-desktop-shortcuts.c
+ src/indicator-desktop-shortcuts.h
+ src/indicator-image-helper.c
+ src/indicator-image-helper.h
+ src/indicator-ng.h
+ src/indicator-object.c
+ src/indicator-object.h
+ src/indicator-service-manager.c
+ src/indicator-service-manager.h
+ src/indicator-service.h
+ src/indicator.h
+ tests/dummy-indicator-entry-func.c
+ tests/service-version-values.h
+Copyright: 2009, Canonical Ltd.
+  2010, Canonical Ltd.
+  2012, Canonical Ltd.
+  2013, Canonical Ltd.
+License: GPL-3
+
+Files: debian/*
+Copyright: 2010-2013, Canonical Ltd.
+           2015-2024, Mike Gabriel <mike.gabriel@das-netzwerkteam.de>
+License: GPL-3
+
+License: GPL-3
+ This program is free software; you can redistribute it and/or modify it
+ under the terms of the GNU General Public License as published by the Free
+ Software Foundation; version 3 of the License.
+ .
+ This program is distributed in the hope that it will be useful, but WITHOUT
+  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ more details.
+ .
+ You should have received a copy of the GNU General Public License along with
+ this program; if not, write to the Free Software Foundation, Inc., 51
+ Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 3 can be found in `/usr/share/common-licenses/GPL-3'.

@@ -1,0 +1,60 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Source: https://download.gnome.org/sources/glib-networking/
+Upstream-Name: glib-networking
+
+Files: *
+Copyright:
+ 2009-2013 Red Hat, Inc.
+ 2010-2016 Collabora, Ltd.
+ 2010 Stefan Walter
+ 2011-2019 Free Software Foundation, Inc.
+ 2011-2019 Changwoo Ryu
+ 2011-2019 Claude Paroz
+ 2011-2019 Charles Monzat
+ 2011-2019 William Oprandi
+ 2011-2012 Cédric Valmary
+ 2011-2012 Swecha Telugu Localisation team
+ 2011 The GNOME Project
+ 2011 Tommi Vainikainen
+ 2013-2015 Canonical Ltd.
+ 2015 Rosetta Contributors
+ 2015 NICE s.r.l.
+ 2018-2021 Igalia S.L.
+ 2021 Ole André Vadla Ravnås
+License: LGPL-2+ and LGPL-2.1+
+
+License: LGPL-2+
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 2 of the License, or (at your option) any later version.
+ .
+ This library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+ .
+ You should have received a copy of the GNU Lesser General Public
+ License along with this library. If not, see <https://www.gnu.org/licenses/>
+ .
+ On Debian systems, the complete text of the GNU Library General
+ Public License version 2 can be found in
+ "/usr/share/common-licenses/LGPL-2".
+
+License: LGPL-2.1+
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 2.1 of the License, or (at your option) any later version.
+ .
+ This library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+ .
+ You should have received a copy of the GNU Lesser General Public
+ License along with this library. If not, see <https://www.gnu.org/licenses/>
+ .
+ On Debian systems, the complete text of the GNU Lesser General
+ Public License version 2 can be found in
+ "/usr/share/common-licenses/LGPL-2.1".

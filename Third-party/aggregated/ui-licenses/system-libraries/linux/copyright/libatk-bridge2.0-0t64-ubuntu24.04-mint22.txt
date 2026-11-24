@@ -1,0 +1,491 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: at-spi2-core
+Source: https://download.gnome.org/sources/at-spi2-core/
+Upstream-Contact: Mike Gorse
+
+Files: *
+Copyright: 2001-2003 Sun Microsystems Inc.
+  2001-2003 Ximian, Inc.
+  2007 IBM Corp.
+  2008 Novell, Inc.
+  2008-2010 Codethink Ltd.
+License: LGPL-2+
+
+Files: atk/*
+Copyright: 2001, 2002, 2003, 2006, 2007 Sun Microsystems Inc.
+License: LGPL-2+
+
+Files: atk/atk-autocleanups.h
+Copyright: 2020 GNOME foundation
+License: LGPL-2+
+
+Files: atk/atkplug.c
+  atk/atkplug.h
+  atk/atksocket.c
+  atk/atksocket.h
+Copyright: 2009 Novell, Inc.
+License: LGPL-2+
+
+Files: atk/atkprivate.c
+  atk/atkprivate.h
+  atk/atkrange.c
+  atk/atkrange.h
+  atk/atkversion.c
+Copyright: 2012, 2014 Igalia, S.L.
+License: LGPL-2+
+
+Files: atk/atkversion.h.in
+Copyright: 2012 Igalia, S.L.
+           2014 Chun-wei Fan
+License: LGPL-2+
+
+Files: atk/atktablecell.c
+  atk/atktablecell.h
+  atk/atkwindow.c
+  atk/atkwindow.h
+Copyright: 2011, 2014 SUSE LLC.
+License: LGPL-2+
+
+Files: atk-adaptor/accessible-cache.c
+  atk-adaptor/accessible-cache.h
+  atk-adaptor/accessible-leasing.c
+Copyright: 2008-2010, Codethink Ltd.
+License: LGPL-2.1+
+
+Files: atk-adaptor/accessible-leasing.h
+  atk-adaptor/accessible-register.h
+Copyright: 2008, Novell, Inc.
+  2008, 2009, Codethink Ltd.
+License: LGPL-2.1+
+
+Files: atk-adaptor/accessible-register.c
+  atk-adaptor/object.c
+  atk-adaptor/object.h
+Copyright: 2008-2010, Codethink Ltd.
+  2008, Novell, Inc.
+License: LGPL-2.1+
+
+Files: atk-adaptor/accessible-stateset.c
+  atk-adaptor/accessible-stateset.h
+  atk-adaptor/spi-dbus.h
+Copyright: 2001, 2002, Ximian, Inc.
+  2001, 2002, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: atk-adaptor/adaptors/*
+Copyright: 2008, Novell, Inc.
+  2001, 2002, Ximian, Inc.
+  2001, 2002, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: atk-adaptor/adaptors/adaptors.h
+Copyright: 2001, 2002, Ximian, Inc.
+  2001, 2002, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: atk-adaptor/adaptors/cache-adaptor.c
+Copyright: 2008, Novell, Inc.
+  2008, 2009, Codethink Ltd.
+  2001, 2002, Ximian, Inc.
+  2001, 2002, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: atk-adaptor/adaptors/collection-adaptor.c
+Copyright: 2007, IBM Corp.
+License: LGPL-2.1+
+
+Files: atk-adaptor/adaptors/table-cell-adaptor.c
+Copyright: 2013, SUSE LLC.
+  2001, 2002, Ximian, Inc.
+  2001, 2002, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: atk-adaptor/atk-bridge.h
+  atk-adaptor/bridge.c
+  atk-adaptor/bridge.h
+  atk-adaptor/event.h
+Copyright: 2008-2010, Codethink Ltd.
+  2001-2003, Ximian, Inc.
+  2001-2003, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: atk-adaptor/bitarray.h
+  atk-adaptor/spi-dbus.c
+Copyright: 2008, Novell, Inc.
+License: LGPL-2.1+
+
+Files: atk-adaptor/event.c
+Copyright: 2011, F123 Consulting & Mais Diferenças
+  2008, 2009, Codethink Ltd.
+  2001-2003, Ximian, Inc.
+  2001-2003, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: atk-adaptor/gtk-2.0/module.c
+Copyright: 2008-2010, Codethink Ltd.
+  2001-2003, Ximian, Inc.
+  2001-2003, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: atspi/*
+Copyright: 2010, 2011, Novell, Inc.
+  2002, Ximian, Inc.
+License: LGPL-2.1+
+
+Files: atspi/atspi-accessible.c
+  atspi/atspi-hyperlink.c
+  atspi/atspi-hypertext.c
+  atspi/atspi-image.c
+  atspi/atspi-matchrule.c
+  atspi/atspi-misc.c
+  atspi/atspi-relation.c
+  atspi/atspi-selection.c
+  atspi/atspi-stateset.c
+  atspi/atspi-stateset.h
+  atspi/atspi-table.c
+  atspi/atspi-text.c
+  atspi/atspi-value.c
+Copyright: 2010, 2011, Novell, Inc.
+  2001, 2002, Ximian, Inc.
+  2001, 2002, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: atspi/atspi-action.c
+  atspi/atspi-application.c
+  atspi/atspi-component.c
+  atspi/atspi-document.c
+  atspi/atspi-editabletext.c
+  atspi/atspi-object.c
+  atspi/atspi-registry.c
+  atspi/atspi.h
+Copyright: 2001, 2002, Ximian, Inc.
+  2001, 2002, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: atspi/atspi-action.h
+  atspi/atspi-application.h
+  atspi/atspi-component.h
+  atspi/atspi-device-listener-private.h
+  atspi/atspi-document.h
+  atspi/atspi-editabletext.h
+  atspi/atspi-object.h
+  atspi/atspi-private.h
+  atspi/atspi-registry.h
+  atspi/atspi-types.h
+Copyright: 2002, Ximian, Inc.
+License: LGPL-2.1+
+
+Files: atspi/atspi-collection.c
+Copyright: 2010, 2011, Novell, Inc.
+  2007, IBM Corp.
+License: LGPL-2.1+
+
+Files: atspi/atspi-constants.h
+Copyright: 2012, SUSE LINUX Products GmbH, Nuernberg, Germany.
+  2010, 2011, Novell, Inc.
+License: LGPL-2.1+
+
+Files: atspi/atspi-device-listener.c
+  atspi/atspi-event-listener.c
+Copyright: 2010, 2011, Novell, Inc.
+  2002, Ximian Inc.
+  2002, Sun Microsystems, Inc.
+License: LGPL-2.1+
+
+Files: atspi/atspi-device.c
+  atspi/atspi-device.h
+  atspi/atspi-device-legacy.c
+  atspi/atspi-device-legacy.h
+  atspi/atspi-device-x11.c
+  atspi/atspi-device-x11.h
+Copyright: 2020 SUSE LLC.
+License: LGPL-2.1+
+
+Files: atspi/atspi-mutter.c
+  atspi/atspi-mutter-private.h
+Copyright: 2019 SUSE LLC.
+License: LGPL-2.1+
+
+Files: atspi/atspi-gmain.c
+Copyright: 2005, Red Hat, Inc.
+  2002, 2003, CodeFactory AB
+License: AFL-2.1 or GPL-2+
+
+Files: atspi/atspi-gmain.h
+Copyright: Copyright 2002, 2003 CodeFactory AB
+           Copyright 2005 Red Hat, Inc.
+License: AFL-2.1 or GPL-2+
+
+Files: atspi/atspi-table-cell.c
+Copyright: 2013, SUSE LLC.
+  2001, 2002, Ximian, Inc.
+  2001, 2002, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: bus/at-spi-bus-launcher.c
+Copyright: 2011-2018, Red Hat, Inc.
+License: LGPL-2.1+
+
+Files: dbind/*
+Copyright: 2008-2011, Novell, Inc.
+License: LGPL-2.1+
+
+Files: debian/*
+Copyright: Copyright 2009, Mario Lang <mlang@debian.org>
+           Akira TAGOH <tagoh@debian.org>
+License: GPL-2
+
+Files: droute/droute-pairhash.c
+  droute/droute-pairhash.h
+Copyright: 2008-2010, Codethink Ltd.
+License: LGPL-2.1+
+
+Files: droute/droute-variant.c
+  droute/droute-variant.h
+Copyright: 2008, Novell, Inc.
+License: LGPL-2.1+
+
+Files: droute/droute.c
+  droute/droute.h
+Copyright: 2008, Novell, Inc.
+  2008, 2009, Codethink Ltd.
+License: LGPL-2.1+
+
+Files: po/am.po
+  po/bn_IN.po
+  po/bn.po
+  po/ca.po
+  po/ca@valencia.po
+  po/cy.po
+  po/da.po
+  po/de.po
+  po/dz.po
+  po/el.po
+  po/eo.po
+  po/ga.po
+  po/gu.po
+  po/hu.po
+  po/it.po
+  po/ja.po
+  po/lt.po
+  po/nb.po
+  po/or.po
+  po/pt_BR.po
+  po/ro.po
+  po/ru.po
+  po/rw.po
+  po/sk.po
+  po/sl.po
+  po/sq.po
+  po/sv.po
+  po/th.po
+  po/tr.po
+  po/yi.po
+  po/zh_HK.po
+  po/zh_TW.po
+Copyright: Free Software Foundation, Inc.
+License: LGPL-2+
+
+Files: po/en@shaw.po
+  po/es.po
+  po/mai.po
+Copyright: The Gnome Foundation.
+License: LGPL-2+
+
+Files: po/et.po
+Copyright: Free Software Foundation, Inc.
+  The GNOME Project.
+License: LGPL-2+
+
+Files: po/az.po
+Copyright: Mətin Əmirov
+License: LGPL-2+
+
+Files: po/bg.po
+Copyright: Free Software Foundation
+           Zahari Yurukov
+License: LGPL-2+
+
+Files: po/bs.po
+  po/ckb.po
+Copyright: 2013, Rosetta Contributors and Canonical Ltd 2013
+License: LGPL-2+
+
+Files: po/cs.po
+Copyright: Free Software Foundation.
+           Miloslav Trmac
+License: LGPL-2+
+
+Files: po/en_CA.po
+Copyright: 2004 Adam Weinberger and the GNOME Foundation
+License: LGPL-2+
+
+Files: po/fa.po
+Copyright: 2011, Iranian Free Software Users Group (IFSUG.org)translation team.
+License: LGPL-2+
+
+Files: po/fi.po
+Copyright: 2011, Tommi Vainikainen
+           Free Software Foundation, Inc.
+License: LGPL-2+
+
+Files: po/fr.po
+  po/oc.po
+Copyright: 2011, Listed translators
+           Free Software Foundation, Inc.
+License: LGPL-2+
+
+Files: po/gl.po
+Copyright: Fran Diéguez
+License: LGPL-2+
+
+Files: po/hi.po
+Copyright: G Karunakar
+License: LGPL-2+
+
+Files: po/hr.po
+Copyright: Croatian team
+License: LGPL-2+
+
+Files: po/hy.po
+Copyright: Arman Vardanyan
+License: LGPL-2+
+
+Files: po/kk.po
+Copyright: HZ
+License: LGPL-2+
+
+Files: po/mr.po
+Copyright: Jitendra Shah
+License: LGPL-2+
+
+Files: po/nn.po
+Copyright: Åsmund Skjæveland
+License: LGPL-2+
+
+Files: po/te.po
+Copyright: Sree Ganesh
+License: LGPL-2+
+
+Files: po/tk.po
+Copyright: Free Software Foundation
+           Mühemmet Amut
+License: LGPL-2+
+
+Files: po/vi.po
+Copyright: GNOME i18n Project for Vietnamese
+License: LGPL-2+
+
+Files: po/xh.po
+Copyright: Canonical Ltd.
+License: LGPL-2+
+
+Files: registryd/*
+Copyright: 2001, 2002, Ximian, Inc.
+  2001, 2002, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: registryd/org.a11y.atspi.Registry.service.in
+Copyright: 2001-2003 Sun Microsystems Inc.
+  2001-2003 Ximian, Inc.
+  2007 IBM Corp.
+  2008 Novell, Inc.
+  2008-2010 Codethink Ltd.
+License: LGPL-2.1+
+
+Files: registryd/deviceeventcontroller-x11.c
+  registryd/deviceeventcontroller.c
+Copyright: 2001, 2003, Sun Microsystems Inc.
+  2001, 2002, Ximian, Inc.
+License: LGPL-2.1+
+
+Files: registryd/display.c
+  registryd/display.h
+  registryd/event-source.c
+  registryd/event-source.h
+Copyright: 2009, Nokia.
+License: LGPL-2.1+
+
+Files: registryd/registry.c
+Copyright: 2008, 2010, Codethink Ltd.
+  2001, 2002, Ximian, Inc.
+  2001, 2002, Sun Microsystems Inc.
+License: LGPL-2.1+
+
+Files: registryd/ucs2keysym.c
+Copyright: NA
+License: public-domain
+ This software is in the public domain. Share and enjoy!
+
+Files: tests/at-spi2-atk/*
+Copyright: 2014, 2015, Samsung Electronics Co., Ltd.
+License: LGPL-2.1+
+
+Files: tests/at-spi2-atk/atk_test_hyperlink.c
+  tests/at-spi2-atk/atk_test_hypertext.c
+  tests/at-spi2-atk/atk_test_table.c
+  tests/at-spi2-atk/atk_test_table_cell.c
+  tests/at-spi2-atk/atk_test_value.c
+Copyright: 2015, Samsung Electronics Co., Ltd.
+  2008, Codethink Ltd.
+License: LGPL-2.1+
+
+Files: tests/at-spi2-atk/data/*
+Copyright: 2001-2003 Sun Microsystems Inc.
+  2001-2003 Ximian, Inc.
+  2007 IBM Corp.
+  2008 Novell, Inc.
+  2008-2010 Codethink Ltd.
+License: LGPL-2.1+
+
+Files: tests/at-spi2-atk/dummyatk/my-atk-hyperlink.c
+  tests/at-spi2-atk/dummyatk/my-atk-hyperlink.h
+  tests/at-spi2-atk/dummyatk/my-atk-hypertext.c
+  tests/at-spi2-atk/dummyatk/my-atk-hypertext.h
+  tests/at-spi2-atk/dummyatk/my-atk-table-cell.c
+  tests/at-spi2-atk/dummyatk/my-atk-table-cell.h
+  tests/at-spi2-atk/dummyatk/my-atk-table.c
+  tests/at-spi2-atk/dummyatk/my-atk-table.h
+  tests/at-spi2-atk/dummyatk/my-atk-value.c
+  tests/at-spi2-atk/dummyatk/my-atk-value.h
+Copyright: 2015, Samsung Electronics Co., Ltd.
+  2008, Codethink Ltd.
+License: LGPL-2.1+
+
+License: AFL-2.1
+ Licensed under the Academic Free License version 2.1
+
+License: GPL-2
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; version 2 dated June, 1991.
+ .
+ On Debian systems, the complete text of version 2 of the GNU General
+ Public License can be found in '/usr/share/common-licenses/GPL-2'.
+
+License: GPL-2+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; version 2 dated June, 1991, or (at
+ your option) any later version.
+ .
+ On Debian systems, the complete text of version 2 of the GNU General
+ Public License can be found in '/usr/share/common-licenses/GPL-2'.
+
+License: LGPL-2+
+ This program is free software; you can redistribute it and/or modify it
+ under the terms of the GNU Library General Public License as published by the
+ Free Software Foundation; version 2 of the License, or (at
+ your option) any later version.
+ .
+ On Debian systems, the complete text of version 2 of the GNU Library
+ General Public License can be found in `/usr/share/common-licenses/LGPL-2'.
+
+License: LGPL-2.1+
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 2.1 of the License, or (at your option) any later version.
+ .
+ On Debian systems, the complete text of version 2.1 of the GNU Library
+ General Public License can be found in `/usr/share/common-licenses/LGPL-2.1'.

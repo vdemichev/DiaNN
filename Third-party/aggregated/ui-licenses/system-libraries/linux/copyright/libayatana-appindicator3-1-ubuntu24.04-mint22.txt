@@ -1,0 +1,224 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: libayatana-appindicator
+Upstream-Contact: Mike Gabriel <mike.gabriel@das-netzwerkteam.de>
+Source: https://github.com/AyatanaIndicators/libayatana-appindicator
+
+Files: .build.yml
+ .travis.yml
+ AUTHORS
+ CMakeLists.txt
+ ChangeLog
+ NEWS
+ README
+ bindings/CMakeLists.txt
+ bindings/mono/ApplicationIndicatorCustom.cs.in
+ bindings/mono/CMakeLists.txt
+ bindings/mono/app-indicator.sources.xml.in
+ bindings/mono/ayatana-appindicator-sharp-0.1.pc.in
+ bindings/mono/ayatana-appindicator-sharp.dll.config
+ bindings/mono/ayatana-appindicator-sharp.snk
+ bindings/mono/ayatana-appindicator3-sharp-0.1.pc.in
+ bindings/mono/ayatana-appindicator3-sharp.dll.config
+ bindings/mono/ayatana-appindicator3-sharp.snk
+ bindings/mono/examples/CMakeLists.txt
+ bindings/mono/examples/ayatana-indicator-example.in
+ bindings/mono/libayatana-appindicator-api.metadata
+ bindings/mono/libayatana-appindicator3-api.metadata
+ bindings/mono/policy.0.0.ayatana-appindicator-sharp.config.in
+ bindings/mono/policy.0.0.ayatana-appindicator3-sharp.config.in
+ bindings/mono/policy.0.1.ayatana-appindicator-sharp.config.in
+ bindings/mono/policy.0.1.ayatana-appindicator3-sharp.config.in
+ bindings/vala/CMakeLists.txt
+ bindings/vala/ayatana-appindicator3-0.1.deps
+ bindings/vala/examples/CMakeLists.txt
+ docs/CMakeLists.txt
+ docs/reference/CMakeLists.txt
+ docs/reference/libayatana-appindicator-docs.sgml.in
+ docs/reference/libayatana-appindicator-overrides.txt
+ docs/reference/libayatana-appindicator-sections.txt
+ docs/reference/libayatana-appindicator.types
+ docs/reference/scangobj.sh.in
+ docs/reference/version.xml.in
+ example/CMakeLists.txt
+ example/simple-client-test-icon.png
+ src/AyatanaAppIndicator-0.1.metadata
+ src/AyatanaAppIndicator3-0.1.metadata
+ src/CMakeLists.txt
+ src/ayatana-appindicator-0.1.pc.in
+ src/ayatana-appindicator3-0.1.pc.in
+ src/notification-item.xml
+ src/notification-watcher.xml
+ tests/CMakeLists.txt
+ tests/run-xvfb.sh
+ tests/test-libappindicator-fallback-item.c
+ tests/test-libappindicator.desktop
+Copyright: 2009-2011, Canonical Ltd.
+License: LGPL-2.1 or LGPL-3 or GPL-3
+Comment:
+ Assuming licenses as found in COPYING and COPYING.LGPL.2.1 file. As some
+ code files are also licensed under GPL-3, assuming that one, as well.
+ .
+ Assuming same copyright holdership as in majority of the other files in
+ this code project
+
+Files: cmake/FindVala.cmake
+ cmake/UseVala.cmake
+Copyright: 2011, Přemysl Janouch
+License: BSD-2-clause
+
+Files: bindings/mono/TestAyatanaIndicator.cs
+ bindings/mono/examples/AyatanaIndicatorExample.cs
+ bindings/vala/examples/ayatana-indicator-example.vala
+ example/simple-client-vala.vala
+ example/simple-client.c
+ src/application-service-marshal.list
+ src/dbus-shared.h
+ src/generate-id.c
+ src/generate-id.h
+ tests/test-defines.h
+ tests/test-libappindicator-dbus-client.c
+ tests/test-libappindicator-dbus-server.c
+ tests/test-libappindicator-fallback-watcher.c
+ tests/test-libappindicator-status-client.c
+ tests/test-libappindicator-status-server.c
+ tests/test-libappindicator.c
+ tests/test-simple-app.c
+Copyright: 2009, Canonical Ltd.
+  2010, Canonical Ltd.
+  2011, Canonical Ltd.
+License: GPL-3
+
+Files: src/app-indicator-enum-types.c.in
+ src/app-indicator-enum-types.h.in
+ src/app-indicator.c
+ src/app-indicator.h
+Copyright: 2009, Canonical Ltd.
+License: LGPL-2.1 or LGPL-3
+
+Files: bindings/vala/ayatana-appindicator-0.1-custom.vala
+Copyright: 2011, Canonical, Ltd.
+License: LGPL-2.1 or LGPL-3
+
+Files: cmake/FindGObjectIntrospection.cmake
+ cmake/UseGObjectIntrospection.cmake
+Copyright: 2010, Pino Toscano, <pino@kde.org>
+License: BSD-3-clause
+
+Files: bindings/mono/AssemblyInfo.cs
+Copyright: 2010, Canonical Ltd.
+  2010, Canonical, Ltd.
+  2015, Mike Gabriel
+  2021, Robert Tari
+License: GPL-3
+
+Files: debian/*
+Copyright: 2009-2011, Canonical Ltd.
+  2015-2023, Mike Gabriel <mike.gabriel@das-netzwerkteam.de>
+License: GPL-3
+
+Files: debian/patches/*
+Copyright: 2023, Mike Gabriel <mike.gabriel@das-netzwerkteam.de>
+License: GPL-3 or LGPL-2.1 or LGPL-3
+
+License: GPL-3
+ This program is free software; you can redistribute it and/or modify it
+ under the terms of the GNU General Public License as published by the Free
+ Software Foundation; version 3 of the License.
+ .
+ This program is distributed in the hope that it will be useful, but WITHOUT
+ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ more details.
+ .
+ You should have received a copy of the GNU General Public License along with
+ this program; if not, write to the Free Software Foundation, Inc., 51
+ Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 3 can be found in `/usr/share/common-licenses/GPL-3'.
+
+License: LGPL-2.1
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Library General Public
+ License as published by the Free Software Foundation; version 2.1
+ of the License.
+ .
+ This library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Library General Public License for more details.
+ .
+ You should have received a copy of the GNU Library General Public
+ License along with this library; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ .
+ See /usr/share/common-licenses/LGPL-2.1 for the full license text.
+
+License: LGPL-3
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Library General Public
+ License as published by the Free Software Foundation; version 3
+ of the License.
+ .
+ This library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Library General Public License for more details.
+ .
+ You should have received a copy of the GNU Library General Public
+ License along with this library; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ .
+ See /usr/share/common-licenses/LGPL-3 for the full license text.
+
+License: public-domain
+ This file is free software; the author(s) gives unlimited
+ permission to copy and/or distribute it, with or without
+ modifications, as long as this notice is preserved.
+
+License: BSD-3-clause
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+ .
+ 1. Redistributions of source code must retain the copyright
+    notice, this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+ 3. The name of the author may not be used to endorse or promote products 
+    derived from this software without specific prior written permission.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License: BSD-2-clause
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions are met:
+ .
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ``AS IS''
+ AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
+ OF SUCH DAMAGE.
+

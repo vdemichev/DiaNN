@@ -1,0 +1,209 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Comment: This package was debianized by Kurt Roeckx <kurt@roeckx.be>.
+Upstream-Name: elfutils
+Upstream-Contact: elfutils-devel@sourceware.org
+Source: https://sourceware.org/elfutils/ftp/
+
+Files: *
+Copyright: (C) 1996-2019 Red Hat, Inc.
+           (C) 2022 Mark J. Wielaard <mark@klomp.org>
+           (C) 2015, 2016 Oracle, Inc.
+           (C) 2017 The Qt Company
+           (C) 2018, 2021 Facebook, Inc.
+           (C) 2021 Runsafe Security, Inc.
+           (C) H.J. Lu <hjl.tools@gmail.com>, 2015.
+           (C) 2020 Tom Tromey
+Comment: Written by:
+   Ulrich Drepper <drepper@redhat.com>
+   Jeff Johnson <jbj@redhat.com>
+   Alexander Larsson
+   Jakub Jelinek <jakub@redhat.com>
+   Roland McGrath <roland@redhat.com>.
+ See more in the AUTHORS file.
+License: GPL-3+
+
+Files: backends/*
+       config/*
+       debuginfod/*
+       lib*
+       version.h
+       debian/patches/mips_cfi.patch
+Copyright: (C) 1996-2019 Red Hat, Inc.
+           (C) 2021, 2022 Mark J. Wielaard <mark@klomp.org>
+           (C) 2015 Oracle, Inc.
+           (C) 2016, 2017 The Qt Company Ltd.
+           (C) 2021 Google, Inc.
+           (C) 2012 Tilera Corporation
+           (C) 2019 Hangzhou C-SKY Microsystems co.,ltd.
+           (C) H.J. Lu <hjl.tools@gmail.com>, 2015.
+           (c) 2021 Dmitry V. Levin <ldv@altlinux.org>
+           (C) 2018 Sifive, Inc.
+           (C) 2018 Kurt Roeckx, Inc.
+Comment: Most of the libraries (lib, libelf, libebl, libdw, libdwfl) have
+         the following license:
+License: LGPL-3+ or GPL-2+
+ This file is free software; you can redistribute it and/or modify
+ it under the terms of either
+ .
+ * the GNU Lesser General Public License as published by the Free
+   Software Foundation; either version 3 of the License, or (at
+   your option) any later version
+ .
+ or
+ .
+ * the GNU General Public License as published by the Free
+   Software Foundation; either version 2 of the License, or (at
+   your option) any later version
+ .
+ or both in parallel, as here.
+ .
+ elfutils is distributed in the hope that it will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ General Public License for more details.
+ .
+ You should have received copies of the GNU General Public License and
+ the GNU Lesser General Public License along with this program.  If
+ not, see <http://www.gnu.org/licenses/>.
+Comment:
+ On Debian GNU/Linux systems, the complete text of the GNU General
+ Public License version 2 can be found in
+ `/usr/share/common-licenses/GPL-2' and the complete text of the GNU
+ Lesser General Public License version 3 can be found in
+ `/usr/share/common-licenses/LGPL-3'.
+
+Files: lib/stdatomic-fbsd.h
+Copyright: (c) 2011 Ed Schouten <ed@FreeBSD.org>
+                    David Chisnall <theraven@FreeBSD.org>
+		    All rights reserved.
+License: BSD-2-clause
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+ 1. Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ SUCH DAMAGE.
+
+Files: doc/readelf.1
+Copyright: (c) 1991-2018 Free Software Foundation, Inc.
+           (c) 2019 Red Hat Inc.
+License: GFDL-NIV-1.3
+ Permission is granted to copy, distribute and/or modify this document
+ under the terms of the GNU Free Documentation License, Version 1.3
+ or any later version published by the Free Software Foundation;
+ with no Invariant Sections, no Front-Cover Texts, and no
+ Back-Cover Texts.  A copy of the license is included in the
+ section entitled "GNU Free Documentation License".
+Comment:
+ On Debian GNU/Linux systems, the complete text of the GNU
+ Free Documentation License version 1.3 can be found in
+ `/usr/share/common-licenses/GFDL-1.3'
+
+Files: libelf/dl-hash.h
+       libelf/elf.h
+Copyright: (C) 1995-2022 Free Software Foundation, Inc.
+Comment: This file is part of the GNU C Library.
+License: LGPL-2.1+
+ The GNU C Library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 2.1 of the License, or (at your option) any later version.
+ .
+ The GNU C Library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+ .
+ You should have received a copy of the GNU Lesser General Public
+ License along with the GNU C Library; if not, see
+ <https://www.gnu.org/licenses/>.
+Comment:
+ On Debian GNU/Linux systems, the complete text of the GNU
+ Lesser General Public License version 2.1 can be found in
+ `/usr/share/common-licenses/LGPL-2.1'.
+
+Files: libcpu/i386_parse.*
+Copyright: (C) 1984, 1989-1990, 2000-2015, 2018-2021 Free Software Foundation,
+	   Inc.
+License: GPL-3+ with Bison exception
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+ .
+ As a special exception, you may create a larger work that contains
+ part or all of the Bison parser skeleton and distribute that work
+ under terms of your choice, so long as that work isn't itself a
+ parser generator using the skeleton or a modified version thereof
+ as a parser skeleton.  Alternatively, if you modify or redistribute
+ the parser skeleton itself, you may (at your option) remove this
+ special exception, which will cause the skeleton and the resulting
+ Bison output files to be licensed under the GNU General Public
+ License without this special exception.
+ .
+ This special exception was added by the Free Software Foundation in
+ version 2.2 of Bison.
+
+Files: debian/po/de.po
+Copyright: (C) 2021, Helge Kreutzmann <debian@helgefjell.de>
+License: GPL-3+
+
+Files: debian/po/es.po
+Copyright: (C) 2022, Camaleón <noelamac@gmail.com>
+License: GPL-3+
+
+Files: debian/po/fr.po
+Copyright: (C) 2021, Jean-Pierre Giraud <jean-pierregiraud@neuf.fr>
+License: GPL-3+
+
+Files: debian/po/nl.po
+Copyright: (C) 2021, Frans Spiesschaert <Frans.Spiesschaert@yucom.be>
+License: GPL-3+
+
+Files: debian/po/pt_BR.po
+Copyright: (C) 2021, Sergio Durigan Junior <sergiodj@debian.org>
+License: GPL-3+
+
+Files: debian/po/pt.po
+Copyright: (C) 2021, Américo Monteiro <a_monteiro@gmx.com>
+License: GPL-3+
+
+License: GPL-3+
+ This file is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 3 of the License, or
+ (at your option) any later version.
+ .
+ elfutils is distributed in the hope that it will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+Comment: GPL-3+
+ On Debian GNU/Linux systems, the complete text of the GNU
+ General Public License version 3 can be found in
+ `/usr/share/common-licenses/GPL-3'
