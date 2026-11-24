@@ -1,0 +1,7 @@
+Unimod protein modification database
+Snapshot: 17 October 2019, as supplied with DIA-NN UI.
+Database authors and contributors: Unimod community; https://www.unimod.org/
+Distributed without modification as a separate data resource under the Design
+Science License. The complete, human-editable source is unimod.obo, supplied
+alongside the executable. This data license does not apply to the independent
+DIA-NN application or its parser. See Unimod.txt for rights and disclaimers.
