@@ -1,0 +1,7 @@
+LLVM-derived utilities in PyTorch/c10
+
+Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+See LICENSE.txt for the license terms.
+
+Source:
+https://github.com/pytorch/pytorch/tree/d0f2af8b66b20da4baa50644c0cd3f887a2eae2e/c10/util

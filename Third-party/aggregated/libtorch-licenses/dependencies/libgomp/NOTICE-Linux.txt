@@ -1,0 +1,37 @@
+/* Copyright (C) 2005-2018 Free Software Foundation, Inc.
+   Contributed by Richard Henderson <rth@redhat.com>.
+
+   This file is part of the GNU Offloading and Multi Processing Library
+   (libgomp).
+
+   Libgomp is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
+
+   Libgomp is distributed in the hope that it will be useful, but WITHOUT ANY
+   WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+   FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+   more details.
+
+   Under Section 7 of GPL version 3, you are granted additional
+   permissions described in the GCC Runtime Library Exception, version
+   3.1, as published by the Free Software Foundation.
+
+   You should have received a copy of the GNU General Public License and
+   a copy of the GCC Runtime Library Exception along with this program;
+   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+   <http://www.gnu.org/licenses/>.  */
+
+GNU libgomp 8.5.0 (AlmaLinux package 8.5.0-29.el8_10.alma.1).
+
+Corresponding source, including distribution patches and build instructions:
+https://repo.almalinux.org/vault/8.10/BaseOS/Source/Packages/gcc-8.5.0-29.el8_10.alma.1.src.rpm
+
+The libgomp.so.1 supplied with DIA-NN is the copy packaged by PyTorch in
+LibTorch 2.15.0+cpu for Linux. PyTorch sets the library search path to
+$ORIGIN so that the loader can find libraries in the same directory.
+The AlmaLinux source package above contains the runtime source and patches.
+PyTorch publishes its packaging instructions at:
+https://github.com/pytorch/pytorch/blob/d0f2af8b66b20da4baa50644c0cd3f887a2eae2e/.ci/wheel/linux/repair_wheel.py
+https://github.com/pytorch/pytorch/blob/d0f2af8b66b20da4baa50644c0cd3f887a2eae2e/.ci/libtorch/extract_libtorch_from_wheel.py
