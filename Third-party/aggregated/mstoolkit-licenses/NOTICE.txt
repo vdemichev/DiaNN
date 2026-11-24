@@ -1,0 +1,46 @@
+MSToolkit and mzParser
+
+MSToolkit reads mass spectrometry data for DIA-NN.
+MSToolkit code is licensed under the Apache License, Version 2.0 (LICENSE.txt).
+Included third-party code retains its original license.
+
+MSToolkit
+Copyright 2005-2016, Michael R. Hoopmann
+
+mzParser
+Copyright (C) 2011, Mike Hoopmann, Institute for Systems Biology
+The BSD terms for the mzParser reader and its RAMP interface are in
+mzParser-BSD.txt. BasicSpectrum.cpp credits Mike Hoopmann, Institute for
+Systems Biology, copyright (C) 2010-2012.
+
+X! Tandem
+mzParser incorporates code from X! Tandem 2010.12.01. The Artistic License
+and copyright notice in saxhandler.cpp are reproduced in X-Tandem-Artistic.txt.
+The mzML and mzXML reader headers acknowledge the earlier work of Patrick
+Pedrioli, Institute for Systems Biology, copyright (C) 2002, and credit
+Ronald Beavis and Mike Hoopmann. The mzML reader also credits Patrick
+Lacasse, Brendan MacLean, Fredrik Levander and Rob Craig.
+
+The base64 conversion code in mzp_base64.cpp comes from X! Tandem.
+Copyright, The Global Proteome Machine Organization
+Artistic License 1.0 (Artistic-1.0.txt)
+
+MSNumpress
+Copyright 2013 Johan Teleman
+Apache License, Version 2.0 (LICENSE.txt)
+
+zlib stream indexing (Czran.cpp, derived from zran.c)
+Copyright (C) 2005 Mark Adler
+The zlib license is in dependencies/zlib/LICENSE.txt.
+The Expat XML parser license is in ../expat-licenses/LICENSE.txt.
+
+Source and modifications
+MSToolkit source and original reader:
+https://github.com/mhoopmann/mstoolkit/tree/d6521094067c8185f957160bfeb7254889992349
+The published DIA-NN source identifies modifications by Vadim Demichev in
+RAMPface.cpp and saxmzmlhandler.cpp, among other MSToolkit files. For example,
+the RAMP reader recognizes .mstoolkit and .mstoolkit.gz as input files.
+https://github.com/vdemichev/DiaNN/tree/5598ebbbe7a5313434f4986aa24262337ce6d5b0/mstoolkit
+The BSD text for RAMPface.cpp is reproduced from the MSToolkit packaging
+copyright record:
+https://sources.debian.org/data/main/libm/libmstoolkit/82-7.2/debian/copyright
